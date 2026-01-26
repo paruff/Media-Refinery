@@ -138,7 +138,7 @@ func (m *Manager) SubmitForTranscoding(path string, options map[string]string) e
 	return nil
 }
 
-// ImportToBeests imports audio files to beets
+// ImportToBeets imports audio files to beets
 func (m *Manager) ImportToBeets(paths []string, copy, move bool) error {
 	if m.beets == nil {
 		return fmt.Errorf("beets integration not enabled")
