@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  # Media Refinery - The main application
+  media-refinery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: media-refinery
+    volumes:
+      - ./input:/input
+      - ./output:/output
+      - ./work:/work
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - TZ=America/New_York
+    depends_on:
+      - beets
+      - tdarr
+      - radarr
+      - sonarr
+    networks:
+      - media-refinery-network
+
+  # Beets - Music library management
+  beets:
+    image: linuxserver/beets:latest
+    container_name: beets
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - ./config/beets:/config
+      - ./input:/music
+      - ./output:/output
+    ports:
+      - "8337:8337"
+    networks:
+      - media-refinery-network
+    restart: unless-stopped
+
+  # Tdarr - Transcoding automation
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - serverIP=0.0.0.0
+      - serverPort=8266
+      - webUIPort=8265
+      - internalNode=true
+      - nodeID=MainNode
+    volumes:
+      - ./config/tdarr/server:/app/server
+      - ./config/tdarr/configs:/app/configs
+      - ./config/tdarr/logs:/app/logs
+      - ./input:/input
+      - ./output:/output
+      - ./work/tdarr:/temp
+    ports:
+      - "8265:8265"  # WebUI
+      - "8266:8266"  # Server
+    networks:
+      - media-refinery-network
+    restart: unless-stopped
+
+  # Radarr - Movie management
+  radarr:
+    image: linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - ./config/radarr:/config
+      - ./input/movies:/movies
+      - ./output/movies:/output
+    ports:
+      - "7878:7878"
+    networks:
+      - media-refinery-network
+    restart: unless-stopped
+
+  # Sonarr - TV show management
+  sonarr:
+    image: linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - ./config/sonarr:/config
+      - ./input/tv:/tv
+      - ./output/tv:/output
+    ports:
+      - "8989:8989"
+    networks:
+      - media-refinery-network
+    restart: unless-stopped
+
+  # Optional: Plex Media Server
+  plex:
+    image: plexinc/pms-docker:latest
+    container_name: plex
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - VERSION=docker
+    volumes:
+      - ./config/plex:/config
+      - ./output:/data
+    ports:
+      - "32400:32400"
+    networks:
+      - media-refinery-network
+    restart: unless-stopped
+
+networks:
+  media-refinery-network:
+    driver: bridge
+
+volumes:
+  input:
+  output:
+  work:

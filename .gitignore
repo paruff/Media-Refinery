@@ -7,6 +7,7 @@
 *.dll
 *.so
 *.dylib
+media-refinery
 
 # Test binary, built with `go test -c`
 *.test
@@ -26,6 +27,13 @@ go.work.sum
 
 # env file
 .env
+
+# Config files with secrets
+config.yaml
+*.local.yaml
+
+# Service configuration directories (Docker volumes)
+/config/
 
 # Editor/IDE
 # .idea/
