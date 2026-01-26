@@ -1,0 +1,102 @@
+# Media Refinery Configuration File
+# This file configures the media normalization pipeline
+
+# Directory settings
+input_dir: /input
+output_dir: /output
+work_dir: /work
+
+# Safety settings
+dry_run: false
+verify_checksums: true
+
+# Processing settings
+concurrency: 4
+chunk_size: 100
+
+# Audio processing
+audio:
+  enabled: true
+  output_format: flac
+  output_quality: lossless
+  supported_types:
+    - mp3
+    - flac
+    - aac
+    - m4a
+    - ogg
+    - wav
+  normalize: true
+  bit_depth: 16
+  sample_rate: 44100
+
+# Video processing
+video:
+  enabled: true
+  output_format: mkv
+  video_codec: h264
+  audio_codec: aac
+  supported_types:
+    - avi
+    - mp4
+    - mkv
+    - mov
+    - wmv
+    - flv
+  quality: high
+  resolution: keep
+
+# Metadata settings
+metadata:
+  fetch_online: true
+  sources:
+    - beets
+    - radarr
+    - sonarr
+  embed_artwork: true
+  cleanup_tags: true
+
+# Organization settings
+organization:
+  # Music pattern for Plex/Music Assistant
+  # Available placeholders: {artist}, {album}, {track}, {title}, {year}
+  music_pattern: "{artist}/{album}/{track} - {title}"
+  
+  # Video pattern for Plex
+  # Available placeholders: {type}, {title}, {year}, {season}, {episode}
+  video_pattern: "{type}/{title} ({year})/Season {season}/{title} - S{season}E{episode}"
+  
+  use_symlinks: false
+
+# Logging settings
+logging:
+  level: info
+  format: text
+  output_file: ""
+
+# Third-party integrations
+integrations:
+  # Beets - Music library management and metadata
+  beets:
+    enabled: true
+    url: http://beets:8337
+    token: ""  # Leave empty if no authentication
+
+  # Tdarr - Automated transcoding
+  tdarr:
+    enabled: true
+    url: http://tdarr:8265
+    api_key: ""  # Get from Tdarr settings
+    library_id: "1"
+
+  # Radarr - Movie management and metadata
+  radarr:
+    enabled: true
+    url: http://radarr:7878
+    api_key: ""  # Get from Radarr Settings > General > API Key
+
+  # Sonarr - TV show management and metadata
+  sonarr:
+    enabled: true
+    url: http://sonarr:8989
+    api_key: ""  # Get from Sonarr Settings > General > API Key
