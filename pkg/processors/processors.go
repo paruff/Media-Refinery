@@ -11,13 +11,16 @@ import (
 	"github.com/paruff/media-refinery/pkg/logger"
 	"github.com/paruff/media-refinery/pkg/metadata"
 	"github.com/paruff/media-refinery/pkg/storage"
+	"github.com/paruff/media-refinery/pkg/telemetry"
 	"github.com/paruff/media-refinery/pkg/validator"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Processor is the interface for media processors
 type Processor interface {
 	// Process processes a single file
-	Process(input string, output string) error
+	Process(ctx context.Context, input string, output string) error
 	
 	// CanProcess checks if this processor can handle the file
 	CanProcess(path string) bool
@@ -33,6 +36,7 @@ type ProcessorContext struct {
 	Validator *validator.Validator
 	Metadata  *metadata.MetadataExtractor
 	DryRun    bool
+	Telemetry *telemetry.Provider
 }
 
 // BaseProcessor provides common functionality
@@ -68,17 +72,35 @@ func NewAudioProcessor(ctx *ProcessorContext, outputFormat, outputQuality string
 }
 
 // Process processes an audio file
-func (p *AudioProcessor) Process(input, output string) error {
+func (p *AudioProcessor) Process(ctx context.Context, input, output string) error {
+	// Start span for audio processing
+	startTime := time.Now()
+	var span trace.Span
+	if p.ctx.Telemetry != nil {
+		ctx, span = p.ctx.Telemetry.StartSpan(ctx, "processor.audio.process",
+			attribute.String("input.path", input),
+			attribute.String("output.path", output),
+			attribute.String("output.format", p.outputFormat))
+		defer span.End()
+	}
+	
 	p.ctx.Logger.Info("Processing audio: %s -> %s", input, output)
 	
 	// Validate input
 	fileInfo, err := p.ctx.Validator.ValidateFile(input)
 	if err != nil {
+		if p.ctx.Telemetry != nil {
+			span.RecordError(err)
+		}
 		return fmt.Errorf("validation failed: %w", err)
 	}
 	
 	if fileInfo.Type != validator.AudioType {
-		return fmt.Errorf("not an audio file")
+		err := fmt.Errorf("not an audio file")
+		if p.ctx.Telemetry != nil {
+			span.RecordError(err)
+		}
+		return err
 	}
 	
 	// Extract metadata
@@ -96,10 +118,16 @@ func (p *AudioProcessor) Process(input, output string) error {
 		p.ctx.Logger.Info("File already in target format, copying: %s", input)
 		if !p.ctx.DryRun {
 			if err := p.ctx.Storage.Copy(input, output); err != nil {
+				if p.ctx.Telemetry != nil {
+					span.RecordError(err)
+				}
 				return err
 			}
 		}
 		p.ctx.Logger.IncCounter("audio.processed")
+		if p.ctx.Telemetry != nil {
+			span.AddEvent("file_copied")
+		}
 		return nil
 	}
 	
@@ -114,8 +142,22 @@ func (p *AudioProcessor) Process(input, output string) error {
 	}
 	
 	// Convert using ffmpeg with metadata preservation
-	if err := p.convertWithFFmpeg(input, output, meta); err != nil {
+	conversionStart := time.Now()
+	if err := p.convertWithFFmpeg(ctx, input, output, meta); err != nil {
+		if p.ctx.Telemetry != nil {
+			p.ctx.Telemetry.RecordFileFailed(ctx, "audio", "conversion_failed")
+			span.RecordError(err)
+		}
 		return fmt.Errorf("conversion failed: %w", err)
+	}
+	
+	// Record metrics
+	if p.ctx.Telemetry != nil {
+		conversionDuration := time.Since(conversionStart)
+		p.ctx.Telemetry.RecordConversionDuration(ctx, conversionDuration, inputFormat, p.outputFormat)
+		span.AddEvent("conversion_complete", trace.WithAttributes(
+			attribute.Float64("conversion.duration_s", conversionDuration.Seconds()),
+			attribute.Float64("total.duration_s", time.Since(startTime).Seconds())))
 	}
 	
 	p.ctx.Logger.IncCounter("audio.processed")
@@ -124,7 +166,7 @@ func (p *AudioProcessor) Process(input, output string) error {
 }
 
 // convertWithFFmpeg converts audio using ffmpeg and preserves metadata
-func (p *AudioProcessor) convertWithFFmpeg(input, output string, meta *metadata.Metadata) error {
+func (p *AudioProcessor) convertWithFFmpeg(ctx context.Context, input, output string, meta *metadata.Metadata) error {
 	// Ensure output directory exists
 	outputDir := filepath.Dir(output)
 	if err := p.ctx.Storage.CreateDir(outputDir); err != nil {
@@ -189,9 +231,10 @@ func (p *AudioProcessor) convertWithFFmpeg(input, output string, meta *metadata.
 	// Output file
 	args = append(args, "-y", output)
 	
-	cmd := exec.Command("ffmpeg", args...)
-	if err := cmd.Run(); err != nil {
-		return err
+	// Create command with context for cancellation
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ffmpeg failed: %w\nOutput: %s", err, string(output))
 	}
 	
 	return nil
@@ -230,17 +273,36 @@ func NewVideoProcessor(ctx *ProcessorContext, outputFormat, videoCodec, audioCod
 }
 
 // Process processes a video file
-func (p *VideoProcessor) Process(input, output string) error {
+func (p *VideoProcessor) Process(ctx context.Context, input, output string) error {
+	// Start span for video processing
+	startTime := time.Now()
+	var span trace.Span
+	if p.ctx.Telemetry != nil {
+		ctx, span = p.ctx.Telemetry.StartSpan(ctx, "processor.video.process",
+			attribute.String("input.path", input),
+			attribute.String("output.path", output),
+			attribute.String("video.codec", p.videoCodec),
+			attribute.String("audio.codec", p.audioCodec))
+		defer span.End()
+	}
+	
 	p.ctx.Logger.Info("Processing video: %s -> %s", input, output)
 	
 	// Validate input
 	fileInfo, err := p.ctx.Validator.ValidateFile(input)
 	if err != nil {
+		if p.ctx.Telemetry != nil {
+			span.RecordError(err)
+		}
 		return fmt.Errorf("validation failed: %w", err)
 	}
 	
 	if fileInfo.Type != validator.VideoType {
-		return fmt.Errorf("not a video file")
+		err := fmt.Errorf("not a video file")
+		if p.ctx.Telemetry != nil {
+			span.RecordError(err)
+		}
+		return err
 	}
 	
 	// Extract metadata
@@ -258,10 +320,16 @@ func (p *VideoProcessor) Process(input, output string) error {
 		p.ctx.Logger.Info("File already in target format, copying: %s", input)
 		if !p.ctx.DryRun {
 			if err := p.ctx.Storage.Copy(input, output); err != nil {
+				if p.ctx.Telemetry != nil {
+					span.RecordError(err)
+				}
 				return err
 			}
 		}
 		p.ctx.Logger.IncCounter("video.processed")
+		if p.ctx.Telemetry != nil {
+			span.AddEvent("file_copied")
+		}
 		return nil
 	}
 	
@@ -276,8 +344,22 @@ func (p *VideoProcessor) Process(input, output string) error {
 	}
 	
 	// Convert using ffmpeg with metadata preservation
-	if err := p.convertWithFFmpeg(input, output, meta); err != nil {
+	conversionStart := time.Now()
+	if err := p.convertWithFFmpeg(ctx, input, output, meta); err != nil {
+		if p.ctx.Telemetry != nil {
+			p.ctx.Telemetry.RecordFileFailed(ctx, "video", "conversion_failed")
+			span.RecordError(err)
+		}
 		return fmt.Errorf("conversion failed: %w", err)
+	}
+	
+	// Record metrics
+	if p.ctx.Telemetry != nil {
+		conversionDuration := time.Since(conversionStart)
+		p.ctx.Telemetry.RecordConversionDuration(ctx, conversionDuration, inputFormat, p.outputFormat)
+		span.AddEvent("conversion_complete", trace.WithAttributes(
+			attribute.Float64("conversion.duration_s", conversionDuration.Seconds()),
+			attribute.Float64("total.duration_s", time.Since(startTime).Seconds())))
 	}
 	
 	p.ctx.Logger.IncCounter("video.processed")
@@ -286,7 +368,7 @@ func (p *VideoProcessor) Process(input, output string) error {
 }
 
 // convertWithFFmpeg converts video using ffmpeg and preserves metadata
-func (p *VideoProcessor) convertWithFFmpeg(input, output string, meta *metadata.Metadata) error {
+func (p *VideoProcessor) convertWithFFmpeg(ctx context.Context, input, output string, meta *metadata.Metadata) error {
 	// Ensure output directory exists
 	outputDir := filepath.Dir(output)
 	if err := p.ctx.Storage.CreateDir(outputDir); err != nil {
@@ -382,10 +464,7 @@ func (p *VideoProcessor) convertWithFFmpeg(input, output string, meta *metadata.
 	// Output file
 	args = append(args, "-y", output)
 	
-	// Create context with timeout (30 minutes per file)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
-	
+	// Use the provided context which already has timeout from caller
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	
 	// Capture stderr for error messages

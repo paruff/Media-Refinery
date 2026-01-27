@@ -16,7 +16,7 @@ services:
     environment:
       - TZ=America/New_York
       # OpenTelemetry Configuration
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4318
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - OTEL_SERVICE_NAME=media-refinery
       - OTEL_RESOURCE_ATTRIBUTES=service.namespace=media-processing,service.version=1.0.0
@@ -24,7 +24,7 @@ services:
       - OTEL_METRICS_EXPORTER=otlp
       - OTEL_LOGS_EXPORTER=otlp
       # Loki logging
-      - LOKI_URL=http://host.docker.internal:3100/loki/api/v1/push
+      - LOKI_URL=http://loki:3100/loki/api/v1/push
     logging:
       driver: "json-file"
       options:
@@ -44,6 +44,7 @@ services:
     restart: unless-stopped
     networks:
       - media-refinery-network
+      - observability-lab
     extra_hosts:
       - "host.docker.internal:host-gateway"
     deploy:
@@ -273,6 +274,9 @@ services:
 networks:
   media-refinery-network:
     driver: bridge
+  observability-lab:
+    external: true
+    name: observability-lab
 
 volumes:
   input:

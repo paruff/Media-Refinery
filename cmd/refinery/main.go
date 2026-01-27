@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/paruff/media-refinery/pkg/config"
 	"github.com/paruff/media-refinery/pkg/logger"
 	"github.com/paruff/media-refinery/pkg/pipeline"
+	"github.com/paruff/media-refinery/pkg/telemetry"
 )
 
 const version = "1.0.0"
@@ -87,21 +92,63 @@ func main() {
 	log := logger.NewLogger(cfg.Logging.Level, cfg.Logging.Format, logOutput)
 	logger.SetDefaultLogger(log)
 	
+	// Initialize OpenTelemetry
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	
+	telProvider, err := telemetry.Initialize(ctx, "media-refinery", version)
+	if err != nil {
+		log.Warn("Failed to initialize telemetry: %v", err)
+		telProvider = nil // Continue without telemetry
+	} else {
+		log.Info("OpenTelemetry initialized successfully")
+		defer func() {
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer shutdownCancel()
+			if err := telProvider.Shutdown(shutdownCtx); err != nil {
+				log.Error("Failed to shutdown telemetry: %v", err)
+			}
+		}()
+	}
+	
+	// Setup graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	
 	// Create and run pipeline
 	log.Info("Media Refinery v%s", version)
 	
-	pipe, err := pipeline.NewPipeline(cfg, log)
+	pipe, err := pipeline.NewPipeline(cfg, log, telProvider)
 	if err != nil {
 		log.Error("Failed to create pipeline: %v", err)
 		os.Exit(1)
 	}
 	
-	if err := pipe.Run(); err != nil {
-		log.Error("Pipeline execution failed: %v", err)
-		os.Exit(1)
-	}
+	// Run pipeline in goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- pipe.Run(ctx)
+	}()
 	
-	log.Info("All operations completed successfully")
+	// Wait for completion or signal
+	select {
+	case err := <-errChan:
+		if err != nil {
+			log.Error("Pipeline execution failed: %v", err)
+			os.Exit(1)
+		}
+		log.Info("All operations completed successfully")
+	case sig := <-sigChan:
+		log.Info("Received signal: %v, shutting down gracefully...", sig)
+		cancel()
+		// Wait for pipeline to finish with timeout
+		select {
+		case <-errChan:
+			log.Info("Pipeline shutdown complete")
+		case <-time.After(30 * time.Second):
+			log.Warn("Pipeline shutdown timed out")
+		}
+	}
 }
 
 func generateDefaultConfig(path string) error {

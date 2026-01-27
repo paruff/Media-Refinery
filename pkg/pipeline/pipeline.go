@@ -1,11 +1,13 @@
 package pipeline
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/paruff/media-refinery/pkg/config"
 	"github.com/paruff/media-refinery/pkg/integrations"
@@ -13,7 +15,11 @@ import (
 	"github.com/paruff/media-refinery/pkg/metadata"
 	"github.com/paruff/media-refinery/pkg/processors"
 	"github.com/paruff/media-refinery/pkg/storage"
+	"github.com/paruff/media-refinery/pkg/telemetry"
 	"github.com/paruff/media-refinery/pkg/validator"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Pipeline orchestrates the media processing workflow
@@ -25,10 +31,11 @@ type Pipeline struct {
 	metadata     *metadata.MetadataExtractor
 	processors   []processors.Processor
 	integrations *integrations.Manager
+	telemetry    *telemetry.Provider
 }
 
 // NewPipeline creates a new pipeline
-func NewPipeline(cfg *config.Config, log *logger.Logger) (*Pipeline, error) {
+func NewPipeline(cfg *config.Config, log *logger.Logger, tel *telemetry.Provider) (*Pipeline, error) {
 	// Create validator
 	val := validator.NewValidator(
 		cfg.Audio.SupportedTypes,
@@ -51,6 +58,7 @@ func NewPipeline(cfg *config.Config, log *logger.Logger) (*Pipeline, error) {
 		Validator: val,
 		Metadata:  meta,
 		DryRun:    cfg.DryRun,
+		Telemetry: tel,
 	}
 	
 	// Create processors
@@ -88,11 +96,19 @@ func NewPipeline(cfg *config.Config, log *logger.Logger) (*Pipeline, error) {
 		metadata:     meta,
 		processors:   procs,
 		integrations: integ,
+		telemetry:    tel,
 	}, nil
 }
 
 // Run executes the pipeline
-func (p *Pipeline) Run() error {
+func (p *Pipeline) Run(ctx context.Context) error {
+	// Start overall pipeline span
+	if p.telemetry != nil {
+		var span trace.Span
+		ctx, span = p.telemetry.StartSpan(ctx, "pipeline.run")
+		defer span.End()
+	}
+	
 	p.logger.Info("Starting media refinery pipeline")
 	p.logger.Info("Input directory: %s", p.config.InputDir)
 	p.logger.Info("Output directory: %s", p.config.OutputDir)
@@ -130,7 +146,7 @@ func (p *Pipeline) Run() error {
 	}
 	
 	// Process files
-	if err := p.processFiles(files); err != nil {
+	if err := p.processFiles(ctx, files); err != nil {
 		return fmt.Errorf("processing failed: %w", err)
 	}
 	
@@ -159,7 +175,15 @@ func (p *Pipeline) ensureDirectories() error {
 }
 
 // processFiles processes a list of files
-func (p *Pipeline) processFiles(files []*validator.FileInfo) error {
+func (p *Pipeline) processFiles(ctx context.Context, files []*validator.FileInfo) error {
+	// Start span for batch processing
+	if p.telemetry != nil {
+		var span trace.Span
+		ctx, span = p.telemetry.StartSpan(ctx, "pipeline.process_files",
+			attribute.Int("file.count", len(files)))
+		defer span.End()
+	}
+	
 	// Create worker pool
 	concurrency := p.config.Concurrency
 	if concurrency < 1 {
@@ -177,7 +201,7 @@ func (p *Pipeline) processFiles(files []*validator.FileInfo) error {
 		go func() {
 			defer wg.Done()
 			for file := range jobs {
-				err := p.processFile(file)
+				err := p.processFile(ctx, file)
 				results <- err
 			}
 		}()
@@ -185,7 +209,13 @@ func (p *Pipeline) processFiles(files []*validator.FileInfo) error {
 	
 	// Send jobs
 	for _, file := range files {
-		jobs <- file
+		select {
+		case <-ctx.Done():
+			close(jobs)
+			wg.Wait()
+			return ctx.Err()
+		case jobs <- file:
+		}
 	}
 	close(jobs)
 	
@@ -217,17 +247,43 @@ func (p *Pipeline) processFiles(files []*validator.FileInfo) error {
 }
 
 // processFile processes a single file
-func (p *Pipeline) processFile(file *validator.FileInfo) error {
+func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) error {
+	// Start processing span
+	startTime := time.Now()
+	var span trace.Span
+	if p.telemetry != nil {
+		ctx, span = p.telemetry.StartSpan(ctx, "pipeline.process_file",
+			attribute.String("file.path", file.Path),
+			attribute.String("file.type", string(file.Type)),
+			attribute.Int64("file.size", file.Size))
+		defer func() {
+			duration := time.Since(startTime)
+			if p.telemetry != nil {
+				p.telemetry.RecordProcessingDuration(ctx, duration, string(file.Type), span.SpanContext().IsValid())
+			}
+			span.End()
+		}()
+	}
+	
 	p.logger.Debug("Processing: %s", file.Path)
 	
 	// Perform comprehensive integrity check before processing
 	p.logger.Info("Validating file integrity: %s", file.Path)
+	validationStart := time.Now()
 	validatedFile, err := p.validator.ValidateMediaIntegrity(file.Path)
 	if err != nil {
 		p.logger.Error("File validation failed for %s: %v", file.Path, err)
+		if p.telemetry != nil {
+			p.telemetry.RecordFileFailed(ctx, string(file.Type), "validation_failed")
+			span.SetStatus(codes.Error, err.Error())
+		}
 		return fmt.Errorf("validation failed: %w", err)
 	}
 	file = validatedFile
+	if p.telemetry != nil {
+		span.AddEvent("file_validated", trace.WithAttributes(
+			attribute.Float64("validation.duration_ms", time.Since(validationStart).Seconds()*1000)))
+	}
 	
 	// Find appropriate processor
 	var proc processors.Processor
@@ -240,15 +296,25 @@ func (p *Pipeline) processFile(file *validator.FileInfo) error {
 	
 	if proc == nil {
 		p.logger.Warn("No processor found for: %s", file.Path)
+		if p.telemetry != nil {
+			span.AddEvent("no_processor_found")
+		}
 		return nil
 	}
 	
 	// Extract metadata for path formatting (with ffprobe already done during validation)
 	p.logger.Debug("Extracting metadata from: %s", file.Path)
+	metadataStart := time.Now()
 	meta, err := p.metadata.ExtractMetadata(file.Path)
 	if err != nil {
 		p.logger.Warn("Failed to extract metadata from %s: %v", file.Path, err)
 		meta = &metadata.Metadata{Title: "Unknown"}
+	}
+	if p.telemetry != nil {
+		span.AddEvent("metadata_extracted", trace.WithAttributes(
+			attribute.Float64("metadata.duration_ms", time.Since(metadataStart).Seconds()*1000),
+			attribute.String("metadata.title", meta.Title),
+			attribute.String("metadata.artist", meta.Artist)))
 	}
 	
 	// Try to enrich metadata from integrations
@@ -277,9 +343,28 @@ func (p *Pipeline) processFile(file *validator.FileInfo) error {
 	}
 	
 	// Process file
-	if err := proc.Process(file.Path, outputPath); err != nil {
+	// Add 30-minute timeout per file
+	processCtx, processCancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer processCancel()
+	
+	processStart := time.Now()
+	if err := proc.Process(processCtx, file.Path, outputPath); err != nil {
 		p.logger.Error("Failed to process %s: %v", file.Path, err)
+		if p.telemetry != nil {
+			p.telemetry.RecordFileFailed(ctx, string(file.Type), "processing_failed")
+			span.SetStatus(codes.Error, err.Error())
+		}
 		return err
+	}
+	
+	// Record success metrics
+	if p.telemetry != nil {
+		processDuration := time.Since(processStart)
+		format := filepath.Ext(outputPath)
+		p.telemetry.RecordFileProcessed(ctx, string(file.Type), format, file.Size)
+		span.AddEvent("file_processed", trace.WithAttributes(
+			attribute.Float64("processing.duration_s", processDuration.Seconds())))
+		span.SetStatus(codes.Ok, "File processed successfully")
 	}
 	
 	p.logger.Info("Successfully processed: %s -> %s", file.Path, outputPath)
