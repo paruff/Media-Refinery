@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
@@ -22,7 +22,7 @@ import (
 // Provider manages OpenTelemetry tracing and metrics
 type Provider struct {
 	tracerProvider *sdktrace.TracerProvider
-	meterProvider  *metric.MeterProvider
+	meterProvider  *sdkmetric.MeterProvider
 	tracer         trace.Tracer
 	meter          metric.Meter
 	
@@ -81,10 +81,10 @@ func Initialize(ctx context.Context, serviceName, serviceVersion string) (*Provi
 	}
 
 	// Setup metric provider
-	meterProvider := metric.NewMeterProvider(
-		metric.WithReader(metric.NewPeriodicReader(metricExporter,
-			metric.WithInterval(10*time.Second))),
-		metric.WithResource(res),
+	meterProvider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter,
+			sdkmetric.WithInterval(10*time.Second))),
+		sdkmetric.WithResource(res),
 	)
 	otel.SetMeterProvider(meterProvider)
 
