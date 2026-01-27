@@ -38,3 +38,5 @@ config.yaml
 # Editor/IDE
 # .idea/
 # .vscode/
+output
+input

@@ -278,23 +278,45 @@ func (p *Pipeline) processFile(file *validator.FileInfo) error {
 func (p *Pipeline) determineOutputPath(file *validator.FileInfo, meta *metadata.Metadata, proc processors.Processor) string {
 	// Get appropriate pattern
 	pattern := ""
+	mediaType := ""
 	if file.Type == validator.AudioType {
 		pattern = p.config.Organization.MusicPattern
+		mediaType = "audio"
 	} else if file.Type == validator.VideoType {
-		pattern = p.config.Organization.VideoPattern
+		// Determine if it's a movie or series
+		if meta.Season != "" || meta.Episode != "" || meta.Show != "" {
+			// It's a TV series
+			pattern = p.config.Organization.VideoPattern
+		} else {
+			// It's a movie - use pattern based on whether we have a year
+			if meta.Year != "" && meta.Year != "Unknown" {
+				pattern = "{title} ({year})/{title}"
+			} else {
+				// No year, just use title
+				pattern = "{title}/{title}"
+			}
+		}
+		mediaType = "video"
 	}
 	
 	// Format path using metadata
 	var relativePath string
-	if pattern != "" && (meta.Artist != "" || meta.Title != "") {
-		relativePath = p.metadata.FormatPath(meta, pattern)
+	if pattern != "" && meta.Title != "" && meta.Title != "Unknown" {
+		relativePath = p.metadata.FormatPath(meta, pattern, mediaType)
 	} else {
-		// Fallback to preserving directory structure
+		// Fallback to preserving directory structure with type prefix
 		relPath, err := filepath.Rel(p.config.InputDir, file.Path)
 		if err != nil {
 			relPath = filepath.Base(file.Path)
 		}
-		relativePath = relPath
+		// Add type prefix
+		if file.Type == validator.AudioType {
+			relativePath = filepath.Join("music", relPath)
+		} else if file.Type == validator.VideoType {
+			relativePath = filepath.Join("movies", relPath)
+		} else {
+			relativePath = relPath
+		}
 	}
 	
 	// Change extension if needed

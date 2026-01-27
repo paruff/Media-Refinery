@@ -1,9 +1,12 @@
 package processors
 
 import (
+	"context"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/paruff/media-refinery/pkg/logger"
 	"github.com/paruff/media-refinery/pkg/metadata"
@@ -92,32 +95,104 @@ func (p *AudioProcessor) Process(input, output string) error {
 	if inputFormat == p.outputFormat {
 		p.ctx.Logger.Info("File already in target format, copying: %s", input)
 		if !p.ctx.DryRun {
-			return p.ctx.Storage.Copy(input, output)
+			if err := p.ctx.Storage.Copy(input, output); err != nil {
+				return err
+			}
 		}
+		p.ctx.Logger.IncCounter("audio.processed")
 		return nil
 	}
 	
-	// In a real implementation, this would use ffmpeg or similar
-	// For now, we'll simulate the conversion
+	// Use ffmpeg for actual conversion
 	p.ctx.Logger.Info("Converting %s to %s (format: %s, quality: %s)", 
 		input, output, p.outputFormat, p.outputQuality)
 	
 	if p.ctx.DryRun {
 		p.ctx.Logger.Info("[DRY-RUN] Would convert: %s", input)
+		p.ctx.Logger.IncCounter("audio.processed")
 		return nil
 	}
 	
-	// Simulate conversion by copying (in real implementation, use ffmpeg)
-	if err := p.ctx.Storage.Copy(input, output); err != nil {
+	// Convert using ffmpeg with metadata preservation
+	if err := p.convertWithFFmpeg(input, output, meta); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 	
-	// Update metadata on output file
-	if err := p.ctx.Metadata.UpdateMetadata(output, meta); err != nil {
-		p.ctx.Logger.Warn("Failed to update metadata: %v", err)
+	p.ctx.Logger.IncCounter("audio.processed")
+	
+	return nil
+}
+
+// convertWithFFmpeg converts audio using ffmpeg and preserves metadata
+func (p *AudioProcessor) convertWithFFmpeg(input, output string, meta *metadata.Metadata) error {
+	// Ensure output directory exists
+	outputDir := filepath.Dir(output)
+	if err := p.ctx.Storage.CreateDir(outputDir); err != nil {
+		return err
 	}
 	
-	p.ctx.Logger.IncCounter("audio.processed")
+	// Build ffmpeg command
+	args := []string{"-i", input}
+	
+	// Add audio codec settings based on format
+	switch p.outputFormat {
+	case "flac":
+		args = append(args, "-c:a", "flac")
+		if p.bitDepth > 0 {
+			args = append(args, "-sample_fmt", fmt.Sprintf("s%d", p.bitDepth))
+		}
+	case "mp3":
+		args = append(args, "-c:a", "libmp3lame")
+		if p.outputQuality == "lossless" {
+			args = append(args, "-q:a", "0")
+		} else {
+			args = append(args, "-b:a", "320k")
+		}
+	case "aac":
+		args = append(args, "-c:a", "aac")
+		args = append(args, "-b:a", "256k")
+	default:
+		args = append(args, "-c:a", "copy")
+	}
+	
+	// Set sample rate if specified
+	if p.sampleRate > 0 {
+		args = append(args, "-ar", fmt.Sprintf("%d", p.sampleRate))
+	}
+	
+	// Add metadata
+	if meta.Title != "" && meta.Title != "Unknown" {
+		args = append(args, "-metadata", "title="+meta.Title)
+	}
+	if meta.Artist != "" && meta.Artist != "Unknown" {
+		args = append(args, "-metadata", "artist="+meta.Artist)
+	}
+	if meta.Album != "" && meta.Album != "Unknown" {
+		args = append(args, "-metadata", "album="+meta.Album)
+	}
+	if meta.AlbumArtist != "" && meta.AlbumArtist != "Unknown" {
+		args = append(args, "-metadata", "album_artist="+meta.AlbumArtist)
+	}
+	if meta.Year != "" && meta.Year != "Unknown" {
+		args = append(args, "-metadata", "date="+meta.Year)
+	}
+	if meta.Genre != "" && meta.Genre != "Unknown" {
+		args = append(args, "-metadata", "genre="+meta.Genre)
+	}
+	if meta.Track != "" && meta.Track != "Unknown" {
+		args = append(args, "-metadata", "track="+meta.Track)
+	}
+	if meta.Composer != "" && meta.Composer != "Unknown" {
+		args = append(args, "-metadata", "composer="+meta.Composer)
+	}
+	
+	// Output file
+	args = append(args, "-y", output)
+	
+	cmd := exec.Command("ffmpeg", args...)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
 	
 	return nil
 }
@@ -182,31 +257,141 @@ func (p *VideoProcessor) Process(input, output string) error {
 	if inputFormat == p.outputFormat {
 		p.ctx.Logger.Info("File already in target format, copying: %s", input)
 		if !p.ctx.DryRun {
-			return p.ctx.Storage.Copy(input, output)
+			if err := p.ctx.Storage.Copy(input, output); err != nil {
+				return err
+			}
 		}
+		p.ctx.Logger.IncCounter("video.processed")
 		return nil
 	}
 	
-	// In a real implementation, this would use ffmpeg
+	// Use ffmpeg for actual conversion
 	p.ctx.Logger.Info("Converting %s to %s (codec: %s/%s, quality: %s)", 
 		input, output, p.videoCodec, p.audioCodec, p.quality)
 	
 	if p.ctx.DryRun {
 		p.ctx.Logger.Info("[DRY-RUN] Would convert: %s", input)
+		p.ctx.Logger.IncCounter("video.processed")
 		return nil
 	}
 	
-	// Simulate conversion by copying (in real implementation, use ffmpeg)
-	if err := p.ctx.Storage.Copy(input, output); err != nil {
+	// Convert using ffmpeg with metadata preservation
+	if err := p.convertWithFFmpeg(input, output, meta); err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 	
-	// Update metadata on output file
-	if err := p.ctx.Metadata.UpdateMetadata(output, meta); err != nil {
-		p.ctx.Logger.Warn("Failed to update metadata: %v", err)
+	p.ctx.Logger.IncCounter("video.processed")
+	
+	return nil
+}
+
+// convertWithFFmpeg converts video using ffmpeg and preserves metadata
+func (p *VideoProcessor) convertWithFFmpeg(input, output string, meta *metadata.Metadata) error {
+	// Ensure output directory exists
+	outputDir := filepath.Dir(output)
+	if err := p.ctx.Storage.CreateDir(outputDir); err != nil {
+		return err
 	}
 	
-	p.ctx.Logger.IncCounter("video.processed")
+	// Build ffmpeg command
+	args := []string{"-i", input}
+	
+	// Add video codec settings
+	switch p.videoCodec {
+	case "h264":
+		args = append(args, "-c:v", "libx264")
+		// For low-resolution or older content, use better quality settings
+		// or consider copying if already compressed
+		switch p.quality {
+		case "high":
+			args = append(args, "-preset", "slow", "-crf", "16")
+		case "medium":
+			args = append(args, "-preset", "medium", "-crf", "20")
+		case "low":
+			args = append(args, "-preset", "fast", "-crf", "24")
+		default:
+			args = append(args, "-preset", "medium", "-crf", "20")
+		}
+	case "h265", "hevc":
+		args = append(args, "-c:v", "libx265")
+		switch p.quality {
+		case "high":
+			args = append(args, "-preset", "slow", "-crf", "18")
+		case "medium":
+			args = append(args, "-preset", "medium", "-crf", "22")
+		case "low":
+			args = append(args, "-preset", "fast", "-crf", "26")
+		default:
+			args = append(args, "-preset", "medium", "-crf", "22")
+		}
+	case "copy":
+		args = append(args, "-c:v", "copy")
+	default:
+		args = append(args, "-c:v", p.videoCodec)
+	}
+	
+	// Add audio codec settings
+	switch p.audioCodec {
+	case "aac":
+		args = append(args, "-c:a", "aac", "-b:a", "192k")
+	case "ac3":
+		args = append(args, "-c:a", "ac3", "-b:a", "384k")
+	case "opus":
+		args = append(args, "-c:a", "libopus", "-b:a", "128k")
+	case "copy":
+		args = append(args, "-c:a", "copy")
+	default:
+		args = append(args, "-c:a", p.audioCodec)
+	}
+	
+	// Handle resolution
+	if p.resolution != "" && p.resolution != "keep" {
+		args = append(args, "-s", p.resolution)
+	}
+	
+	// Add metadata
+	if meta.Title != "" && meta.Title != "Unknown" {
+		args = append(args, "-metadata", "title="+meta.Title)
+	}
+	if meta.Show != "" && meta.Show != "Unknown" {
+		args = append(args, "-metadata", "show="+meta.Show)
+	}
+	if meta.Season != "" && meta.Season != "Unknown" {
+		args = append(args, "-metadata", "season_number="+meta.Season)
+	}
+	if meta.Episode != "" && meta.Episode != "Unknown" {
+		args = append(args, "-metadata", "episode_sort="+meta.Episode)
+	}
+	if meta.Year != "" && meta.Year != "Unknown" {
+		args = append(args, "-metadata", "date="+meta.Year)
+	}
+	if meta.Genre != "" && meta.Genre != "Unknown" {
+		args = append(args, "-metadata", "genre="+meta.Genre)
+	}
+	if meta.Director != "" && meta.Director != "Unknown" {
+		args = append(args, "-metadata", "director="+meta.Director)
+	}
+	if meta.Comment != "" && meta.Comment != "Unknown" {
+		args = append(args, "-metadata", "comment="+meta.Comment)
+	}
+	
+	// Output file
+	args = append(args, "-y", output)
+	
+	// Create context with timeout (30 minutes per file)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	
+	p.ctx.Logger.Debug("Running ffmpeg: %v", args)
+	
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("conversion timed out after 30 minutes")
+		}
+		return fmt.Errorf("ffmpeg error: %w", err)
+	}
 	
 	return nil
 }
