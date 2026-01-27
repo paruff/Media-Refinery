@@ -220,6 +220,15 @@ func (p *Pipeline) processFiles(files []*validator.FileInfo) error {
 func (p *Pipeline) processFile(file *validator.FileInfo) error {
 	p.logger.Debug("Processing: %s", file.Path)
 	
+	// Perform comprehensive integrity check before processing
+	p.logger.Info("Validating file integrity: %s", file.Path)
+	validatedFile, err := p.validator.ValidateMediaIntegrity(file.Path)
+	if err != nil {
+		p.logger.Error("File validation failed for %s: %v", file.Path, err)
+		return fmt.Errorf("validation failed: %w", err)
+	}
+	file = validatedFile
+	
 	// Find appropriate processor
 	var proc processors.Processor
 	for _, processor := range p.processors {
@@ -234,7 +243,8 @@ func (p *Pipeline) processFile(file *validator.FileInfo) error {
 		return nil
 	}
 	
-	// Extract metadata for path formatting
+	// Extract metadata for path formatting (with ffprobe already done during validation)
+	p.logger.Debug("Extracting metadata from: %s", file.Path)
 	meta, err := p.metadata.ExtractMetadata(file.Path)
 	if err != nil {
 		p.logger.Warn("Failed to extract metadata from %s: %v", file.Path, err)
@@ -245,8 +255,10 @@ func (p *Pipeline) processFile(file *validator.FileInfo) error {
 	if p.integrations.HasAnyIntegration() {
 		integratedMeta, err := p.integrations.GetMetadata(file.Path, file.Type)
 		if err == nil && integratedMeta != nil {
-			p.logger.Info("Enriched metadata from integrations for: %s", file.Path)
+			p.logger.Debug("Enriched metadata from integrations for: %s", file.Path)
 			meta = p.metadata.MergeMetadata(meta, integratedMeta)
+		} else if err != nil {
+			p.logger.Debug("Could not get metadata from integrations: %v", err)
 		}
 	}
 	
@@ -255,6 +267,7 @@ func (p *Pipeline) processFile(file *validator.FileInfo) error {
 	
 	// Verify checksum if enabled
 	if p.config.VerifyChecksums && !p.config.DryRun {
+		p.logger.Debug("Computing checksum for: %s", file.Path)
 		checksum, err := p.validator.ComputeChecksum(file.Path)
 		if err != nil {
 			p.logger.Warn("Failed to compute checksum for %s: %v", file.Path, err)

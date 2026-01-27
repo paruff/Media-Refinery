@@ -3,9 +3,11 @@ package validator
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -174,3 +176,80 @@ func (v *Validator) ValidateOutputPath(path string, allowOverwrite bool) error {
 	
 	return nil
 }
+
+// ProbeMediaFile validates a media file using ffprobe to ensure it's not corrupted
+func (v *Validator) ProbeMediaFile(path string) error {
+	cmd := exec.Command("ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration,size,bit_rate:stream=codec_type,codec_name",
+		"-of", "json",
+		path,
+	)
+	
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("ffprobe failed - file may be corrupted: %w", err)
+	}
+	
+	var result struct {
+		Format struct {
+			Duration string `json:"duration"`
+			Size     string `json:"size"`
+		} `json:"format"`
+		Streams []struct {
+			CodecType string `json:"codec_type"`
+			CodecName string `json:"codec_name"`
+		} `json:"streams"`
+	}
+	
+	if err := json.Unmarshal(output, &result); err != nil {
+		return fmt.Errorf("failed to parse ffprobe output: %w", err)
+	}
+	
+	// Check if file has at least one valid stream
+	if len(result.Streams) == 0 {
+		return fmt.Errorf("no valid streams found in file")
+	}
+	
+	// Check if we have valid codec info
+	hasValidStream := false
+	for _, stream := range result.Streams {
+		if stream.CodecName != "" && stream.CodecType != "" {
+			hasValidStream = true
+			break
+		}
+	}
+	
+	if !hasValidStream {
+		return fmt.Errorf("no valid codec information found - file may be corrupted")
+	}
+	
+	// Check if duration is valid for video/audio
+	if result.Format.Duration == "" || result.Format.Duration == "N/A" {
+		return fmt.Errorf("invalid or missing duration - file may be corrupted")
+	}
+	
+	return nil
+}
+
+// ValidateMediaIntegrity performs comprehensive validation including ffprobe check
+func (v *Validator) ValidateMediaIntegrity(path string) (*FileInfo, error) {
+	// Basic file validation
+	fileInfo, err := v.ValidateFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("basic validation failed: %w", err)
+	}
+	
+	// Check file size
+	if fileInfo.Size == 0 {
+		return nil, fmt.Errorf("file is empty")
+	}
+	
+	// Probe file with ffprobe to check integrity
+	if err := v.ProbeMediaFile(path); err != nil {
+		return nil, fmt.Errorf("integrity check failed: %w", err)
+	}
+	
+	return fileInfo, nil
+}
+

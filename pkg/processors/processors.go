@@ -294,7 +294,11 @@ func (p *VideoProcessor) convertWithFFmpeg(input, output string, meta *metadata.
 	}
 	
 	// Build ffmpeg command
-	args := []string{"-i", input}
+	args := []string{
+		"-i", input,
+		"-progress", "pipe:1", // Enable progress output
+		"-nostats", // Disable status line
+	}
 	
 	// Add video codec settings
 	switch p.videoCodec {
@@ -384,14 +388,45 @@ func (p *VideoProcessor) convertWithFFmpeg(input, output string, meta *metadata.
 	
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	
-	p.ctx.Logger.Debug("Running ffmpeg: %v", args)
+	// Capture stderr for error messages
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
 	
-	if err := cmd.Run(); err != nil {
+	p.ctx.Logger.Debug("Starting ffmpeg conversion with args: %v", args)
+	
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start ffmpeg: %w", err)
+	}
+	
+	// Monitor progress in background
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderr.Read(buf)
+			if err != nil {
+				break
+			}
+			if n > 0 {
+				output := string(buf[:n])
+				// Log progress periodically (every time we see "time=" in output)
+				if strings.Contains(output, "time=") {
+					p.ctx.Logger.Debug("Conversion progress: %s", strings.TrimSpace(output))
+				}
+			}
+		}
+	}()
+	
+	// Wait for completion
+	if err := cmd.Wait(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return fmt.Errorf("conversion timed out after 30 minutes")
 		}
-		return fmt.Errorf("ffmpeg error: %w", err)
+		return fmt.Errorf("ffmpeg conversion failed: %w", err)
 	}
+	
+	p.ctx.Logger.Debug("Conversion completed successfully")
 	
 	return nil
 }
