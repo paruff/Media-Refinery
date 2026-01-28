@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/paruff/media-refinery/pkg/logger"
-	"github.com/paruff/media-refinery/pkg/metadata"
-	"github.com/paruff/media-refinery/pkg/storage"
-	"github.com/paruff/media-refinery/pkg/telemetry"
-	"github.com/paruff/media-refinery/pkg/validator"
+	"github.com/paruff/Media-Refinery/pkg/logger"
+	"github.com/paruff/Media-Refinery/pkg/metadata"
+	"github.com/paruff/Media-Refinery/pkg/storage"
+	"github.com/paruff/Media-Refinery/pkg/telemetry"
+	"github.com/paruff/Media-Refinery/pkg/validator"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )

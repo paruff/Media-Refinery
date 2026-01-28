@@ -3,14 +3,14 @@ package integrations
 import (
 	"fmt"
 
-	"github.com/paruff/media-refinery/pkg/config"
-	"github.com/paruff/media-refinery/pkg/integrations/beets"
-	"github.com/paruff/media-refinery/pkg/integrations/radarr"
-	"github.com/paruff/media-refinery/pkg/integrations/sonarr"
-	"github.com/paruff/media-refinery/pkg/integrations/tdarr"
-	"github.com/paruff/media-refinery/pkg/logger"
-	"github.com/paruff/media-refinery/pkg/metadata"
-	"github.com/paruff/media-refinery/pkg/validator"
+	"github.com/paruff/Media-Refinery/pkg/config"
+	"github.com/paruff/Media-Refinery/pkg/integrations/beets"
+	"github.com/paruff/Media-Refinery/pkg/integrations/radarr"
+	"github.com/paruff/Media-Refinery/pkg/integrations/sonarr"
+	"github.com/paruff/Media-Refinery/pkg/integrations/tdarr"
+	"github.com/paruff/Media-Refinery/pkg/logger"
+	"github.com/paruff/Media-Refinery/pkg/metadata"
+	"github.com/paruff/Media-Refinery/pkg/validator"
 )
 
 // Manager coordinates all third-party integrations

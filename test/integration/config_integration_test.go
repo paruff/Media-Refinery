@@ -1,13 +1,12 @@
 package integration
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/paruff/Media-Refinery/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/paruff/Media-Refinery/pkg/config"
 )
 
 func TestConfigIntegration_LoadAndSave(t *testing.T) {

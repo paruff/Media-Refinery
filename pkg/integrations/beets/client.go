@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/paruff/media-refinery/pkg/metadata"
+	"github.com/paruff/Media-Refinery/pkg/metadata"
 )
 
 // Client represents a beets API client
@@ -57,16 +57,16 @@ func NewClient(baseURL, token string) *Client {
 // Query searches for items in the beets library
 func (c *Client) Query(query string) ([]BeetsItem, error) {
 	url := fmt.Sprintf("%s/item/?query=%s", c.baseURL, url.QueryEscape(query))
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -76,36 +76,36 @@ func (c *Client) Query(query string) ([]BeetsItem, error) {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	var result struct {
 		Items []BeetsItem `json:"results"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	return result.Items, nil
 }
 
 // GetItem retrieves a specific item by ID
 func (c *Client) GetItem(id int) (*BeetsItem, error) {
 	url := fmt.Sprintf("%s/item/%d", c.baseURL, id)
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -115,45 +115,45 @@ func (c *Client) GetItem(id int) (*BeetsItem, error) {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
-	
+
 	var item BeetsItem
 	if err := json.NewDecoder(resp.Body).Decode(&item); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	return &item, nil
 }
 
 // Import imports files into the beets library
 func (c *Client) Import(paths []string, copy, move, write bool) error {
 	url := fmt.Sprintf("%s/import", c.baseURL)
-	
+
 	importReq := ImportRequest{
 		Paths: paths,
 		Copy:  copy,
 		Move:  move,
 		Write: write,
 	}
-	
+
 	jsonData, err := json.Marshal(importReq)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/json")
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
@@ -163,12 +163,12 @@ func (c *Client) Import(paths []string, copy, move, write bool) error {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	return nil
 }
 
@@ -195,27 +195,27 @@ func (c *Client) GetMetadataForFile(path string) (*metadata.Metadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(items) == 0 {
 		return nil, fmt.Errorf("no metadata found for file: %s", path)
 	}
-	
+
 	return items[0].ToMetadata(), nil
 }
 
 // HealthCheck checks if the beets server is accessible
 func (c *Client) HealthCheck() error {
 	url := fmt.Sprintf("%s/stats", c.baseURL)
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
@@ -225,10 +225,10 @@ func (c *Client) HealthCheck() error {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check returned status %d", resp.StatusCode)
 	}
-	
+
 	return nil
 }

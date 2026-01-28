@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/paruff/media-refinery/pkg/metadata"
+	"github.com/paruff/Media-Refinery/pkg/metadata"
 )
 
 // Client represents a Sonarr API client
@@ -100,14 +100,14 @@ func NewClient(baseURL, apiKey string) *Client {
 // GetSeries retrieves a specific series by ID
 func (c *Client) GetSeries(id int) (*Series, error) {
 	url := fmt.Sprintf("%s/api/v3/series/%d", c.baseURL, id)
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("X-Api-Key", c.apiKey)
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -117,31 +117,31 @@ func (c *Client) GetSeries(id int) (*Series, error) {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	var series Series
 	if err := json.NewDecoder(resp.Body).Decode(&series); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	return &series, nil
 }
 
 // LookupSeries searches for series by title
 func (c *Client) LookupSeries(title string) ([]Series, error) {
 	url := fmt.Sprintf("%s/api/v3/series/lookup?term=%s", c.baseURL, title)
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("X-Api-Key", c.apiKey)
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -151,30 +151,30 @@ func (c *Client) LookupSeries(title string) ([]Series, error) {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
-	
+
 	var series []Series
 	if err := json.NewDecoder(resp.Body).Decode(&series); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	return series, nil
 }
 
 // GetEpisode retrieves a specific episode by ID
 func (c *Client) GetEpisode(id int) (*Episode, error) {
 	url := fmt.Sprintf("%s/api/v3/episode/%d", c.baseURL, id)
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("X-Api-Key", c.apiKey)
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -184,30 +184,30 @@ func (c *Client) GetEpisode(id int) (*Episode, error) {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
-	
+
 	var episode Episode
 	if err := json.NewDecoder(resp.Body).Decode(&episode); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	return &episode, nil
 }
 
 // GetRenamePreview gets a preview of how files would be renamed
 func (c *Client) GetRenamePreview(seriesID int) ([]RenamePreview, error) {
 	url := fmt.Sprintf("%s/api/v3/rename?seriesId=%d", c.baseURL, seriesID)
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("X-Api-Key", c.apiKey)
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -217,41 +217,41 @@ func (c *Client) GetRenamePreview(seriesID int) ([]RenamePreview, error) {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
-	
+
 	var previews []RenamePreview
 	if err := json.NewDecoder(resp.Body).Decode(&previews); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	return previews, nil
 }
 
 // RenameFiles triggers a rename operation for a series
 func (c *Client) RenameFiles(seriesIDs []int) error {
 	url := fmt.Sprintf("%s/api/v3/command", c.baseURL)
-	
+
 	command := map[string]interface{}{
 		"name":      "RenameSeries",
 		"seriesIds": seriesIDs,
 	}
-	
+
 	jsonData, err := json.Marshal(command)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Api-Key", c.apiKey)
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
@@ -261,12 +261,12 @@ func (c *Client) RenameFiles(seriesIDs []int) error {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	return nil
 }
 
@@ -276,7 +276,7 @@ func (s *Series) ToMetadata(ep *Episode) *metadata.Metadata {
 	if len(s.Genres) > 0 {
 		genre = s.Genres[0]
 	}
-	
+
 	meta := &metadata.Metadata{
 		Title:    s.Title,
 		Year:     fmt.Sprintf("%d", s.Year),
@@ -285,13 +285,13 @@ func (s *Series) ToMetadata(ep *Episode) *metadata.Metadata {
 		Show:     s.Title,
 		FilePath: s.Path,
 	}
-	
+
 	if ep != nil {
 		meta.Episode = fmt.Sprintf("%d", ep.EpisodeNumber)
 		meta.Season = fmt.Sprintf("%d", ep.SeasonNumber)
 		meta.Title = ep.Title
 	}
-	
+
 	return meta
 }
 
@@ -301,25 +301,25 @@ func (c *Client) GetMetadataByTitle(title string, season, episode int) (*metadat
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(series) == 0 {
 		return nil, fmt.Errorf("no series found with title: %s", title)
 	}
-	
+
 	return series[0].ToMetadata(nil), nil
 }
 
 // HealthCheck checks if the Sonarr server is accessible
 func (c *Client) HealthCheck() error {
 	url := fmt.Sprintf("%s/api/v3/system/status", c.baseURL)
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("X-Api-Key", c.apiKey)
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
@@ -329,10 +329,10 @@ func (c *Client) HealthCheck() error {
 			fmt.Printf("failed to close response body: %v", err)
 		}
 	}()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check returned status %d", resp.StatusCode)
 	}
-	
+
 	return nil
 }
