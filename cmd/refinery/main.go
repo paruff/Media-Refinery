@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/paruff/media-refinery/pkg/config"
-	"github.com/paruff/media-refinery/pkg/logger"
-	"github.com/paruff/media-refinery/pkg/pipeline"
-	"github.com/paruff/media-refinery/pkg/telemetry"
+	"github.com/paruff/Media-Refinery/pkg/config"
+	"github.com/paruff/Media-Refinery/pkg/logger"
+	"github.com/paruff/Media-Refinery/pkg/pipeline"
+	"github.com/paruff/Media-Refinery/pkg/telemetry"
 )
 
 const version = "1.0.0"

@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/paruff/Media-Refinery/pkg/config"
 	"github.com/paruff/Media-Refinery/pkg/logger"
 	"github.com/paruff/Media-Refinery/pkg/pipeline"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewPipeline(t *testing.T) {

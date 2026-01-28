@@ -16,7 +16,7 @@ all: test build
 
 ## build: Build the binary
 build:
-	$(GOBUILD) -o $(BINARY_NAME) -v ./cmd/refinery
+	go build ./...
 
 ## test: Run tests
 test:
@@ -52,7 +52,7 @@ vet:
 
 ## lint: Run golangci-lint (requires golangci-lint installed)
 lint:
-	golangci-lint run
+	golangci-lint run ./...
 
 ## docker-build: Build Docker image
 docker-build:
@@ -92,3 +92,27 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
+
+# Unit Tests
+unit-test:
+	go test ./pkg/... -v
+
+# Integration Tests
+integration-test:
+	bash ./test/integration_test.sh
+
+# Benchmark Tests
+benchmark-test:
+	go test -bench=. ./pkg/...
+
+# BDD/E2E Tests
+bdd-test:
+	go test ./test/bdd -v
+
+# Security Scans
+security-scan:
+	trivy fs .
+
+# Static Code Analysis
+static-analysis:
+	golangci-lint run ./...

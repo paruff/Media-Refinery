@@ -133,11 +133,12 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	}
 	
 	// Scan input directory
-	p.logger.Info("Scanning input directory...")
+	p.logger.Debug("Scanning directory for media files: directory=%s", p.config.InputDir)
 	files, err := p.validator.ScanDirectory(p.config.InputDir)
 	if err != nil {
 		return fmt.Errorf("failed to scan directory: %w", err)
 	}
+	p.logger.Debug("Files found during scan: count=%d, files=%v", len(files), files)
 	
 	p.logger.Info("Found %d media files", len(files))
 	
@@ -266,7 +267,9 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 		}()
 	}
 	
-	p.logger.Debug("Processing: %s", file.Path)
+	p.logger.Debug("Processing file: file=%s", file.Path)
+	p.logger.Debug("File size: size=%d", file.Size)
+	p.logger.Debug("File type: type=%d", file.Type)
 	
 	// Perform comprehensive integrity check before processing
 	p.logger.Info("Validating file integrity: %s", file.Path)

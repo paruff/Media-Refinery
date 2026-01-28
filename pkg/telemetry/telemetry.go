@@ -15,7 +15,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -41,6 +41,7 @@ func Initialize(ctx context.Context, serviceName, serviceVersion string) (*Provi
 		resource.Default(),
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
+			attribute.String("schema_version", "1.24.0"),
 			semconv.ServiceName(serviceName),
 			semconv.ServiceVersion(serviceVersion),
 			attribute.String("environment", getEnv("ENVIRONMENT", "production")),

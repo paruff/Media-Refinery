@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/paruff/Media-Refinery/pkg/config"
+	"github.com/paruff/Media-Refinery/pkg/logger"
+	"github.com/paruff/Media-Refinery/pkg/pipeline"
+	"github.com/paruff/Media-Refinery/pkg/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/paruff/media-refinery/pkg/config"
-	"github.com/paruff/media-refinery/pkg/logger"
-	"github.com/paruff/media-refinery/pkg/pipeline"
-	"github.com/paruff/media-refinery/pkg/telemetry"
 )
 
 func TestPipelineIntegration_Run(t *testing.T) {
@@ -20,9 +20,16 @@ func TestPipelineIntegration_Run(t *testing.T) {
 		outputDir := t.TempDir()
 		workDir := t.TempDir()
 
-		// Create sample input file
-		inputFile := filepath.Join(inputDir, "sample.mp3")
-		require.NoError(t, os.WriteFile(inputFile, []byte("dummy audio data"), 0644))
+		// Copy a real MP3 file from input/sample.mp3
+		src := filepath.Join("input", "sample.mp3")
+		dst := filepath.Join(inputDir, "sample.mp3")
+		srcData, err := os.ReadFile(src)
+		require.NoError(t, err, "failed to read input/sample.mp3 for integration test")
+		require.NoError(t, os.WriteFile(dst, srcData, 0644), "failed to copy sample.mp3 to temp input dir")
+
+		// Verify file copying
+		copiedFile := filepath.Join(inputDir, "sample.mp3")
+		require.FileExists(t, copiedFile, "sample.mp3 should exist in the temporary input directory")
 
 		cfg := config.DefaultConfig()
 		cfg.InputDir = inputDir
@@ -31,8 +38,9 @@ func TestPipelineIntegration_Run(t *testing.T) {
 		cfg.Audio.Enabled = true
 		cfg.Video.Enabled = false
 
-		log := logger.NewLogger("info", "text", "")
-		tel := telemetry.NewProvider()
+		log := logger.NewLogger("info", "text", os.Stdout)
+		tel, err := telemetry.Initialize(context.Background(), "Media-Refinery", "1.0.0")
+		require.NoError(t, err)
 
 		pipe, err := pipeline.NewPipeline(cfg, log, tel)
 		require.NoError(t, err)
@@ -64,8 +72,9 @@ func TestPipelineIntegration_Run(t *testing.T) {
 		cfg.Audio.Enabled = true
 		cfg.Video.Enabled = false
 
-		log := logger.NewLogger("info", "text", "")
-		tel := telemetry.NewProvider()
+		log := logger.NewLogger("info", "text", os.Stdout)
+		tel, err := telemetry.Initialize(context.Background(), "Media-Refinery", "1.0.0")
+		require.NoError(t, err)
 
 		pipe, err := pipeline.NewPipeline(cfg, log, tel)
 		require.NoError(t, err)

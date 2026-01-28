@@ -1,9 +1,6 @@
 package beets
 
 import (
-	"bytes"
-	"errors"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,7 +23,9 @@ func TestQuery(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/item/?query=test", r.URL.String())
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"results": [{"id": 1, "title": "Test Song"}]}`))
+			if _, err := w.Write([]byte(`{"results": [{"id": 1, "title": "Test Song"}]}`)); err != nil {
+				t.Fatalf("failed to write response: %v", err)
+			}
 		}))
 		defer server.Close()
 
@@ -40,7 +39,9 @@ func TestQuery(t *testing.T) {
 	t.Run("API error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Internal Server Error"))
+			if _, err := w.Write([]byte("Internal Server Error")); err != nil {
+				t.Fatalf("failed to write response: %v", err)
+			}
 		}))
 		defer server.Close()
 
@@ -53,7 +54,9 @@ func TestQuery(t *testing.T) {
 	t.Run("decode error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("invalid json"))
+			if _, err := w.Write([]byte("invalid json")); err != nil {
+				t.Fatalf("failed to write response: %v", err)
+			}
 		}))
 		defer server.Close()
 

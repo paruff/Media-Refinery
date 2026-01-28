@@ -119,6 +119,8 @@ jobs:
       run: make test-integration
       env:
         DATABASE_URL: postgres://postgres:test@localhost:5432/test
+        BEETS_BASE_URL: "http://localhost:8337"
+        BEETS_TOKEN: "test-token"
 
   docker:
     name: Build Docker Image

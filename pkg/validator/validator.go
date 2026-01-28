@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"log"
 )
 
 // MediaType represents the type of media file
@@ -34,6 +35,7 @@ type FileInfo struct {
 type Validator struct {
 	audioExts []string
 	videoExts []string
+	logger    *log.Logger
 }
 
 // NewValidator creates a new validator
@@ -41,6 +43,7 @@ func NewValidator(audioExts, videoExts []string) *Validator {
 	return &Validator{
 		audioExts: audioExts,
 		videoExts: videoExts,
+		logger:    log.New(os.Stdout, "", 0),
 	}
 }
 
@@ -67,21 +70,28 @@ func (v *Validator) ValidateFile(path string) (*FileInfo, error) {
 
 // GetMediaType determines the media type from file extension
 func (v *Validator) GetMediaType(path string) MediaType {
-	ext := strings.ToLower(filepath.Ext(path))
+	// Debug logging for path input
+	fmt.Printf("Input path: '%s' (bytes: %v)\n", path, []byte(path))
+
+	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(path)))
 	ext = strings.TrimPrefix(ext, ".")
-	
-	for _, audioExt := range v.audioExts {
-		if ext == audioExt {
+
+	// Debug logging with byte representation
+	fmt.Printf("Extracted extension: '%s' (bytes: %v)\n", ext, []byte(ext))
+	for i, audioExt := range v.audioExts {
+		fmt.Printf("Comparing with audioExt[%d]: '%s' (bytes: %v)\n", i, audioExt, []byte(audioExt))
+		if ext == strings.TrimSpace(audioExt) {
 			return AudioType
 		}
 	}
-	
-	for _, videoExt := range v.videoExts {
-		if ext == videoExt {
+
+	for i, videoExt := range v.videoExts {
+		fmt.Printf("Comparing with videoExt[%d]: '%s' (bytes: %v)\n", i, videoExt, []byte(videoExt))
+		if ext == strings.TrimSpace(videoExt) {
 			return VideoType
 		}
 	}
-	
+
 	return UnknownType
 }
 
@@ -102,12 +112,12 @@ func (v *Validator) ComputeChecksum(path string) (string, error) {
 			fmt.Printf("failed to close file: %v", err)
 		}
 	}()
-	
+
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
 		return "", fmt.Errorf("failed to compute checksum: %w", err)
 	}
-	
+
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
@@ -117,7 +127,7 @@ func (v *Validator) VerifyChecksum(path, expectedChecksum string) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	
+
 	return actualChecksum == expectedChecksum, nil
 }
 
@@ -134,36 +144,36 @@ func (v *Validator) IsVideoFile(path string) bool {
 // ScanDirectory scans a directory for media files
 func (v *Validator) ScanDirectory(dir string) ([]*FileInfo, error) {
 	var files []*FileInfo
-	
+
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		
+
 		if info.IsDir() {
 			return nil
 		}
-		
+
 		mediaType := v.GetMediaType(path)
 		if mediaType == UnknownType {
 			return nil
 		}
-		
+
 		fileInfo := &FileInfo{
 			Path:   path,
 			Size:   info.Size(),
 			Type:   mediaType,
 			Format: v.GetFormat(path),
 		}
-		
+
 		files = append(files, fileInfo)
 		return nil
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan directory: %w", err)
 	}
-	
+
 	return files, nil
 }
 
@@ -177,7 +187,7 @@ func (v *Validator) ValidateOutputPath(path string, allowOverwrite bool) error {
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("failed to check output path: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -189,12 +199,16 @@ func (v *Validator) ProbeMediaFile(path string) error {
 		"-of", "json",
 		path,
 	)
-	
-	output, err := cmd.Output()
+
+	// Debug logging for ffprobe command
+	log.Printf("Running ffprobe command: %v", cmd.Args)
+
+	output, err := cmd.CombinedOutput()
 	if err != nil {
+		log.Printf("ffprobe error: %v, output: %s", err, string(output))
 		return fmt.Errorf("ffprobe failed - file may be corrupted: %w", err)
 	}
-	
+
 	var result struct {
 		Format struct {
 			Duration string `json:"duration"`
@@ -205,16 +219,16 @@ func (v *Validator) ProbeMediaFile(path string) error {
 			CodecName string `json:"codec_name"`
 		} `json:"streams"`
 	}
-	
+
 	if err := json.Unmarshal(output, &result); err != nil {
 		return fmt.Errorf("failed to parse ffprobe output: %w", err)
 	}
-	
+
 	// Check if file has at least one valid stream
 	if len(result.Streams) == 0 {
 		return fmt.Errorf("no valid streams found in file")
 	}
-	
+
 	// Check if we have valid codec info
 	hasValidStream := false
 	for _, stream := range result.Streams {
@@ -223,16 +237,16 @@ func (v *Validator) ProbeMediaFile(path string) error {
 			break
 		}
 	}
-	
+
 	if !hasValidStream {
 		return fmt.Errorf("no valid codec information found - file may be corrupted")
 	}
-	
+
 	// Check if duration is valid for video/audio
 	if result.Format.Duration == "" || result.Format.Duration == "N/A" {
 		return fmt.Errorf("invalid or missing duration - file may be corrupted")
 	}
-	
+
 	return nil
 }
 
@@ -243,17 +257,17 @@ func (v *Validator) ValidateMediaIntegrity(path string) (*FileInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("basic validation failed: %w", err)
 	}
-	
+
 	// Check file size
 	if fileInfo.Size == 0 {
 		return nil, fmt.Errorf("file is empty")
 	}
-	
+
 	// Probe file with ffprobe to check integrity
 	if err := v.ProbeMediaFile(path); err != nil {
 		return nil, fmt.Errorf("integrity check failed: %w", err)
 	}
-	
+
 	return fileInfo, nil
 }
 
