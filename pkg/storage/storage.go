@@ -60,34 +60,45 @@ func (s *Storage) Copy(src, dest string) error {
 		return nil
 	}
 	
-	// Ensure destination directory exists
-	destDir := filepath.Dir(dest)
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return fmt.Errorf("failed to create destination directory: %w", err)
+	// Open source file
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
 	}
-	
-	// Check if destination exists and back it up
-	if _, err := os.Stat(dest); err == nil {
-		backupPath := dest + ".backup"
-		if err := s.backup(dest, backupPath); err != nil {
-			return fmt.Errorf("failed to backup existing file: %w", err)
+	defer func() {
+		if err := srcFile.Close(); err != nil {
+			fmt.Printf("failed to close source file: %v\n", err)
 		}
-		op.BackupPath = backupPath
+	}()
+
+	// Create destination file
+	destFile, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
 	}
-	
-	// Copy file
-	if err := copyFile(src, dest); err != nil {
-		// Restore backup if copy failed
-		if op.BackupPath != "" {
-			_ = s.restore(op.BackupPath, dest)
+	defer func() {
+		if err := destFile.Close(); err != nil {
+			fmt.Printf("failed to close destination file: %v\n", err)
 		}
+	}()
+
+	// Copy file contents
+	if _, err := io.Copy(destFile, srcFile); err != nil {
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
+
+	// Sync to ensure data is written
+	if err := destFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync destination file: %w", err)
+	}
 	
-	op.Completed = true
-	s.operations = append(s.operations, op)
+	// Copy permissions
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
 	
-	return nil
+	return os.Chmod(dest, srcInfo.Mode())
 }
 
 // Move moves a file
@@ -205,11 +216,6 @@ func (s *Storage) Rollback() error {
 	return nil
 }
 
-// backup creates a backup of a file
-func (s *Storage) backup(src, dest string) error {
-	return copyFile(src, dest)
-}
-
 // restore restores a file from backup
 func (s *Storage) restore(backup, dest string) error {
 	if err := copyFile(backup, dest); err != nil {
@@ -224,29 +230,37 @@ func copyFile(src, dest string) error {
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
-	
+	defer func() {
+		if err := srcFile.Close(); err != nil {
+			fmt.Printf("failed to close source file: %v\n", err)
+		}
+	}()
+
 	destFile, err := os.Create(dest)
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
-	
+	defer func() {
+		if err := destFile.Close(); err != nil {
+			fmt.Printf("failed to close destination file: %v\n", err)
+		}
+	}()
+
 	if _, err := io.Copy(destFile, srcFile); err != nil {
 		return err
 	}
-	
+
 	// Sync to ensure data is written
 	if err := destFile.Sync(); err != nil {
 		return err
 	}
-	
+
 	// Copy permissions
 	srcInfo, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
-	
+
 	return os.Chmod(dest, srcInfo.Mode())
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -254,12 +255,12 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 	if p.telemetry != nil {
 		ctx, span = p.telemetry.StartSpan(ctx, "pipeline.process_file",
 			attribute.String("file.path", file.Path),
-			attribute.String("file.type", string(file.Type)),
+			attribute.String("file.type", strconv.Itoa(int(file.Type))),
 			attribute.Int64("file.size", file.Size))
 		defer func() {
 			duration := time.Since(startTime)
 			if p.telemetry != nil {
-				p.telemetry.RecordProcessingDuration(ctx, duration, string(file.Type), span.SpanContext().IsValid())
+				p.telemetry.RecordProcessingDuration(ctx, duration, strconv.Itoa(int(file.Type)), span.SpanContext().IsValid())
 			}
 			span.End()
 		}()
@@ -274,7 +275,7 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 	if err != nil {
 		p.logger.Error("File validation failed for %s: %v", file.Path, err)
 		if p.telemetry != nil {
-			p.telemetry.RecordFileFailed(ctx, string(file.Type), "validation_failed")
+			p.telemetry.RecordFileFailed(ctx, strconv.Itoa(int(file.Type)), "validation_failed")
 			span.SetStatus(codes.Error, err.Error())
 		}
 		return fmt.Errorf("validation failed: %w", err)
@@ -351,7 +352,7 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 	if err := proc.Process(processCtx, file.Path, outputPath); err != nil {
 		p.logger.Error("Failed to process %s: %v", file.Path, err)
 		if p.telemetry != nil {
-			p.telemetry.RecordFileFailed(ctx, string(file.Type), "processing_failed")
+			p.telemetry.RecordFileFailed(ctx, strconv.Itoa(int(file.Type)), "processing_failed")
 			span.SetStatus(codes.Error, err.Error())
 		}
 		return err
@@ -361,7 +362,7 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 	if p.telemetry != nil {
 		processDuration := time.Since(processStart)
 		format := filepath.Ext(outputPath)
-		p.telemetry.RecordFileProcessed(ctx, string(file.Type), format, file.Size)
+		p.telemetry.RecordFileProcessed(ctx, strconv.Itoa(int(file.Type)), format, file.Size)
 		span.AddEvent("file_processed", trace.WithAttributes(
 			attribute.Float64("processing.duration_s", processDuration.Seconds())))
 		span.SetStatus(codes.Ok, "File processed successfully")
@@ -377,20 +378,17 @@ func (p *Pipeline) determineOutputPath(file *validator.FileInfo, meta *metadata.
 	// Get appropriate pattern
 	pattern := ""
 	mediaType := ""
-	if file.Type == validator.AudioType {
+	switch file.Type {
+	case validator.AudioType:
 		pattern = p.config.Organization.MusicPattern
 		mediaType = "audio"
-	} else if file.Type == validator.VideoType {
-		// Determine if it's a movie or series
+	case validator.VideoType:
 		if meta.Season != "" || meta.Episode != "" || meta.Show != "" {
-			// It's a TV series
 			pattern = p.config.Organization.VideoPattern
 		} else {
-			// It's a movie - use pattern based on whether we have a year
 			if meta.Year != "" && meta.Year != "Unknown" {
 				pattern = "{title} ({year})/{title}"
 			} else {
-				// No year, just use title
 				pattern = "{title}/{title}"
 			}
 		}
@@ -407,12 +405,12 @@ func (p *Pipeline) determineOutputPath(file *validator.FileInfo, meta *metadata.
 		if err != nil {
 			relPath = filepath.Base(file.Path)
 		}
-		// Add type prefix
-		if file.Type == validator.AudioType {
+		switch file.Type {
+		case validator.AudioType:
 			relativePath = filepath.Join("music", relPath)
-		} else if file.Type == validator.VideoType {
+		case validator.VideoType:
 			relativePath = filepath.Join("movies", relPath)
-		} else {
+		default:
 			relativePath = relPath
 		}
 	}

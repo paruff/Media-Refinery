@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -85,7 +86,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
 			os.Exit(1)
 		}
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil {
+				log.Printf("failed to close file: %v", err)
+			}
+		}()
 		logOutput = file
 	}
 	

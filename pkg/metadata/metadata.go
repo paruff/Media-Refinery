@@ -279,10 +279,10 @@ func (e *MetadataExtractor) FormatPath(meta *Metadata, pattern string, mediaType
 	
 	// Determine media type prefix
 	var typePrefix string
-	if mediaType == "audio" {
+	switch mediaType {
+	case "audio":
 		typePrefix = "music"
-	} else if mediaType == "video" {
-		// Check if it's a TV series or movie
+	case "video":
 		if meta.Season != "" || meta.Episode != "" || meta.Show != "" {
 			typePrefix = "series"
 		} else {

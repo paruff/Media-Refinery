@@ -97,7 +97,11 @@ func (v *Validator) ComputeChecksum(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("failed to close file: %v", err)
+		}
+	}()
 	
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {

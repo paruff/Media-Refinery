@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/metric"
+	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -24,14 +24,14 @@ type Provider struct {
 	tracerProvider *sdktrace.TracerProvider
 	meterProvider  *sdkmetric.MeterProvider
 	tracer         trace.Tracer
-	meter          metric.Meter
-	
+	meter          otelmetric.Meter
+
 	// Metrics
-	filesProcessedCounter metric.Int64Counter
-	filesFailedCounter    metric.Int64Counter
-	processingDuration    metric.Float64Histogram
-	fileSizeHistogram     metric.Int64Histogram
-	conversionDuration    metric.Float64Histogram
+	filesProcessedCounter otelmetric.Int64Counter
+	filesFailedCounter    otelmetric.Int64Counter
+	processingDuration    otelmetric.Float64Histogram
+	fileSizeHistogram     otelmetric.Int64Histogram
+	conversionDuration    otelmetric.Float64Histogram
 }
 
 // Initialize sets up OpenTelemetry with OTLP exporters
@@ -95,8 +95,8 @@ func Initialize(ctx context.Context, serviceName, serviceVersion string) (*Provi
 	// Initialize metrics
 	filesProcessedCounter, err := meter.Int64Counter(
 		"media.files.processed",
-		metric.WithDescription("Total number of files processed successfully"),
-		metric.WithUnit("{file}"),
+		otelmetric.WithDescription("Total number of files processed successfully"),
+		otelmetric.WithUnit("{file}"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create files processed counter: %w", err)
@@ -104,8 +104,8 @@ func Initialize(ctx context.Context, serviceName, serviceVersion string) (*Provi
 
 	filesFailedCounter, err := meter.Int64Counter(
 		"media.files.failed",
-		metric.WithDescription("Total number of files that failed processing"),
-		metric.WithUnit("{file}"),
+		otelmetric.WithDescription("Total number of files that failed processing"),
+		otelmetric.WithUnit("{file}"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create files failed counter: %w", err)
@@ -113,8 +113,8 @@ func Initialize(ctx context.Context, serviceName, serviceVersion string) (*Provi
 
 	processingDuration, err := meter.Float64Histogram(
 		"media.processing.duration",
-		metric.WithDescription("Duration of file processing operations"),
-		metric.WithUnit("s"),
+		otelmetric.WithDescription("Duration of file processing operations"),
+		otelmetric.WithUnit("s"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create processing duration histogram: %w", err)
@@ -122,8 +122,8 @@ func Initialize(ctx context.Context, serviceName, serviceVersion string) (*Provi
 
 	fileSizeHistogram, err := meter.Int64Histogram(
 		"media.file.size",
-		metric.WithDescription("Size of processed files"),
-		metric.WithUnit("By"),
+		otelmetric.WithDescription("Size of processed files"),
+		otelmetric.WithUnit("By"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file size histogram: %w", err)
@@ -131,8 +131,8 @@ func Initialize(ctx context.Context, serviceName, serviceVersion string) (*Provi
 
 	conversionDuration, err := meter.Float64Histogram(
 		"media.conversion.duration",
-		metric.WithDescription("Duration of media conversion operations"),
-		metric.WithUnit("s"),
+		otelmetric.WithDescription("Duration of media conversion operations"),
+		otelmetric.WithUnit("s"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create conversion duration histogram: %w", err)
@@ -178,7 +178,7 @@ func (p *Provider) StartSpan(ctx context.Context, name string, attrs ...attribut
 
 // RecordFileProcessed records a successfully processed file
 func (p *Provider) RecordFileProcessed(ctx context.Context, fileType, format string, fileSize int64) {
-	attrs := metric.WithAttributes(
+	attrs := otelmetric.WithAttributes(
 		attribute.String("file.type", fileType),
 		attribute.String("file.format", format),
 	)
@@ -188,7 +188,7 @@ func (p *Provider) RecordFileProcessed(ctx context.Context, fileType, format str
 
 // RecordFileFailed records a failed file processing
 func (p *Provider) RecordFileFailed(ctx context.Context, fileType string, errorType string) {
-	p.filesFailedCounter.Add(ctx, 1, metric.WithAttributes(
+	p.filesFailedCounter.Add(ctx, 1, otelmetric.WithAttributes(
 		attribute.String("file.type", fileType),
 		attribute.String("error.type", errorType),
 	))
@@ -196,7 +196,7 @@ func (p *Provider) RecordFileFailed(ctx context.Context, fileType string, errorT
 
 // RecordProcessingDuration records the duration of a processing operation
 func (p *Provider) RecordProcessingDuration(ctx context.Context, duration time.Duration, fileType string, success bool) {
-	p.processingDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
+	p.processingDuration.Record(ctx, duration.Seconds(), otelmetric.WithAttributes(
 		attribute.String("file.type", fileType),
 		attribute.Bool("success", success),
 	))
@@ -204,7 +204,7 @@ func (p *Provider) RecordProcessingDuration(ctx context.Context, duration time.D
 
 // RecordConversionDuration records the duration of a conversion operation
 func (p *Provider) RecordConversionDuration(ctx context.Context, duration time.Duration, inputFormat, outputFormat string) {
-	p.conversionDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
+	p.conversionDuration.Record(ctx, duration.Seconds(), otelmetric.WithAttributes(
 		attribute.String("input.format", inputFormat),
 		attribute.String("output.format", outputFormat),
 	))

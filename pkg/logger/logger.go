@@ -102,10 +102,14 @@ func (l *Logger) log(level Level, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	
 	if l.format == "json" {
-		fmt.Fprintf(l.output, `{"time":"%s","level":"%s","msg":"%s"}`+"\n",
-			timestamp, levelStr, msg)
+		if _, err := fmt.Fprintf(l.output, `{"time":"%s","level":"%s","msg":"%s"}`+"\n",
+			timestamp, levelStr, msg); err != nil {
+			log.Printf("failed to write log: %v", err)
+		}
 	} else {
-		fmt.Fprintf(l.output, "[%s] %s: %s\n", timestamp, levelStr, msg)
+		if _, err := fmt.Fprintf(l.output, "[%s] %s: %s\n", timestamp, levelStr, msg); err != nil {
+			log.Printf("failed to write log: %v", err)
+		}
 	}
 }
 
