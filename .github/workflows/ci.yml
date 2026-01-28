@@ -24,6 +24,20 @@ jobs:
       with:
         go-version: '1.21'
 
+    - name: Install ffmpeg (if missing)
+      run: |
+        if command -v ffprobe >/dev/null; then
+          echo "ffprobe already present: $(command -v ffprobe)"
+        else
+          echo "ffprobe not found — attempting to install ffmpeg"
+          if [ -f /etc/alpine-release ]; then
+            sudo apk add --no-cache ffmpeg || true
+          else
+            sudo apt-get update || true
+            sudo apt-get install -y ffmpeg || true
+          fi
+        fi
+
     - name: Cache Go modules
       uses: actions/cache@v4
       with:
