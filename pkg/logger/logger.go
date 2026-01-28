@@ -42,11 +42,11 @@ func NewLogger(level, format string, output io.Writer) *Logger {
 		output:   output,
 		counters: make(map[string]int64),
 	}
-	
+
 	if output == nil {
 		l.output = os.Stdout
 	}
-	
+
 	return l
 }
 
@@ -82,10 +82,10 @@ func (l *Logger) log(level Level, format string, args ...interface{}) {
 	if level < l.level {
 		return
 	}
-	
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	
+
 	levelStr := ""
 	switch level {
 	case DebugLevel:
@@ -97,10 +97,10 @@ func (l *Logger) log(level Level, format string, args ...interface{}) {
 	case ErrorLevel:
 		levelStr = "ERROR"
 	}
-	
+
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	msg := fmt.Sprintf(format, args...)
-	
+
 	if l.format == "json" {
 		if _, err := fmt.Fprintf(l.output, `{"time":"%s","level":"%s","msg":"%s"}`+"\n",
 			timestamp, levelStr, msg); err != nil {
@@ -151,7 +151,7 @@ func (l *Logger) GetCounter(name string) int64 {
 func (l *Logger) GetCounters() map[string]int64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	
+
 	result := make(map[string]int64)
 	for k, v := range l.counters {
 		result[k] = v

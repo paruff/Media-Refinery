@@ -21,10 +21,10 @@ import (
 type Processor interface {
 	// Process processes a single file
 	Process(ctx context.Context, input string, output string) error
-	
+
 	// CanProcess checks if this processor can handle the file
 	CanProcess(path string) bool
-	
+
 	// GetOutputExtension returns the output file extension
 	GetOutputExtension() string
 }
@@ -83,9 +83,9 @@ func (p *AudioProcessor) Process(ctx context.Context, input, output string) erro
 			attribute.String("output.format", p.outputFormat))
 		defer span.End()
 	}
-	
+
 	p.ctx.Logger.Info("Processing audio: %s -> %s", input, output)
-	
+
 	// Validate input
 	fileInfo, err := p.ctx.Validator.ValidateFile(input)
 	if err != nil {
@@ -94,7 +94,7 @@ func (p *AudioProcessor) Process(ctx context.Context, input, output string) erro
 		}
 		return fmt.Errorf("validation failed: %w", err)
 	}
-	
+
 	if fileInfo.Type != validator.AudioType {
 		err := fmt.Errorf("not an audio file")
 		if p.ctx.Telemetry != nil {
@@ -102,18 +102,18 @@ func (p *AudioProcessor) Process(ctx context.Context, input, output string) erro
 		}
 		return err
 	}
-	
+
 	// Extract metadata
 	meta, err := p.ctx.Metadata.ExtractMetadata(input)
 	if err != nil {
 		p.ctx.Logger.Warn("Failed to extract metadata: %v", err)
 		meta = &metadata.Metadata{}
 	}
-	
+
 	// Check if conversion is needed
 	inputFormat := strings.ToLower(filepath.Ext(input))
 	inputFormat = strings.TrimPrefix(inputFormat, ".")
-	
+
 	if inputFormat == p.outputFormat {
 		p.ctx.Logger.Info("File already in target format, copying: %s", input)
 		if !p.ctx.DryRun {
@@ -130,17 +130,17 @@ func (p *AudioProcessor) Process(ctx context.Context, input, output string) erro
 		}
 		return nil
 	}
-	
+
 	// Use ffmpeg for actual conversion
-	p.ctx.Logger.Info("Converting %s to %s (format: %s, quality: %s)", 
+	p.ctx.Logger.Info("Converting %s to %s (format: %s, quality: %s)",
 		input, output, p.outputFormat, p.outputQuality)
-	
+
 	if p.ctx.DryRun {
 		p.ctx.Logger.Info("[DRY-RUN] Would convert: %s", input)
 		p.ctx.Logger.IncCounter("audio.processed")
 		return nil
 	}
-	
+
 	// Convert using ffmpeg with metadata preservation
 	conversionStart := time.Now()
 	if err := p.convertWithFFmpeg(ctx, input, output, meta); err != nil {
@@ -150,7 +150,7 @@ func (p *AudioProcessor) Process(ctx context.Context, input, output string) erro
 		}
 		return fmt.Errorf("conversion failed: %w", err)
 	}
-	
+
 	// Record metrics
 	if p.ctx.Telemetry != nil {
 		conversionDuration := time.Since(conversionStart)
@@ -159,9 +159,9 @@ func (p *AudioProcessor) Process(ctx context.Context, input, output string) erro
 			attribute.Float64("conversion.duration_s", conversionDuration.Seconds()),
 			attribute.Float64("total.duration_s", time.Since(startTime).Seconds())))
 	}
-	
+
 	p.ctx.Logger.IncCounter("audio.processed")
-	
+
 	return nil
 }
 
@@ -172,10 +172,10 @@ func (p *AudioProcessor) convertWithFFmpeg(ctx context.Context, input, output st
 	if err := p.ctx.Storage.CreateDir(outputDir); err != nil {
 		return err
 	}
-	
+
 	// Build ffmpeg command
 	args := []string{"-i", input}
-	
+
 	// Add audio codec settings based on format
 	switch p.outputFormat {
 	case "flac":
@@ -196,12 +196,12 @@ func (p *AudioProcessor) convertWithFFmpeg(ctx context.Context, input, output st
 	default:
 		args = append(args, "-c:a", "copy")
 	}
-	
+
 	// Set sample rate if specified
 	if p.sampleRate > 0 {
 		args = append(args, "-ar", fmt.Sprintf("%d", p.sampleRate))
 	}
-	
+
 	// Add metadata
 	if meta.Title != "" && meta.Title != "Unknown" {
 		args = append(args, "-metadata", "title="+meta.Title)
@@ -227,16 +227,16 @@ func (p *AudioProcessor) convertWithFFmpeg(ctx context.Context, input, output st
 	if meta.Composer != "" && meta.Composer != "Unknown" {
 		args = append(args, "-metadata", "composer="+meta.Composer)
 	}
-	
+
 	// Output file
 	args = append(args, "-y", output)
-	
+
 	// Create command with context for cancellation
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("ffmpeg failed: %w\nOutput: %s", err, string(output))
 	}
-	
+
 	return nil
 }
 
@@ -285,9 +285,9 @@ func (p *VideoProcessor) Process(ctx context.Context, input, output string) erro
 			attribute.String("audio.codec", p.audioCodec))
 		defer span.End()
 	}
-	
+
 	p.ctx.Logger.Info("Processing video: %s -> %s", input, output)
-	
+
 	// Validate input
 	fileInfo, err := p.ctx.Validator.ValidateFile(input)
 	if err != nil {
@@ -296,7 +296,7 @@ func (p *VideoProcessor) Process(ctx context.Context, input, output string) erro
 		}
 		return fmt.Errorf("validation failed: %w", err)
 	}
-	
+
 	if fileInfo.Type != validator.VideoType {
 		err := fmt.Errorf("not a video file")
 		if p.ctx.Telemetry != nil {
@@ -304,18 +304,18 @@ func (p *VideoProcessor) Process(ctx context.Context, input, output string) erro
 		}
 		return err
 	}
-	
+
 	// Extract metadata
 	meta, err := p.ctx.Metadata.ExtractMetadata(input)
 	if err != nil {
 		p.ctx.Logger.Warn("Failed to extract metadata: %v", err)
 		meta = &metadata.Metadata{}
 	}
-	
+
 	// Check if conversion is needed
 	inputFormat := strings.ToLower(filepath.Ext(input))
 	inputFormat = strings.TrimPrefix(inputFormat, ".")
-	
+
 	if inputFormat == p.outputFormat {
 		p.ctx.Logger.Info("File already in target format, copying: %s", input)
 		if !p.ctx.DryRun {
@@ -332,17 +332,17 @@ func (p *VideoProcessor) Process(ctx context.Context, input, output string) erro
 		}
 		return nil
 	}
-	
+
 	// Use ffmpeg for actual conversion
-	p.ctx.Logger.Info("Converting %s to %s (codec: %s/%s, quality: %s)", 
+	p.ctx.Logger.Info("Converting %s to %s (codec: %s/%s, quality: %s)",
 		input, output, p.videoCodec, p.audioCodec, p.quality)
-	
+
 	if p.ctx.DryRun {
 		p.ctx.Logger.Info("[DRY-RUN] Would convert: %s", input)
 		p.ctx.Logger.IncCounter("video.processed")
 		return nil
 	}
-	
+
 	// Convert using ffmpeg with metadata preservation
 	conversionStart := time.Now()
 	if err := p.convertWithFFmpeg(ctx, input, output, meta); err != nil {
@@ -352,7 +352,7 @@ func (p *VideoProcessor) Process(ctx context.Context, input, output string) erro
 		}
 		return fmt.Errorf("conversion failed: %w", err)
 	}
-	
+
 	// Record metrics
 	if p.ctx.Telemetry != nil {
 		conversionDuration := time.Since(conversionStart)
@@ -361,9 +361,9 @@ func (p *VideoProcessor) Process(ctx context.Context, input, output string) erro
 			attribute.Float64("conversion.duration_s", conversionDuration.Seconds()),
 			attribute.Float64("total.duration_s", time.Since(startTime).Seconds())))
 	}
-	
+
 	p.ctx.Logger.IncCounter("video.processed")
-	
+
 	return nil
 }
 
@@ -374,14 +374,14 @@ func (p *VideoProcessor) convertWithFFmpeg(ctx context.Context, input, output st
 	if err := p.ctx.Storage.CreateDir(outputDir); err != nil {
 		return err
 	}
-	
+
 	// Build ffmpeg command
 	args := []string{
 		"-i", input,
 		"-progress", "pipe:1", // Enable progress output
 		"-nostats", // Disable status line
 	}
-	
+
 	// Add video codec settings
 	switch p.videoCodec {
 	case "h264":
@@ -415,7 +415,7 @@ func (p *VideoProcessor) convertWithFFmpeg(ctx context.Context, input, output st
 	default:
 		args = append(args, "-c:v", p.videoCodec)
 	}
-	
+
 	// Add audio codec settings
 	switch p.audioCodec {
 	case "aac":
@@ -429,12 +429,12 @@ func (p *VideoProcessor) convertWithFFmpeg(ctx context.Context, input, output st
 	default:
 		args = append(args, "-c:a", p.audioCodec)
 	}
-	
+
 	// Handle resolution
 	if p.resolution != "" && p.resolution != "keep" {
 		args = append(args, "-s", p.resolution)
 	}
-	
+
 	// Add metadata
 	if meta.Title != "" && meta.Title != "Unknown" {
 		args = append(args, "-metadata", "title="+meta.Title)
@@ -460,25 +460,25 @@ func (p *VideoProcessor) convertWithFFmpeg(ctx context.Context, input, output st
 	if meta.Comment != "" && meta.Comment != "Unknown" {
 		args = append(args, "-metadata", "comment="+meta.Comment)
 	}
-	
+
 	// Output file
 	args = append(args, "-y", output)
-	
+
 	// Use the provided context which already has timeout from caller
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	
+
 	// Capture stderr for error messages
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
-	
+
 	p.ctx.Logger.Debug("Starting ffmpeg conversion with args: %v", args)
-	
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
-	
+
 	// Monitor progress in background
 	go func() {
 		buf := make([]byte, 1024)
@@ -496,7 +496,7 @@ func (p *VideoProcessor) convertWithFFmpeg(ctx context.Context, input, output st
 			}
 		}
 	}()
-	
+
 	// Wait for completion
 	if err := cmd.Wait(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -504,9 +504,9 @@ func (p *VideoProcessor) convertWithFFmpeg(ctx context.Context, input, output st
 		}
 		return fmt.Errorf("ffmpeg conversion failed: %w", err)
 	}
-	
+
 	p.ctx.Logger.Debug("Conversion completed successfully")
-	
+
 	return nil
 }
 

@@ -8,20 +8,25 @@ import (
 	"sync"
 )
 
+// IsDryRun returns true if storage is in dry-run mode
+func (s *Storage) IsDryRun() bool {
+	return s.dryRun
+}
+
 // Storage provides safe file operations with transaction-like behavior
 type Storage struct {
-	workDir     string
-	dryRun      bool
-	operations  []Operation
-	mu          sync.Mutex
+	workDir    string
+	dryRun     bool
+	operations []Operation
+	mu         sync.Mutex
 }
 
 // Operation represents a file operation
 type Operation struct {
-	Type      OperationType
-	Source    string
-	Dest      string
-	Completed bool
+	Type       OperationType
+	Source     string
+	Dest       string
+	Completed  bool
 	BackupPath string
 }
 
@@ -48,18 +53,18 @@ func NewStorage(workDir string, dryRun bool) *Storage {
 func (s *Storage) Copy(src, dest string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	op := Operation{
 		Type:   CopyOp,
 		Source: src,
 		Dest:   dest,
 	}
-	
+
 	if s.dryRun {
 		s.operations = append(s.operations, op)
 		return nil
 	}
-	
+
 	// Open source file
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -91,13 +96,13 @@ func (s *Storage) Copy(src, dest string) error {
 	if err := destFile.Sync(); err != nil {
 		return fmt.Errorf("failed to sync destination file: %w", err)
 	}
-	
+
 	// Copy permissions
 	srcInfo, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
-	
+
 	return os.Chmod(dest, srcInfo.Mode())
 }
 
@@ -105,24 +110,24 @@ func (s *Storage) Copy(src, dest string) error {
 func (s *Storage) Move(src, dest string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	op := Operation{
 		Type:   MoveOp,
 		Source: src,
 		Dest:   dest,
 	}
-	
+
 	if s.dryRun {
 		s.operations = append(s.operations, op)
 		return nil
 	}
-	
+
 	// Ensure destination directory exists
 	destDir := filepath.Dir(dest)
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
-	
+
 	// Try rename first (faster if on same filesystem)
 	if err := os.Rename(src, dest); err != nil {
 		// If rename fails, try copy and delete
@@ -135,10 +140,10 @@ func (s *Storage) Move(src, dest string) error {
 			return fmt.Errorf("failed to remove source file: %w", err)
 		}
 	}
-	
+
 	op.Completed = true
 	s.operations = append(s.operations, op)
-	
+
 	return nil
 }
 
@@ -146,24 +151,24 @@ func (s *Storage) Move(src, dest string) error {
 func (s *Storage) CreateDir(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	op := Operation{
 		Type: CreateDirOp,
 		Dest: path,
 	}
-	
+
 	if s.dryRun {
 		s.operations = append(s.operations, op)
 		return nil
 	}
-	
+
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
-	
+
 	op.Completed = true
 	s.operations = append(s.operations, op)
-	
+
 	return nil
 }
 
@@ -171,7 +176,7 @@ func (s *Storage) CreateDir(path string) error {
 func (s *Storage) GetOperations() []Operation {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	result := make([]Operation, len(s.operations))
 	copy(result, s.operations)
 	return result
@@ -181,16 +186,16 @@ func (s *Storage) GetOperations() []Operation {
 func (s *Storage) Rollback() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	var errors []error
-	
+
 	// Rollback in reverse order
 	for i := len(s.operations) - 1; i >= 0; i-- {
 		op := s.operations[i]
 		if !op.Completed {
 			continue
 		}
-		
+
 		switch op.Type {
 		case CopyOp:
 			if err := os.Remove(op.Dest); err != nil && !os.IsNotExist(err) {
@@ -208,11 +213,11 @@ func (s *Storage) Rollback() error {
 			}
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("rollback completed with %d errors", len(errors))
 	}
-	
+
 	return nil
 }
 
@@ -255,16 +260,5 @@ func copyFile(src, dest string) error {
 		return err
 	}
 
-	// Copy permissions
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-
-	return os.Chmod(dest, srcInfo.Mode())
-}
-
-// IsDryRun returns whether storage is in dry-run mode
-func (s *Storage) IsDryRun() bool {
-	return s.dryRun
+	return nil
 }

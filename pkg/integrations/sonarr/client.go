@@ -20,30 +20,30 @@ type Client struct {
 
 // Series represents a TV series in Sonarr
 type Series struct {
-	ID           int      `json:"id"`
-	Title        string   `json:"title"`
-	Year         int      `json:"year"`
-	Path         string   `json:"path"`
-	Genres       []string `json:"genres"`
-	TVDbID       int      `json:"tvdbId"`
-	IMDbID       string   `json:"imdbId"`
-	Overview     string   `json:"overview"`
-	Network      string   `json:"network"`
-	Monitored    bool     `json:"monitored"`
-	SeasonCount  int      `json:"seasonCount"`
+	ID          int      `json:"id"`
+	Title       string   `json:"title"`
+	Year        int      `json:"year"`
+	Path        string   `json:"path"`
+	Genres      []string `json:"genres"`
+	TVDbID      int      `json:"tvdbId"`
+	IMDbID      string   `json:"imdbId"`
+	Overview    string   `json:"overview"`
+	Network     string   `json:"network"`
+	Monitored   bool     `json:"monitored"`
+	SeasonCount int      `json:"seasonCount"`
 }
 
 // Episode represents an episode in Sonarr
 type Episode struct {
-	ID                 int    `json:"id"`
-	SeriesID           int    `json:"seriesId"`
-	SeasonNumber       int    `json:"seasonNumber"`
-	EpisodeNumber      int    `json:"episodeNumber"`
-	Title              string `json:"title"`
-	AirDate            string `json:"airDate"`
-	Overview           string `json:"overview"`
-	HasFile            bool   `json:"hasFile"`
-	EpisodeFileID      int    `json:"episodeFileId,omitempty"`
+	ID            int    `json:"id"`
+	SeriesID      int    `json:"seriesId"`
+	SeasonNumber  int    `json:"seasonNumber"`
+	EpisodeNumber int    `json:"episodeNumber"`
+	Title         string `json:"title"`
+	AirDate       string `json:"airDate"`
+	Overview      string `json:"overview"`
+	HasFile       bool   `json:"hasFile"`
+	EpisodeFileID int    `json:"episodeFileId,omitempty"`
 }
 
 // EpisodeFile represents an episode file in Sonarr
@@ -78,12 +78,12 @@ type Revision struct {
 
 // RenamePreview represents a rename preview
 type RenamePreview struct {
-	SeriesID        int    `json:"seriesId"`
-	SeasonNumber    int    `json:"seasonNumber"`
-	EpisodeNumbers  []int  `json:"episodeNumbers"`
-	EpisodeFileID   int    `json:"episodeFileId"`
-	ExistingPath    string `json:"existingPath"`
-	NewPath         string `json:"newPath"`
+	SeriesID       int    `json:"seriesId"`
+	SeasonNumber   int    `json:"seasonNumber"`
+	EpisodeNumbers []int  `json:"episodeNumbers"`
+	EpisodeFileID  int    `json:"episodeFileId"`
+	ExistingPath   string `json:"existingPath"`
+	NewPath        string `json:"newPath"`
 }
 
 // NewClient creates a new Sonarr API client

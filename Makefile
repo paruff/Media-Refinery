@@ -98,7 +98,7 @@ unit-test:
 	go test ./pkg/... -v
 
 # Integration Tests
-integration-test:
+integration-test: lint fmt
 	bash ./test/integration_test.sh
 
 # Benchmark Tests

@@ -29,28 +29,28 @@ func NewManager(cfg *config.Config, log *logger.Logger) *Manager {
 		config: cfg,
 		logger: log,
 	}
-	
+
 	// Initialize enabled integrations
 	if cfg.Integrations.Beets.Enabled {
 		m.beets = beets.NewClient(cfg.Integrations.Beets.URL, cfg.Integrations.Beets.Token)
 		log.Info("Beets integration enabled: %s", cfg.Integrations.Beets.URL)
 	}
-	
+
 	if cfg.Integrations.Tdarr.Enabled {
 		m.tdarr = tdarr.NewClient(cfg.Integrations.Tdarr.URL, cfg.Integrations.Tdarr.APIKey)
 		log.Info("Tdarr integration enabled: %s", cfg.Integrations.Tdarr.URL)
 	}
-	
+
 	if cfg.Integrations.Radarr.Enabled {
 		m.radarr = radarr.NewClient(cfg.Integrations.Radarr.URL, cfg.Integrations.Radarr.APIKey)
 		log.Info("Radarr integration enabled: %s", cfg.Integrations.Radarr.URL)
 	}
-	
+
 	if cfg.Integrations.Sonarr.Enabled {
 		m.sonarr = sonarr.NewClient(cfg.Integrations.Sonarr.URL, cfg.Integrations.Sonarr.APIKey)
 		log.Info("Sonarr integration enabled: %s", cfg.Integrations.Sonarr.URL)
 	}
-	
+
 	return m
 }
 
@@ -62,28 +62,28 @@ func (m *Manager) HealthCheck() error {
 		}
 		m.logger.Info("Beets health check passed")
 	}
-	
+
 	if m.tdarr != nil {
 		if err := m.tdarr.HealthCheck(); err != nil {
 			return fmt.Errorf("tdarr health check failed: %w", err)
 		}
 		m.logger.Info("Tdarr health check passed")
 	}
-	
+
 	if m.radarr != nil {
 		if err := m.radarr.HealthCheck(); err != nil {
 			return fmt.Errorf("radarr health check failed: %w", err)
 		}
 		m.logger.Info("Radarr health check passed")
 	}
-	
+
 	if m.sonarr != nil {
 		if err := m.sonarr.HealthCheck(); err != nil {
 			return fmt.Errorf("sonarr health check failed: %w", err)
 		}
 		m.logger.Info("Sonarr health check passed")
 	}
-	
+
 	return nil
 }
 
@@ -100,7 +100,7 @@ func (m *Manager) GetMetadata(path string, mediaType validator.MediaType) (*meta
 			}
 			return meta, nil
 		}
-		
+
 	case validator.VideoType:
 		// Try to determine if it's a movie or TV show
 		// For now, try radarr first, then sonarr
@@ -110,13 +110,13 @@ func (m *Manager) GetMetadata(path string, mediaType validator.MediaType) (*meta
 			m.logger.Debug("Attempting movie metadata lookup via Radarr")
 			// In a real implementation, we'd parse the filename better
 		}
-		
+
 		if m.sonarr != nil {
 			m.logger.Debug("Attempting TV show metadata lookup via Sonarr")
 			// In a real implementation, we'd parse the filename better
 		}
 	}
-	
+
 	return nil, fmt.Errorf("no integration available for media type")
 }
 
@@ -125,16 +125,16 @@ func (m *Manager) SubmitForTranscoding(path string, options map[string]string) e
 	if m.tdarr == nil {
 		return fmt.Errorf("tdarr integration not enabled")
 	}
-	
+
 	m.logger.Info("Submitting file to Tdarr: %s", path)
-	
+
 	job, err := m.tdarr.SubmitJob(path, options)
 	if err != nil {
 		return fmt.Errorf("failed to submit to tdarr: %w", err)
 	}
-	
+
 	m.logger.Info("Tdarr job created: %s", job.ID)
-	
+
 	return nil
 }
 
@@ -143,15 +143,15 @@ func (m *Manager) ImportToBeets(paths []string, copy, move bool) error {
 	if m.beets == nil {
 		return fmt.Errorf("beets integration not enabled")
 	}
-	
+
 	m.logger.Info("Importing %d files to beets", len(paths))
-	
+
 	if err := m.beets.Import(paths, copy, move, true); err != nil {
 		return fmt.Errorf("failed to import to beets: %w", err)
 	}
-	
+
 	m.logger.Info("Successfully imported files to beets")
-	
+
 	return nil
 }
 
@@ -160,16 +160,16 @@ func (m *Manager) GetRadarrRenamePreview(movieID int) (string, string, error) {
 	if m.radarr == nil {
 		return "", "", fmt.Errorf("radarr integration not enabled")
 	}
-	
+
 	previews, err := m.radarr.GetRenamePreview(movieID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get rename preview: %w", err)
 	}
-	
+
 	if len(previews) == 0 {
 		return "", "", fmt.Errorf("no rename preview available")
 	}
-	
+
 	return previews[0].ExistingPath, previews[0].NewPath, nil
 }
 
@@ -178,18 +178,18 @@ func (m *Manager) GetSonarrRenamePreview(seriesID int) ([]string, []string, erro
 	if m.sonarr == nil {
 		return nil, nil, fmt.Errorf("sonarr integration not enabled")
 	}
-	
+
 	previews, err := m.sonarr.GetRenamePreview(seriesID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get rename preview: %w", err)
 	}
-	
+
 	var existing, newPaths []string
 	for _, preview := range previews {
 		existing = append(existing, preview.ExistingPath)
 		newPaths = append(newPaths, preview.NewPath)
 	}
-	
+
 	return existing, newPaths, nil
 }
 

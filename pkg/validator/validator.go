@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"log"
 )
 
 // MediaType represents the type of media file
@@ -53,18 +53,18 @@ func (v *Validator) ValidateFile(path string) (*FileInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat file: %w", err)
 	}
-	
+
 	if stat.IsDir() {
 		return nil, fmt.Errorf("path is a directory")
 	}
-	
+
 	info := &FileInfo{
 		Path:   path,
 		Size:   stat.Size(),
 		Type:   v.GetMediaType(path),
 		Format: v.GetFormat(path),
 	}
-	
+
 	return info, nil
 }
 
@@ -103,22 +103,27 @@ func (v *Validator) GetFormat(path string) string {
 
 // ComputeChecksum computes SHA-256 checksum of a file
 func (v *Validator) ComputeChecksum(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", fmt.Errorf("failed to open file: %w", err)
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			fmt.Printf("failed to close file: %v", err)
-		}
-	}()
+	       file, err := os.Open(path)
+	       if err != nil {
+		       return "", fmt.Errorf("failed to open file: %w", err)
+	       }
+	       var closeErr error
+	       defer func() {
+		       cerr := file.Close()
+		       if cerr != nil {
+			       closeErr = cerr
+			       fmt.Printf("failed to close file: %v", cerr)
+		       }
+	       }()
 
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", fmt.Errorf("failed to compute checksum: %w", err)
-	}
-
-	return hex.EncodeToString(hash.Sum(nil)), nil
+	       hash := sha256.New()
+	       if _, err := io.Copy(hash, file); err != nil {
+		       return "", fmt.Errorf("failed to compute checksum: %w", err)
+	       }
+	       if closeErr != nil {
+		       return "", fmt.Errorf("failed to close file: %w", closeErr)
+	       }
+	       return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // VerifyChecksum verifies a file's checksum
@@ -143,6 +148,9 @@ func (v *Validator) IsVideoFile(path string) bool {
 
 // ScanDirectory scans a directory for media files
 func (v *Validator) ScanDirectory(dir string) ([]*FileInfo, error) {
+		// Log configured audio and video extensions for debugging
+		fmt.Printf("Configured audio extensions: %v\n", v.audioExts)
+		fmt.Printf("Configured video extensions: %v\n", v.videoExts)
 	var files []*FileInfo
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -270,4 +278,3 @@ func (v *Validator) ValidateMediaIntegrity(path string) (*FileInfo, error) {
 
 	return fileInfo, nil
 }
-

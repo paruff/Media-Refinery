@@ -42,16 +42,16 @@ func NewPipeline(cfg *config.Config, log *logger.Logger, tel *telemetry.Provider
 		cfg.Audio.SupportedTypes,
 		cfg.Video.SupportedTypes,
 	)
-	
+
 	// Create storage manager
 	stor := storage.NewStorage(cfg.WorkDir, cfg.DryRun)
-	
+
 	// Create metadata extractor
 	meta := metadata.NewMetadataExtractor(cfg.Metadata.CleanupTags)
-	
+
 	// Create integration manager
 	integ := integrations.NewManager(cfg, log)
-	
+
 	// Create processor context
 	ctx := &processors.ProcessorContext{
 		Logger:    log,
@@ -61,10 +61,10 @@ func NewPipeline(cfg *config.Config, log *logger.Logger, tel *telemetry.Provider
 		DryRun:    cfg.DryRun,
 		Telemetry: tel,
 	}
-	
+
 	// Create processors
 	var procs []processors.Processor
-	
+
 	if cfg.Audio.Enabled {
 		audioProc := processors.NewAudioProcessor(
 			ctx,
@@ -76,7 +76,7 @@ func NewPipeline(cfg *config.Config, log *logger.Logger, tel *telemetry.Provider
 		)
 		procs = append(procs, audioProc)
 	}
-	
+
 	if cfg.Video.Enabled {
 		videoProc := processors.NewVideoProcessor(
 			ctx,
@@ -88,7 +88,7 @@ func NewPipeline(cfg *config.Config, log *logger.Logger, tel *telemetry.Provider
 		)
 		procs = append(procs, videoProc)
 	}
-	
+
 	return &Pipeline{
 		config:       cfg,
 		logger:       log,
@@ -109,15 +109,15 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		ctx, span = p.telemetry.StartSpan(ctx, "pipeline.run")
 		defer span.End()
 	}
-	
+
 	p.logger.Info("Starting media refinery pipeline")
 	p.logger.Info("Input directory: %s", p.config.InputDir)
 	p.logger.Info("Output directory: %s", p.config.OutputDir)
-	
+
 	if p.config.DryRun {
 		p.logger.Info("DRY-RUN mode enabled - no files will be modified")
 	}
-	
+
 	// Health check integrations
 	if p.integrations.HasAnyIntegration() {
 		p.logger.Info("Performing integration health checks...")
@@ -126,37 +126,56 @@ func (p *Pipeline) Run(ctx context.Context) error {
 			p.logger.Warn("Continuing without integrations...")
 		}
 	}
-	
-	// Ensure directories exist
-	if err := p.ensureDirectories(); err != nil {
-		return fmt.Errorf("failed to ensure directories: %w", err)
-	}
-	
-	// Scan input directory
-	p.logger.Debug("Scanning directory for media files: directory=%s", p.config.InputDir)
-	files, err := p.validator.ScanDirectory(p.config.InputDir)
-	if err != nil {
-		return fmt.Errorf("failed to scan directory: %w", err)
-	}
-	p.logger.Debug("Files found during scan: count=%d, files=%v", len(files), files)
-	
-	p.logger.Info("Found %d media files", len(files))
-	
-	if len(files) == 0 {
-		p.logger.Info("No media files found to process")
-		return nil
-	}
-	
+
+	       // Ensure directories exist
+	       if err := p.ensureDirectories(); err != nil {
+		       return fmt.Errorf("failed to ensure directories: %w", err)
+	       }
+
+	       // Log current working directory
+	       if cwd, err := os.Getwd(); err == nil {
+		       p.logger.Info("Current working directory: %s", cwd)
+	       } else {
+		       p.logger.Warn("Failed to get current working directory: %v", err)
+	       }
+
+	       // List files in input directory
+	       entries, err := os.ReadDir(p.config.InputDir)
+	       if err != nil {
+		       p.logger.Warn("Failed to list input directory: %v", err)
+	       } else {
+		       var names []string
+		       for _, entry := range entries {
+			       names = append(names, entry.Name())
+		       }
+		       p.logger.Info("Input directory contents: %v", names)
+	       }
+
+	       // Scan input directory
+	       p.logger.Debug("Scanning directory for media files: directory=%s", p.config.InputDir)
+	       files, err := p.validator.ScanDirectory(p.config.InputDir)
+	       if err != nil {
+		       return fmt.Errorf("failed to scan directory: %w", err)
+	       }
+	       p.logger.Debug("Files found during scan: count=%d, files=%v", len(files), files)
+
+	       p.logger.Info("Found %d media files", len(files))
+
+	       if len(files) == 0 {
+		       p.logger.Info("No media files found to process")
+		       return nil
+	       }
+
 	// Process files
 	if err := p.processFiles(ctx, files); err != nil {
 		return fmt.Errorf("processing failed: %w", err)
 	}
-	
+
 	// Print statistics
 	p.printStatistics()
-	
+
 	p.logger.Info("Pipeline completed successfully")
-	
+
 	return nil
 }
 
@@ -166,13 +185,13 @@ func (p *Pipeline) ensureDirectories() error {
 		p.config.OutputDir,
 		p.config.WorkDir,
 	}
-	
+
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -185,18 +204,18 @@ func (p *Pipeline) processFiles(ctx context.Context, files []*validator.FileInfo
 			attribute.Int("file.count", len(files)))
 		defer span.End()
 	}
-	
+
 	// Create worker pool
 	concurrency := p.config.Concurrency
 	if concurrency < 1 {
 		concurrency = 1
 	}
-	
+
 	jobs := make(chan *validator.FileInfo, len(files))
 	results := make(chan error, len(files))
-	
+
 	var wg sync.WaitGroup
-	
+
 	// Start workers
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
@@ -208,7 +227,7 @@ func (p *Pipeline) processFiles(ctx context.Context, files []*validator.FileInfo
 			}
 		}()
 	}
-	
+
 	// Send jobs
 	for _, file := range files {
 		select {
@@ -220,11 +239,11 @@ func (p *Pipeline) processFiles(ctx context.Context, files []*validator.FileInfo
 		}
 	}
 	close(jobs)
-	
+
 	// Wait for completion
 	wg.Wait()
 	close(results)
-	
+
 	// Collect errors
 	var errors []error
 	for err := range results {
@@ -232,7 +251,7 @@ func (p *Pipeline) processFiles(ctx context.Context, files []*validator.FileInfo
 			errors = append(errors, err)
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		p.logger.Error("Processing completed with %d errors", len(errors))
 		for i, err := range errors {
@@ -244,7 +263,7 @@ func (p *Pipeline) processFiles(ctx context.Context, files []*validator.FileInfo
 			p.logger.Error("  ... and %d more errors", len(errors)-10)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -266,11 +285,11 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 			span.End()
 		}()
 	}
-	
+
 	p.logger.Debug("Processing file: file=%s", file.Path)
 	p.logger.Debug("File size: size=%d", file.Size)
 	p.logger.Debug("File type: type=%d", file.Type)
-	
+
 	// Perform comprehensive integrity check before processing
 	p.logger.Info("Validating file integrity: %s", file.Path)
 	validationStart := time.Now()
@@ -288,7 +307,7 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 		span.AddEvent("file_validated", trace.WithAttributes(
 			attribute.Float64("validation.duration_ms", time.Since(validationStart).Seconds()*1000)))
 	}
-	
+
 	// Find appropriate processor
 	var proc processors.Processor
 	for _, processor := range p.processors {
@@ -297,7 +316,7 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 			break
 		}
 	}
-	
+
 	if proc == nil {
 		p.logger.Warn("No processor found for: %s", file.Path)
 		if p.telemetry != nil {
@@ -305,7 +324,7 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 		}
 		return nil
 	}
-	
+
 	// Extract metadata for path formatting (with ffprobe already done during validation)
 	p.logger.Debug("Extracting metadata from: %s", file.Path)
 	metadataStart := time.Now()
@@ -320,7 +339,7 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 			attribute.String("metadata.title", meta.Title),
 			attribute.String("metadata.artist", meta.Artist)))
 	}
-	
+
 	// Try to enrich metadata from integrations
 	if p.integrations.HasAnyIntegration() {
 		integratedMeta, err := p.integrations.GetMetadata(file.Path, file.Type)
@@ -331,10 +350,10 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 			p.logger.Debug("Could not get metadata from integrations: %v", err)
 		}
 	}
-	
+
 	// Determine output path
 	outputPath := p.determineOutputPath(file, meta, proc)
-	
+
 	// Verify checksum if enabled
 	if p.config.VerifyChecksums && !p.config.DryRun {
 		p.logger.Debug("Computing checksum for: %s", file.Path)
@@ -345,12 +364,12 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 			p.logger.Debug("Checksum for %s: %s", file.Path, checksum)
 		}
 	}
-	
+
 	// Process file
 	// Add 30-minute timeout per file
 	processCtx, processCancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer processCancel()
-	
+
 	processStart := time.Now()
 	if err := proc.Process(processCtx, file.Path, outputPath); err != nil {
 		p.logger.Error("Failed to process %s: %v", file.Path, err)
@@ -360,7 +379,7 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 		}
 		return err
 	}
-	
+
 	// Record success metrics
 	if p.telemetry != nil {
 		processDuration := time.Since(processStart)
@@ -370,9 +389,9 @@ func (p *Pipeline) processFile(ctx context.Context, file *validator.FileInfo) er
 			attribute.Float64("processing.duration_s", processDuration.Seconds())))
 		span.SetStatus(codes.Ok, "File processed successfully")
 	}
-	
+
 	p.logger.Info("Successfully processed: %s -> %s", file.Path, outputPath)
-	
+
 	return nil
 }
 
@@ -397,7 +416,7 @@ func (p *Pipeline) determineOutputPath(file *validator.FileInfo, meta *metadata.
 		}
 		mediaType = "video"
 	}
-	
+
 	// Format path using metadata
 	var relativePath string
 	if pattern != "" && meta.Title != "" && meta.Title != "Unknown" {
@@ -417,30 +436,30 @@ func (p *Pipeline) determineOutputPath(file *validator.FileInfo, meta *metadata.
 			relativePath = relPath
 		}
 	}
-	
+
 	// Change extension if needed
 	ext := proc.GetOutputExtension()
 	if ext != "" {
 		relativePath = strings.TrimSuffix(relativePath, filepath.Ext(relativePath)) + ext
 	}
-	
+
 	return filepath.Join(p.config.OutputDir, relativePath)
 }
 
 // printStatistics prints processing statistics
 func (p *Pipeline) printStatistics() {
 	counters := p.logger.GetCounters()
-	
+
 	p.logger.Info("=== Processing Statistics ===")
-	
+
 	if audioCount, ok := counters["audio.processed"]; ok {
 		p.logger.Info("Audio files processed: %d", audioCount)
 	}
-	
+
 	if videoCount, ok := counters["video.processed"]; ok {
 		p.logger.Info("Video files processed: %d", videoCount)
 	}
-	
+
 	if p.storage.IsDryRun() {
 		ops := p.storage.GetOperations()
 		p.logger.Info("Operations that would be performed: %d", len(ops))
