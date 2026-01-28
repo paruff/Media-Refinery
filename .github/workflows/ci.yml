@@ -92,7 +92,11 @@ jobs:
 
   integration:
     name: Run Integration Tests
+    # Run integration tests inside a prebuilt container that includes ffmpeg/ffprobe
+    # This ensures `ffprobe` is available without installing packages on the runner.
     runs-on: ubuntu-latest
+    container:
+      image: jrottenberg/ffmpeg:latest
     needs: build
     permissions:
       contents: read
@@ -114,6 +118,13 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.21'
+
+    - name: Ensure ffprobe is available
+      run: |
+        if ! command -v ffprobe >/dev/null; then
+          echo "::error::ffprobe not found in PATH. Ensure the job container includes ffmpeg/ffprobe or install it before running tests."
+          exit 1
+        fi
 
     - name: Run Integration Tests
       run: make test-integration
