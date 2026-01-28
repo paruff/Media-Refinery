@@ -1,0 +1,42 @@
+name: Workflow Action Versions Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  check-actions:
+    name: Check workflow action versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflows
+        uses: actions/checkout@v4
+
+      - name: Scan for deprecated action versions
+        run: |
+          set -e
+          # List deprecated action patterns to warn about
+          deprecated_patterns=(
+            'actions/upload-artifact@v3'
+            'actions/checkout@v1'
+            'actions/checkout@v2'
+            'actions/setup-go@v1'
+            'actions/cache@v2'
+            # Add additional deprecated patterns here
+          )
+
+          warn_count=0
+          for p in "${deprecated_patterns[@]}"; do
+            if grep -R --line-number --color=never "$p" .github/workflows || true; then
+              echo "::warning::Deprecated action usage found: $p"
+              warn_count=$((warn_count+1))
+            fi
+          done
+
+          if [ $warn_count -eq 0 ]; then
+            echo "No deprecated action versions found."
+          else
+            echo "Found $warn_count deprecated action references. See warnings above."
+          fi
