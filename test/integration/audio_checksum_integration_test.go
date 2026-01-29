@@ -1,4 +1,3 @@
-package integration
 package integration_test
 
 import (
@@ -6,7 +5,7 @@ import (
     "path/filepath"
     "testing"
 
-    "github.com/paruff/media-refinery/pkg/state"
+    "github.com/paruff/Media-Refinery/pkg/state"
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/require"
 )
