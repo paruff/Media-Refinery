@@ -16,6 +16,9 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Pre-commit checks (format, imports, tidy, lint)
+        run: make precom
+      
     - name: Checkout code
       uses: actions/checkout@v4
 

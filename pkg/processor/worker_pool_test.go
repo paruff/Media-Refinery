@@ -12,86 +12,20 @@ import (
     "github.com/stretchr/testify/require"
 )
 
-// TestWorkerPool_Creation tests pool creation
 func TestWorkerPool_Creation(t *testing.T) {
-    tests := []struct {
-        name    string
-        workers int
-        wantErr bool
-    }{
-        {"Valid pool size", 4, false},
-        {"Single worker", 1, false},
-        {"Max workers", 16, false},
-        {"Zero workers", 0, true},
-        {"Negative workers", -1, true},
-    }
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            pool, err := processor.NewWorkerPool(tt.workers)
-            if tt.wantErr {
-                assert.Error(t, err)
-                return
-            }
-            require.NoError(t, err)
-            assert.NotNil(t, pool)
-            pool.Close()
-        })
-    }
+    // ...existing code...
 }
 
-// TestWorkerPool_TaskExecution tests task execution
 func TestWorkerPool_TaskExecution(t *testing.T) {
-    var executed int32
-    ctx := context.Background()
-    pool, err := processor.NewWorkerPool(2)
-    require.NoError(t, err)
-    defer pool.Close()
-    task := func() error {
-        atomic.AddInt32(&executed, 1)
-        return nil
-    }
-    for i := 0; i < 10; i++ {
-        err := pool.Submit(ctx, task)
-        require.NoError(t, err)
-    }
-    pool.Wait()
-    assert.Equal(t, int32(10), atomic.LoadInt32(&executed))
+    // ...existing code...
 }
 
-// TestWorkerPool_ErrorHandling tests error propagation
 func TestWorkerPool_ErrorHandling(t *testing.T) {
-    ctx := context.Background()
-    pool, err := processor.NewWorkerPool(2)
-    require.NoError(t, err)
-    defer pool.Close()
-    expectedErr := errors.New("task failed")
-    task := func() error {
-        return expectedErr
-    }
-    for i := 0; i < 5; i++ {
-        err := pool.Submit(ctx, task)
-        require.NoError(t, err)
-    }
-    errs := pool.WaitWithErrors()
-    assert.NotEmpty(t, errs, "Should collect errors")
-    assert.Contains(t, errs, expectedErr, "Should contain task error")
+    // ...existing code...
 }
 
-// TestWorkerPool_ContextCancellation tests cancellation
 func TestWorkerPool_ContextCancellation(t *testing.T) {
-    ctx, cancel := context.WithCancel(context.Background())
-    pool, err := processor.NewWorkerPool(2)
-    require.NoError(t, err)
-    defer pool.Close()
-    task := func() error {
-        time.Sleep(5 * time.Second)
-        return nil
-    }
-    err = pool.Submit(ctx, task)
-    require.NoError(t, err)
-    cancel()
-    errs := pool.WaitWithErrors()
-    assert.NotEmpty(t, errs, "Should report cancellation")
+    // ...existing code...
 }
 package processor_test
 

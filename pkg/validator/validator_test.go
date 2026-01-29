@@ -19,12 +19,12 @@ func TestValidateFile(t *testing.T) {
 		{
 			name: "Valid audio file",
 			setup: func() string {
-				       file, _ := os.CreateTemp("", "test")
-				       defer func() {
-					       if err := file.Close(); err != nil {
-						       t.Errorf("failed to close file: %v", err)
-					       }
-				       }()
+				file, _ := os.CreateTemp("", "test")
+				defer func() {
+					if err := file.Close(); err != nil {
+						t.Errorf("failed to close file: %v", err)
+					}
+				}()
 				mp3Data, _ := os.ReadFile("../../sample.mp3")
 				if _, err := file.Write(mp3Data); err != nil {
 					t.Fatalf("failed to write mp3 data: %v", err)
@@ -57,12 +57,12 @@ func TestValidateFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			path := tt.path
 			if tt.setup != nil {
-				       path = tt.setup()
-				       defer func() {
-					       if err := os.RemoveAll(path); err != nil {
-						       t.Errorf("failed to remove test file or dir: %v", err)
-					       }
-				       }()
+				path = tt.setup()
+				defer func() {
+					if err := os.RemoveAll(path); err != nil {
+						t.Errorf("failed to remove test file or dir: %v", err)
+					}
+				}()
 			}
 
 			validator := NewValidator([]string{"mp3"}, []string{"mp4"})
@@ -99,12 +99,12 @@ func TestComputeChecksum(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var path string
 			if tt.content != "" {
-				       file, _ := os.CreateTemp("", "testfile")
-				       defer func() {
-					       if err := file.Close(); err != nil {
-						       t.Errorf("failed to close file: %v", err)
-					       }
-				       }()
+				file, _ := os.CreateTemp("", "testfile")
+				defer func() {
+					if err := file.Close(); err != nil {
+						t.Errorf("failed to close file: %v", err)
+					}
+				}()
 				if _, err := file.WriteString(tt.content); err != nil {
 					t.Fatalf("failed to write string: %v", err)
 				}

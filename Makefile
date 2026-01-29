@@ -1,3 +1,10 @@
+# Format, import, and lint all Go files (pre-commit automation)
+precom:
+	gofmt -s -w .
+	goimports -w .
+	go mod tidy
+	golangci-lint run ./...
+
 # check-all: Run all quality and test targets
 check-all: lint fmt build unit-test integration-test benchmark-test bdd-test
 	@echo "All checks completed."

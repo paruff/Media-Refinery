@@ -127,44 +127,44 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		}
 	}
 
-	       // Ensure directories exist
-	       if err := p.ensureDirectories(); err != nil {
-		       return fmt.Errorf("failed to ensure directories: %w", err)
-	       }
+	// Ensure directories exist
+	if err := p.ensureDirectories(); err != nil {
+		return fmt.Errorf("failed to ensure directories: %w", err)
+	}
 
-	       // Log current working directory
-	       if cwd, err := os.Getwd(); err == nil {
-		       p.logger.Info("Current working directory: %s", cwd)
-	       } else {
-		       p.logger.Warn("Failed to get current working directory: %v", err)
-	       }
+	// Log current working directory
+	if cwd, err := os.Getwd(); err == nil {
+		p.logger.Info("Current working directory: %s", cwd)
+	} else {
+		p.logger.Warn("Failed to get current working directory: %v", err)
+	}
 
-	       // List files in input directory
-	       entries, err := os.ReadDir(p.config.InputDir)
-	       if err != nil {
-		       p.logger.Warn("Failed to list input directory: %v", err)
-	       } else {
-		       var names []string
-		       for _, entry := range entries {
-			       names = append(names, entry.Name())
-		       }
-		       p.logger.Info("Input directory contents: %v", names)
-	       }
+	// List files in input directory
+	entries, err := os.ReadDir(p.config.InputDir)
+	if err != nil {
+		p.logger.Warn("Failed to list input directory: %v", err)
+	} else {
+		var names []string
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		p.logger.Info("Input directory contents: %v", names)
+	}
 
-	       // Scan input directory
-	       p.logger.Debug("Scanning directory for media files: directory=%s", p.config.InputDir)
-	       files, err := p.validator.ScanDirectory(p.config.InputDir)
-	       if err != nil {
-		       return fmt.Errorf("failed to scan directory: %w", err)
-	       }
-	       p.logger.Debug("Files found during scan: count=%d, files=%v", len(files), files)
+	// Scan input directory
+	p.logger.Debug("Scanning directory for media files: directory=%s", p.config.InputDir)
+	files, err := p.validator.ScanDirectory(p.config.InputDir)
+	if err != nil {
+		return fmt.Errorf("failed to scan directory: %w", err)
+	}
+	p.logger.Debug("Files found during scan: count=%d, files=%v", len(files), files)
 
-	       p.logger.Info("Found %d media files", len(files))
+	p.logger.Info("Found %d media files", len(files))
 
-	       if len(files) == 0 {
-		       p.logger.Info("No media files found to process")
-		       return nil
-	       }
+	if len(files) == 0 {
+		p.logger.Info("No media files found to process")
+		return nil
+	}
 
 	// Process files
 	if err := p.processFiles(ctx, files); err != nil {
