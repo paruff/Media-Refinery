@@ -39,13 +39,18 @@ type Config struct {
 
 
 
+		logger   *zap.Logger
+		config   Config
+		stateMgr *state.Manager
 
 
 
-
-
-
-
+		mgr := state.NewManager(config.StateDir)
+		return &Converter{
+			logger: zap.L(),
+			config: config,
+			stateMgr: mgr,
+		}
 
 
 

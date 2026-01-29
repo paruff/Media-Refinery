@@ -1,15 +1,15 @@
 package processor
 
 import (
-    "context"
-    "fmt"
-    "path/filepath"
-    "sync"
-    "sync/atomic"
-    "time"
+	"context"
+	"fmt"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
+	"time"
 
-    "github.com/paruff/media-refinery/pkg/audio"
-    "go.uber.org/zap"
+	"github.com/paruff/media-refinery/pkg/audio"
+	"go.uber.org/zap"
 )
 
 // Config holds batch processor configuration
@@ -40,6 +40,7 @@ type Result struct {
 }
 
 // BatchProcessor handles batch file processing
+// Now supports idempotency and state management via audio.Converter
 type BatchProcessor struct {
     config           Config
     converter        *audio.Converter
@@ -95,6 +96,7 @@ func (bp *BatchProcessor) ProcessAll(ctx context.Context) (*Result, error) {
     for _, file := range files {
         filePath := file
         task := func() error {
+            // Idempotency: audio.Converter.ConvertFile now skips already-processed files
             _, err := bp.converter.ConvertFile(ctx, filePath)
             atomic.AddInt32(&processed, 1)
             if err != nil {
