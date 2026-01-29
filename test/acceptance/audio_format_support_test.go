@@ -1,15 +1,15 @@
 package acceptance_test
 
 import (
-    "context"
-    "os"
-    "path/filepath"
-    "testing"
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
 
-    "github.com/paruff/media-refinery/pkg/audio"
-    "github.com/paruff/media-refinery/pkg/processor"
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/require"
+	"github.com/paruff/media-refinery/pkg/audio"
+	"github.com/paruff/media-refinery/pkg/processor"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestStory4_FormatSupport_AllFormatsConvert tests multi-format conversion
