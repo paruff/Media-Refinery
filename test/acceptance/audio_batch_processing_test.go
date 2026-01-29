@@ -1,4 +1,58 @@
 package acceptance_test
+import (
+    "context"
+    "fmt"
+    "os"
+    "path/filepath"
+    "runtime"
+    "sync"
+    "sync/atomic"
+    "testing"
+    "time"
+
+    "github.com/paruff/Media-Refinery/pkg/audio"
+    "github.com/paruff/Media-Refinery/pkg/processor"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
+
+// TestStory2_BatchProcessing_ConcurrentWorkers tests concurrent processing
+// ACCEPTANCE CRITERIA: Scenario 1
+func TestStory2_BatchProcessing_ConcurrentWorkers(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping long-running batch test in short mode")
+    }
+
+    // ===== ARRANGE =====
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+    defer cancel()
+
+    tempDir := t.TempDir()
+    inputDir := filepath.Join(tempDir, "input")
+    outputDir := filepath.Join(tempDir, "output")
+
+    require.NoError(t, os.MkdirAll(inputDir, 0755))
+    require.NoError(t, os.MkdirAll(outputDir, 0755))
+
+    // ... existing code ...
+
+    assert.Less(t, memoryMB, uint64(500), "Memory should be bounded")
+    memoryMB := m.Alloc / 1024 / 1024
+    runtime.ReadMemStats(&m)
+    var m runtime.MemStats
+    assert.Less(t, goroutineIncrease, 10, "Should not leak goroutines")
+    goroutineIncrease := finalGoroutines - initialGoroutines
+    finalGoroutines := runtime.NumGoroutine()
+    assert.LessOrEqual(t, maxProc, int32(4), "Should not exceed worker limit")
+    maxProc := atomic.LoadInt32(&maxActiveProcesses)
+    time.Sleep(1 * time.Second)
+    require.NoError(t, err)
+    _, err := batchProcessor.ProcessAll(ctx)
+}
+
+// ... existing code up to last valid test function ...
+}
+package acceptance_test
 
 import (
     "context"
