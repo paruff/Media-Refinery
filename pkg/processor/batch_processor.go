@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/paruff/media-refinery/pkg/audio"
+	"github.com/paruff/Media-Refinery/pkg/audio"
 	"go.uber.org/zap"
 )
 
