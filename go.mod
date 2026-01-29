@@ -1,3 +1,5 @@
+replace github.com/paruff/media-refinery => ./
+
 module github.com/paruff/Media-Refinery
 
 go 1.21
@@ -15,6 +17,8 @@ require (
 	go.uber.org/zap v1.26.0
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+require github.com/paruff/media-refinery v0.0.0-00010101000000-000000000000
 
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
