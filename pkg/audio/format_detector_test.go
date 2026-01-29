@@ -13,98 +13,76 @@ import (
 // TestFormatDetector_SupportedFormats tests format support checking
 func TestFormatDetector_SupportedFormats(t *testing.T) {
 	detector := audio.NewFormatDetector()
-
 	tests := []struct {
 		format        string
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-}	}		})			assert.Equal(t, tt.wantFormat, format)			require.NoError(t, err)			format, err := detector.DetectFromContent(testFile)			require.NoError(t, os.WriteFile(testFile, tt.content, 0644))			testFile := filepath.Join(tempDir, "test")		t.Run(tt.name, func(t *testing.T) {	for _, tt := range tests {	}		},			wantFormat: "wav",			content:    append([]byte("RIFF"), make([]byte, 100)...),			name:       "WAV file",		{		},			wantFormat: "flac",			content:    append([]byte("fLaC"), make([]byte, 100)...),			name:       "FLAC file",		{		},			wantFormat: "mp3",			content:    append([]byte{0xFF, 0xFB}, make([]byte, 100)...),			name:       "MP3 file",		{	}{		wantFormat string		content    []byte		name       string	tests := []struct {	tempDir := t.TempDir()	detector := audio.NewFormatDetector()func TestFormatDetector_MagicNumberDetection(t *testing.T) {// TestFormatDetector_MagicNumberDetection tests content-based detection}	}		})			assert.Equal(t, tt.wantFormat, format)			require.NoError(t, err)			}				return				assert.Error(t, err)			if tt.wantErr {			format, err := detector.DetectFromExtension(tt.filename)		t.Run(tt.filename, func(t *testing.T) {	for _, tt := range tests {	}		{"no_extension", "", true},		{"song.unknown", "", true},		{"song.aac", "aac", false},		{"song.MP3", "mp3", false},		{"song.mp3", "mp3", false},	}{		wantErr    bool		wantFormat string		filename   string	tests := []struct {	detector := audio.NewFormatDetector()func TestFormatDetector_ExtensionDetection(t *testing.T) {// TestFormatDetector_ExtensionDetection tests format from extension}	}		})			assert.Equal(t, tt.wantSupported, supported)			supported := detector.IsSupported(tt.format)		t.Run(tt.format, func(t *testing.T) {	for _, tt := range tests {	}		{"mp4", false},		{"ape", false},		{"wma", false},		{"flac", true},		{"opus", true},		{"wav", true},		{"ogg", true},		{"m4a", true},		{"aac", true},		{"mp3", true},	}{		wantSupported bool
+		wantSupported bool
+	}{
+		{"mp3", true},
+		{"aac", true},
+		{"m4a", true},
+		{"ogg", true},
+		{"wav", true},
+		{"flac", true},
+		{"opus", true},
+		{"wma", false},
+		{"ape", false},
+		{"mp4", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+			supported := detector.IsSupported(tt.format)
+			assert.Equal(t, tt.wantSupported, supported)
+		})
+	}
+}
+
+// TestFormatDetector_ExtensionDetection tests format from extension
+func TestFormatDetector_ExtensionDetection(t *testing.T) {
+	detector := audio.NewFormatDetector()
+	tests := []struct {
+		filename   string
+		wantFormat string
+		wantErr    bool
+	}{
+		{"song.mp3", "mp3", false},
+		{"song.MP3", "mp3", false},
+		{"song.aac", "aac", false},
+		{"song.unknown", "", true},
+		{"no_extension", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.filename, func(t *testing.T) {
+			format, err := detector.DetectFromExtension(tt.filename)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantFormat, format)
+			}
+		})
+	}
+}
+
+// TestFormatDetector_MagicNumberDetection tests content-based detection
+func TestFormatDetector_MagicNumberDetection(t *testing.T) {
+	detector := audio.NewFormatDetector()
+	tempDir := t.TempDir()
+	tests := []struct {
+		name       string
+		content    []byte
+		wantFormat string
+	}{
+		{"MP3 file", append([]byte{0xFF, 0xFB}, make([]byte, 100)...), "mp3"},
+		{"FLAC file", append([]byte("fLaC"), make([]byte, 100)...), "flac"},
+		{"WAV file", append([]byte("RIFF"), make([]byte, 100)...), "wav"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testFile := filepath.Join(tempDir, "test")
+			require.NoError(t, os.WriteFile(testFile, tt.content, 0644))
+			format, err := detector.DetectFromContent(testFile)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantFormat, format)
+		})
+	}
+}

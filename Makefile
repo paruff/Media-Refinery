@@ -1,8 +1,10 @@
-# Format, import, and lint all Go files (pre-commit automation)
+# Format, import, vet, staticcheck, and lint all Go files (pre-commit automation)
 precom:
 	gofmt -s -w .
 	goimports -w .
 	go mod tidy
+	go vet ./...
+	staticcheck ./...
 	golangci-lint run ./...
 
 # check-all: Run all quality and test targets
