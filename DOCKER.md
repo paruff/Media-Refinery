@@ -6,7 +6,7 @@ This guide explains how to set up and run Media Refinery with all integrations u
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/paruff/media-refinery.git
+git clone https://github.com/paruff/Media-Refinery.git
 cd media-refinery
 ```
 

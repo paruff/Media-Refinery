@@ -52,7 +52,6 @@ func TestStory2_BatchProcessing_ConcurrentWorkers(t *testing.T) {
 
 // ... existing code up to last valid test function ...
 }
-package acceptance_test
 
 import (
     "context"

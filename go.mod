@@ -1,4 +1,4 @@
-replace github.com/paruff/media-refinery => ./
+// removed duplicate replace
 
 module github.com/paruff/Media-Refinery
 
@@ -18,7 +18,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/paruff/media-refinery v0.0.0-00010101000000-000000000000
+// removed duplicate require
 
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect

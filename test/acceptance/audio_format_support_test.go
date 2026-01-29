@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/paruff/media-refinery/pkg/audio"
-	"github.com/paruff/media-refinery/pkg/processor"
+    "github.com/paruff/Media-Refinery/pkg/audio"
+    "github.com/paruff/Media-Refinery/pkg/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

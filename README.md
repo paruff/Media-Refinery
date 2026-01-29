@@ -37,7 +37,7 @@ Media Refinery is a robust media normalization pipeline designed for transformin
 ### Option 1: Docker Installation (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/paruff/media-refinery.git
+git clone https://github.com/paruff/Media-Refinery.git
 cd media-refinery
 
 # Copy an example config file and edit it to include API keys
@@ -55,7 +55,7 @@ docker-compose run --rm media-refinery -config /app/config.yaml
 go build -o media-refinery ./cmd/refinery
 
 # OR install directly using Go Modules
-go install github.com/paruff/media-refinery/cmd/refinery@latest
+go install github.com/paruff/Media-Refinery/cmd/refinery@latest
 
 # Run the application
 ./media-refinery -init -config config.yaml
