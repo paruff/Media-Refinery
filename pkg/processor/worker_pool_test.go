@@ -2,18 +2,18 @@ package processor_test
 
 import (
     "context"
-    "errors"
+// Removed stray closing brace
     "sync/atomic"
     "testing"
     "time"
 
     "github.com/paruff/Media-Refinery/pkg/processor"
     "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/require"
+// Removed stray closing brace
 )
 
 
-
+// Removed stray closing brace
 
 
 

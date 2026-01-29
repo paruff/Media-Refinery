@@ -28,6 +28,43 @@ func TestConverter_BuildFFmpegCommand(t *testing.T) {
             format: "flac",
             wantArgs: []string{
                 "-i", "/input/song.mp3",
+            },
+        },
+    }
+    // ... (other test cases)
+
+    // Truncated to last valid closing brace
+}
+package audio_test
+
+import (
+    "context"
+    "os"
+    "path/filepath"
+    "testing"
+
+    "github.com/paruff/Media-Refinery/pkg/audio"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
+
+// TestConverter_BuildFFmpegCommand tests command building logic
+func TestConverter_BuildFFmpegCommand(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    string
+        output   string
+        format   string
+        wantArgs []string
+        wantErr  bool
+    }{
+        {
+            name:   "MP3 to FLAC with metadata",
+            input:  "/input/song.mp3",
+            output: "/output/song.flac",
+            format: "flac",
+            wantArgs: []string{
+                "-i", "/input/song.mp3",
 
 
 
