@@ -1,15 +1,15 @@
 package acceptance_test
 
 import (
-    "context"
-    "os"
-    "path/filepath"
-    "testing"
-    "time"
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
 
-    "github.com/paruff/media-refinery/pkg/audio"
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/require"
+	"github.com/paruff/media-refinery/pkg/audio"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestStory1_BasicAudioConversion_Success tests the happy path
