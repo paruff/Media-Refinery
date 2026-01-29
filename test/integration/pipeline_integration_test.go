@@ -19,9 +19,9 @@ func TestPipelineIntegration_Run(t *testing.T) {
 
 	// Table-driven tests for dry-run vs real conversion
 	cases := []struct {
-		name         string
-		dryRun       bool
-		expectOutput bool
+		name          string
+		dryRun        bool
+		expectOutput  bool
 		requireFFMpeg bool
 	}{
 		{name: "dry-run", dryRun: true, expectOutput: false, requireFFMpeg: false},
@@ -81,15 +81,18 @@ func TestPipelineIntegration_Run(t *testing.T) {
 			require.NoError(t, err)
 
 			if tc.expectOutput {
-				// Expect at least one file and at least one matching .flac
-				assert.Greater(t, len(outputFiles), 0)
+				// Expect at least one .flac output file anywhere under outputDir
 				foundFlac := false
-				for _, fi := range outputFiles {
-					if filepath.Ext(fi.Name()) == ".flac" {
-						foundFlac = true
-						break
+				err = filepath.WalkDir(outputDir, func(path string, d os.DirEntry, err error) error {
+					if err != nil {
+						return err
 					}
-				}
+					if !d.IsDir() && filepath.Ext(d.Name()) == ".flac" {
+						foundFlac = true
+					}
+					return nil
+				})
+				require.NoError(t, err)
 				assert.True(t, foundFlac, "expected at least one .flac output file")
 			} else {
 				assert.Equal(t, 0, len(outputFiles))
