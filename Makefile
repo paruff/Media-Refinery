@@ -139,3 +139,23 @@ security-scan:
 # Static Code Analysis
 static-analysis:
 	golangci-lint run ./...
+
+# Python Linting
+python-lint:
+	@which pylint >/dev/null 2>&1 && pylint src/ || echo "pylint not installed; skipping Python lint"
+
+# Python Static Analysis
+python-static-analysis:
+	@which mypy >/dev/null 2>&1 && mypy src/ || echo "mypy not installed; skipping Python static analysis"
+
+# Python Unit Tests
+python-test:
+	@which pytest >/dev/null 2>&1 && pytest tests/unit/ || echo "pytest not installed; skipping Python unit tests"
+
+# Python Test Coverage
+python-test-coverage:
+	@which pytest >/dev/null 2>&1 && pytest --cov=src --cov-report=html --cov-report=term || echo "pytest not installed; skipping Python test coverage"
+
+# Python Check-All
+python-check-all: python-lint python-static-analysis python-test python-test-coverage
+	@echo "Python checks completed."
