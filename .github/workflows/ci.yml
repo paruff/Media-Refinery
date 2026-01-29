@@ -1,5 +1,4 @@
 name: CI/CD Pipeline
-name: CI/CD Pipeline
 
 on:
   push:
@@ -17,72 +16,24 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Pre-commit checks (format, imports, tidy, lint)
-        run: make precom
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          go-version: '1.21'
-      - name: Install ffmpeg (if missing)
+          python-version: '3.10'
+      - name: Install dependencies
         run: |
-          if command -v ffprobe >/dev/null; then
-            echo "ffprobe already present: $(command -v ffprobe)"
-          else
-            echo "ffprobe not found — attempting to install ffmpeg"
-            if [ -f /etc/alpine-release ]; then
-              sudo apk add --no-cache ffmpeg || true
-            else
-              sudo apt-get update || true
-              sudo apt-get install -y ffmpeg || true
-            fi
-          fi
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      - name: Download dependencies
-        run: go mod download
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
       - name: Run Tests with Coverage
         run: |
-          set -euo pipefail
-          go test -v -race -coverprofile=coverage.out ./...
-          # Ensure coverage file was generated
-          if [ ! -f coverage.out ]; then
-            echo "::error::coverage.out not found — test coverage report missing"
-            exit 1
-          fi
-          # Capture go tool cover output (may contain 'coverage: [no statements]')
-          cov_out="$(go tool cover -func=coverage.out 2>&1 || true)"
-          if echo "$cov_out" | grep -q "no statements"; then
-            echo "::error::Coverage report contains no statements (coverage: [no statements]). Failing to enforce threshold to avoid silent passes."
-            echo "$cov_out"
-            exit 1
-          fi
-          # Extract total coverage line
-          total_line=$(printf "%s" "$cov_out" | grep -E '^total:' || true)
-          if [ -z "$total_line" ]; then
-            echo "::error::Unable to find total coverage line in coverage output. Output:\n$cov_out"
-            exit 1
-          fi
-          # Parse percentage (e.g., 'total: (statements) 82.5%')
-          percent=$(printf "%s" "$total_line" | awk '{print $3}' | sed 's/%//')
-          if ! printf '%s' "$percent" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then
-            echo "::error::Parsed coverage percent is invalid: '$percent'\nFull output:\n$cov_out"
-            exit 1
-          fi
-          # Compare as float against threshold (80)
-          awk -v p="$percent" 'BEGIN{ if (p+0 < 80) { print "::error::Coverage threshold not met: " p "% < 80%"; exit 1 } }'
-
+          pytest --cov=src --cov-report=term-missing --cov-fail-under=80
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage.out
+          path: .coverage
 
   lint:
     name: Lint Code
@@ -93,15 +44,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          go-version: '1.21'
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v4
-        with:
-          version: latest
-          args: --timeout=5m
+          python-version: '3.10'
+      - name: Install linting tools
+        run: |
+          pip install flake8 mypy
+      - name: Run flake8
+        run: flake8 src
+      - name: Run mypy
+        run: mypy src
 
   build:
     name: Build Application
@@ -112,21 +65,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          go-version: '1.21'
-      - name: Build Binary
-        run: go build -v ./cmd/refinery
-      - name: Test Binary
-        run: |
-          ./refinery -version
-          ./refinery -init -config /tmp/test-config.yaml
+          python-version: '3.10'
+      - name: Build Package
+        run: python setup.py sdist bdist_wheel
 
   integration:
     name: Run Integration Tests
-    # Run integration tests inside a prebuilt container that includes ffmpeg/ffprobe
-    # This ensures `ffprobe` is available without installing packages on the runner.
     runs-on: ubuntu-latest
     container:
       image: jrottenberg/ffmpeg:latest
@@ -146,22 +93,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          go-version: '1.21'
-      - name: Ensure ffprobe is available
+          python-version: '3.10'
+      - name: Install dependencies
         run: |
-          if ! command -v ffprobe >/dev/null; then
-            echo "::error::ffprobe not found in PATH. Ensure the job container includes ffmpeg/ffprobe or install it before running tests."
-            exit 1
-          fi
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
       - name: Run Integration Tests
-        run: make test-integration
-        env:
-          DATABASE_URL: postgres://postgres:test@localhost:5432/test
-          BEETS_BASE_URL: "http://localhost:8337"
-          BEETS_TOKEN: "test-token"
+        run: pytest tests/integration
 
   docker:
     name: Build Docker Image
@@ -196,18 +137,3 @@ jobs:
           tags: media-refinery:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: docker
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
-      - name: Run gosec
-        run: gosec ./...
-  security:

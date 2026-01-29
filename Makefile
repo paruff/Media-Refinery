@@ -156,6 +156,10 @@ python-test:
 python-test-coverage:
 	@which pytest >/dev/null 2>&1 && pytest --cov=src --cov-report=html --cov-report=term || echo "pytest not installed; skipping Python test coverage"
 
+# Python Type Checking
+type-check:
+	@which mypy >/dev/null 2>&1 && mypy src/ || echo "mypy not installed; skipping Python type checking"
+
 # Python Check-All
-python-check-all: python-lint python-static-analysis python-test python-test-coverage
+python-check-all: python-lint python-static-analysis python-test python-test-coverage type-check
 	@echo "Python checks completed."
