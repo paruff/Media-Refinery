@@ -15,58 +15,48 @@ func TestFormatDetection_AllFormats(t *testing.T) {
     }
 
     testCases := []struct {
-        name       string
-        file       string
-        wantFormat string
-    }{
-        {"MP3 file", "testdata/audio/sample.mp3", "mp3"},
-        {"AAC file", "testdata/audio/sample.aac", "aac"},
-        {"M4A file", "testdata/audio/sample-alac.m4a", "m4a"},
-        {"OGG file", "testdata/audio/sample.ogg", "ogg"},
-        {"WAV file", "testdata/audio/sample.wav", "wav"},
-        {"OPUS file", "testdata/audio/sample.opus", "opus"},
-        {"FLAC file", "testdata/audio/sample.flac", "flac"},
-    }
+        package integration_test
 
-    detector := audio.NewFormatDetector()
+        import (
+            "testing"
 
-    for _, tc := range testCases {
-        tc := tc
-        t.Run(tc.name, func(t *testing.T) {
-            format, err := detector.DetectFormat(tc.file)
-            require.NoError(t, err)
-            assert.Equal(t, tc.wantFormat, format)
-        })
-    }
-}
+            "github.com/paruff/Media-Refinery/pkg/audio"
+            "github.com/stretchr/testify/assert"
+            "github.com/stretchr/testify/require"
+        )
 
-package integration_test
+        // TestFormatDetection_AllFormats tests format detection for all supported types
+        func TestFormatDetection_AllFormats(t *testing.T) {
+            if testing.Short() {
+                t.Skip("Skipping integration test in short mode")
+            }
 
+            testCases := []struct {
+                name       string
+                file       string
+                wantFormat string
+            }{
+                {"MP3 file", "testdata/audio/sample.mp3", "mp3"},
+                {"AAC file", "testdata/audio/sample.aac", "aac"},
+                {"M4A file", "testdata/audio/sample-alac.m4a", "m4a"},
+                {"OGG file", "testdata/audio/sample.ogg", "ogg"},
+                {"WAV file", "testdata/audio/sample.wav", "wav"},
+                {"OPUS file", "testdata/audio/sample.opus", "opus"},
+                {"FLAC file", "testdata/audio/sample.flac", "flac"},
+            }
 
-import (
-    "testing"
+            detector := audio.NewFormatDetector()
 
-    "github.com/paruff/Media-Refinery/pkg/audio"
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/require"
-)
+            for _, tc := range testCases {
+                tc := tc
+                t.Run(tc.name, func(t *testing.T) {
+                    format, err := detector.DetectFormat(tc.file)
+                    require.NoError(t, err)
+                    assert.Equal(t, tc.wantFormat, format)
+                })
+            }
+        }
 
-// TestFormatDetection_AllFormats tests format detection for all supported types
-func TestFormatDetection_AllFormats(t *testing.T) {
-    if testing.Short() {
-        t.Skip("Skipping integration test in short mode")
-    }
-
-    testCases := []struct {
-        name       string
-        file       string
-        wantFormat string
-    }{
-        {"MP3 file", "testdata/audio/sample.mp3", "mp3"},
-        {"AAC file", "testdata/audio/sample.aac", "aac"},
-        {"M4A file", "testdata/audio/sample-alac.m4a", "m4a"},
-        {"OGG file", "testdata/audio/sample.ogg", "ogg"},
-        {"WAV file", "testdata/audio/sample.wav", "wav"},
         {"OPUS file", "testdata/audio/sample.opus", "opus"},
         {"FLAC file", "testdata/audio/sample.flac", "flac"},
 
