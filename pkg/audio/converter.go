@@ -1,16 +1,6 @@
 package audio
 
 import (
-	"context"
-	"crypto/sha256"
-	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"time"
-
 	"github.com/paruff/Media-Refinery/pkg/state"
 	"go.uber.org/zap"
 )
