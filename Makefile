@@ -5,6 +5,15 @@ precom:
 	go mod tidy
 	go vet ./...
 	staticcheck ./...
+	# Additional static checks
+	@which errcheck >/dev/null 2>&1 && errcheck ./... || echo "errcheck not installed; skipping errcheck"
+	@which gosec >/dev/null 2>&1 && gosec ./... || echo "gosec not installed; skipping gosec"
+	@which govulncheck >/dev/null 2>&1 && govulncheck ./... || echo "govulncheck not installed; skipping govulncheck"
+	@which git-secrets >/dev/null 2>&1 && git-secrets --scan || echo "git-secrets not installed; skipping git-secrets"
+	@which hadolint >/dev/null 2>&1 && hadolint Dockerfile || echo "hadolint not installed; skipping hadolint"
+	# Show available module updates (non-fatal)
+	@echo "Checking for module updates (go list -m -u all)..."
+	@$(GOCMD) list -m -u all || true
 	# YAML lint for workflow and config files
 	@which yamllint >/dev/null 2>&1 && yamllint $(shell git ls-files '*.yml' '*.yaml') || echo "yamllint not installed; skipping YAML lint"
 	golangci-lint run ./...
