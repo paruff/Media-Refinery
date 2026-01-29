@@ -1,4 +1,5 @@
 name: CI/CD Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -12,89 +13,76 @@ permissions:
 jobs:
   test:
     name: Run Tests
-    test:
-      name: Run Tests
-      runs-on: ubuntu-latest
-      permissions:
-        contents: read
-      steps:
-        - name: Pre-commit checks (format, imports, tidy, lint)
-          run: make precom
-        - name: Checkout code
-          uses: actions/checkout@v4
-        - name: Set up Go
-          uses: actions/setup-go@v5
-          with:
-            go-version: '1.21'
-        - name: Install ffmpeg (if missing)
-          run: |
-            if command -v ffprobe >/dev/null; then
-              echo "ffprobe already present: $(command -v ffprobe)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Pre-commit checks (format, imports, tidy, lint)
+        run: make precom
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Install ffmpeg (if missing)
+        run: |
+          if command -v ffprobe >/dev/null; then
+            echo "ffprobe already present: $(command -v ffprobe)"
+          else
+            echo "ffprobe not found — attempting to install ffmpeg"
+            if [ -f /etc/alpine-release ]; then
+              sudo apk add --no-cache ffmpeg || true
             else
-              echo "ffprobe not found — attempting to install ffmpeg"
-              if [ -f /etc/alpine-release ]; then
-                sudo apk add --no-cache ffmpeg || true
-              else
-                sudo apt-get update || true
-                sudo apt-get install -y ffmpeg || true
-              fi
+              sudo apt-get update || true
+              sudo apt-get install -y ffmpeg || true
             fi
-        - name: Cache Go modules
-          uses: actions/cache@v4
-          with:
-            path: ~/go/pkg/mod
-            key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-            restore-keys: |
-              ${{ runner.os }}-go-
-        - name: Download dependencies
-          run: go mod download
-        - name: Run Tests with Coverage
-          run: |
-            set -euo pipefail
-            go test -v -race -coverprofile=coverage.out ./...
-            # Ensure coverage file was generated
-            if [ ! -f coverage.out ]; then
-              echo "::error::coverage.out not found — test coverage report missing"
-              exit 1
-            fi
-            # Capture go tool cover output (may contain 'coverage: [no statements]')
-            cov_out="$(go tool cover -func=coverage.out 2>&1 || true)"
-            if echo "$cov_out" | grep -q "no statements"; then
-              echo "::error::Coverage report contains no statements (coverage: [no statements]). Failing to enforce threshold to avoid silent passes."
-              echo "$cov_out"
-              exit 1
-            fi
-            # Extract total coverage line
-            total_line=$(printf "%s" "$cov_out" | grep -E '^total:' || true)
-            if [ -z "$total_line" ]; then
-              echo "::error::Unable to find total coverage line in coverage output. Output:\n$cov_out"
-              exit 1
-            fi
-          exit 1
-        fi
+          fi
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Download dependencies
+        run: go mod download
+      - name: Run Tests with Coverage
+        run: |
+          set -euo pipefail
+          go test -v -race -coverprofile=coverage.out ./...
+          # Ensure coverage file was generated
+          if [ ! -f coverage.out ]; then
+            echo "::error::coverage.out not found — test coverage report missing"
+            exit 1
+          fi
+          # Capture go tool cover output (may contain 'coverage: [no statements]')
+          cov_out="$(go tool cover -func=coverage.out 2>&1 || true)"
+          if echo "$cov_out" | grep -q "no statements"; then
+            echo "::error::Coverage report contains no statements (coverage: [no statements]). Failing to enforce threshold to avoid silent passes."
+            echo "$cov_out"
+            exit 1
+          fi
+          # Extract total coverage line
+          total_line=$(printf "%s" "$cov_out" | grep -E '^total:' || true)
+          if [ -z "$total_line" ]; then
+            echo "::error::Unable to find total coverage line in coverage output. Output:\n$cov_out"
+            exit 1
+          fi
+          # Parse percentage (e.g., 'total: (statements) 82.5%')
+          percent=$(printf "%s" "$total_line" | awk '{print $3}' | sed 's/%//')
+          if ! printf '%s' "$percent" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then
+            echo "::error::Parsed coverage percent is invalid: '$percent'\nFull output:\n$cov_out"
+            exit 1
+          fi
+          # Compare as float against threshold (80)
+          awk -v p="$percent" 'BEGIN{ if (p+0 < 80) { print "::error::Coverage threshold not met: " p "% < 80%"; exit 1 } }'
 
-        # Extract total coverage line
-        total_line=$(printf "%s" "$cov_out" | grep -E '^total:' || true)
-        if [ -z "$total_line" ]; then
-          echo "::error::Unable to find total coverage line in coverage output. Output:\n$cov_out"
-          exit 1
-        fi
-
-        # Parse percentage (e.g., 'total: (statements) 82.5%')
-        percent=$(printf "%s" "$total_line" | awk '{print $3}' | sed 's/%//')
-        if ! printf '%s' "$percent" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then
-          echo "::error::Parsed coverage percent is invalid: '$percent'\nFull output:\n$cov_out"
-          exit 1
-        fi
-
-        # Compare as float against threshold (80)
-        awk -v p="$percent" 'BEGIN{ if (p+0 < 80) { print "::error::Coverage threshold not met: " p "% < 80%"; exit 1 } }'
-
-    - name: Upload Coverage Report
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: coverage.out
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
 
   lint:
     name: Lint Code
@@ -103,19 +91,17 @@ jobs:
     permissions:
       contents: read
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.21'
-
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v4
-      with:
-        version: latest
-        args: --timeout=5m
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
 
   build:
     name: Build Application
@@ -124,21 +110,18 @@ jobs:
     permissions:
       contents: read
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.21'
-
-    - name: Build Binary
-      run: go build -v ./cmd/refinery
-
-    - name: Test Binary
-      run: |
-        ./refinery -version
-        ./refinery -init -config /tmp/test-config.yaml
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Build Binary
+        run: go build -v ./cmd/refinery
+      - name: Test Binary
+        run: |
+          ./refinery -version
+          ./refinery -init -config /tmp/test-config.yaml
 
   integration:
     name: Run Integration Tests
@@ -161,27 +144,24 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.21'
-
-    - name: Ensure ffprobe is available
-      run: |
-        if ! command -v ffprobe >/dev/null; then
-          echo "::error::ffprobe not found in PATH. Ensure the job container includes ffmpeg/ffprobe or install it before running tests."
-          exit 1
-        fi
-
-    - name: Run Integration Tests
-      run: make test-integration
-      env:
-        DATABASE_URL: postgres://postgres:test@localhost:5432/test
-        BEETS_BASE_URL: "http://localhost:8337"
-        BEETS_TOKEN: "test-token"
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Ensure ffprobe is available
+        run: |
+          if ! command -v ffprobe >/dev/null; then
+            echo "::error::ffprobe not found in PATH. Ensure the job container includes ffmpeg/ffprobe or install it before running tests."
+            exit 1
+          fi
+      - name: Run Integration Tests
+        run: make test-integration
+        env:
+          DATABASE_URL: postgres://postgres:test@localhost:5432/test
+          BEETS_BASE_URL: "http://localhost:8337"
+          BEETS_TOKEN: "test-token"
 
   docker:
     name: Build Docker Image
@@ -190,36 +170,32 @@ jobs:
     permissions:
       contents: read
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Check Docker Hub secrets
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        if [ -z "$DOCKER_USERNAME" ] || [ -z "$DOCKER_PASSWORD" ]; then
-          echo "::error::Missing Docker Hub secrets (DOCKER_USERNAME/DOCKER_PASSWORD). Set them in repository settings."
-          exit 1
-        fi
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Build Docker Image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: false
-        tags: media-refinery:latest
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check Docker Hub secrets
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          if [ -z "$DOCKER_USERNAME" ] || [ -z "$DOCKER_PASSWORD" ]; then
+            echo "::error::Missing Docker Hub secrets (DOCKER_USERNAME/DOCKER_PASSWORD). Set them in repository settings."
+            exit 1
+          fi
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: media-refinery:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   security:
     name: Security Scan
@@ -228,11 +204,10 @@ jobs:
     permissions:
       contents: read
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install gosec
-      run: go install github.com/securego/gosec/v2/cmd/gosec@latest
-
-    - name: Run gosec
-      run: gosec ./...
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: Run gosec
+        run: gosec ./...
+  security:

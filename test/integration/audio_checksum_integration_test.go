@@ -34,21 +34,21 @@ func TestChecksumIntegration_CalculateAndStore(t *testing.T) {
 
 // TestChecksumIntegration_DetectMismatch tests mismatch detection
 func TestChecksumIntegration_DetectMismatch(t *testing.T) {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-}    assert.False(t, matches, "Should detect mismatch")    require.NoError(t, err)    matches, err := stateManager.VerifyChecksum(testFile)    require.NoError(t, os.WriteFile(testFile, []byte("modified"), 0644))    require.NoError(t, stateManager.StoreChecksum(testFile, checksum1))    require.NoError(t, err)    checksum1, err := stateManager.CalculateChecksum(testFile)    stateManager := state.NewManager(stateDir)    require.NoError(t, os.WriteFile(testFile, []byte("original"), 0644))    require.NoError(t, os.MkdirAll(stateDir, 0755))    testFile := filepath.Join(tempDir, "test.flac")    stateDir := filepath.Join(tempDir, "state")    tempDir := t.TempDir()    }        t.Skip("Skipping integration test")    if testing.Short() {
+    if testing.Short() {
+        t.Skip("Skipping integration test")
+    }
+    tempDir := t.TempDir()
+    stateDir := filepath.Join(tempDir, "state")
+    testFile := filepath.Join(tempDir, "test.flac")
+    require.NoError(t, os.MkdirAll(stateDir, 0755))
+    require.NoError(t, os.WriteFile(testFile, []byte("original"), 0644))
+    stateManager := state.NewManager(stateDir)
+    checksum1, err := stateManager.CalculateChecksum(testFile)
+    require.NoError(t, err)
+    require.NoError(t, stateManager.StoreChecksum(testFile, checksum1))
+    // Modify the file to create a checksum mismatch
+    require.NoError(t, os.WriteFile(testFile, []byte("modified"), 0644))
+    matches, err := stateManager.VerifyChecksum(testFile)
+    require.NoError(t, err)
+    assert.False(t, matches, "Should detect mismatch")
+}
