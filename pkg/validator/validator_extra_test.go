@@ -1,7 +1,7 @@
 package validator
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -9,7 +9,7 @@ func TestComputeChecksum_Success(t *testing.T) {
 	tmp := t.TempDir()
 	file := tmp + "/f.txt"
 	data := []byte("checksum-test")
-	if err := ioutil.WriteFile(file, data, 0644); err != nil {
+	if err := os.WriteFile(file, data, 0644); err != nil {
 		t.Fatalf("write failed: %v", err)
 	}
 

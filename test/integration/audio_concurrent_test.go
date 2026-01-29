@@ -19,7 +19,8 @@ func TestConcurrent_WorkerPool(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	pool := processor.NewWorkerPool(4)
+	pool, err := processor.NewWorkerPool(4)
+	require.NoError(t, err)
 	defer pool.Close()
 
 	var concurrent int32
@@ -66,7 +67,8 @@ func TestConcurrent_RaceConditions(t *testing.T) {
 	}
 	// This test simply runs the worker pool under concurrent submissions to surface races when run with `-race`.
 	ctx := context.Background()
-	pool := processor.NewWorkerPool(8)
+	pool, err := processor.NewWorkerPool(8)
+	require.NoError(t, err)
 	defer pool.Close()
 
 	var wg sync.WaitGroup

@@ -17,7 +17,7 @@ func TestBeetsClient_HTTP(t *testing.T) {
 		if q != "path:/some/path" && q != "" {
 			// return empty
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{"results": []interface{}{}})
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"results": []interface{}{}})
 			return
 		}
 		resp := map[string]interface{}{"results": []map[string]interface{}{{
@@ -35,7 +35,7 @@ func TestBeetsClient_HTTP(t *testing.T) {
 			"format":      "mp3",
 		}}}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	mux.HandleFunc("/item/1", func(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +54,7 @@ func TestBeetsClient_HTTP(t *testing.T) {
 			"format":      "mp3",
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(item)
+		_ = json.NewEncoder(w).Encode(item)
 	})
 
 	mux.HandleFunc("/import", func(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +67,7 @@ func TestBeetsClient_HTTP(t *testing.T) {
 
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{}"))
+		_, _ = w.Write([]byte("{}"))
 	})
 
 	server := httptest.NewServer(mux)

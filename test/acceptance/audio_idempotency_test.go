@@ -31,7 +31,7 @@ func TestStory3_Idempotency_SkipAlreadyConverted(t *testing.T) {
 		Format:       "flac",
 		StateManager: stateManager,
 	})
-	result1, err := converter.ConvertFile(ctx, inputFile)
+	_, err := converter.ConvertFile(ctx, inputFile)
 	require.NoError(t, err)
 
 	// ...test logic for idempotency skip...
@@ -40,7 +40,7 @@ func TestStory3_Idempotency_SkipAlreadyConverted(t *testing.T) {
 // TestStory3_Idempotency_ReprocessOnChecksumMismatch tests mismatch handling
 // ACCEPTANCE CRITERIA: Scenario 2
 func TestStory3_Idempotency_ReprocessOnChecksumMismatch(t *testing.T) {
-	ctx := context.Background()
+	_ = context.Background()
 	tempDir := t.TempDir()
 	inputDir := filepath.Join(tempDir, "input")
 	outputDir := filepath.Join(tempDir, "output")
@@ -54,7 +54,7 @@ func TestStory3_Idempotency_ReprocessOnChecksumMismatch(t *testing.T) {
 // TestStory3_Idempotency_PartialBatchRecovery tests batch recovery
 // ACCEPTANCE CRITERIA: Scenario 3
 func TestStory3_Idempotency_PartialBatchRecovery(t *testing.T) {
-	ctx := context.Background()
+	_ = context.Background()
 	tempDir := t.TempDir()
 	inputDir := filepath.Join(tempDir, "input")
 	outputDir := filepath.Join(tempDir, "output")
@@ -68,7 +68,7 @@ func TestStory3_Idempotency_PartialBatchRecovery(t *testing.T) {
 // TestStory3_Idempotency_CorruptOutputRecovery tests corrupt file handling
 // ACCEPTANCE CRITERIA: Scenario 4
 func TestStory3_Idempotency_CorruptOutputRecovery(t *testing.T) {
-	ctx := context.Background()
+	_ = context.Background()
 	tempDir := t.TempDir()
 	inputDir := filepath.Join(tempDir, "input")
 	outputDir := filepath.Join(tempDir, "output")
@@ -82,7 +82,7 @@ func TestStory3_Idempotency_CorruptOutputRecovery(t *testing.T) {
 // TestStory3_Idempotency_AtomicFileOperations tests atomic writes
 // ACCEPTANCE CRITERIA: Scenario 5
 func TestStory3_Idempotency_AtomicFileOperations(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	tempDir := t.TempDir()
 	inputDir := filepath.Join(tempDir, "input")

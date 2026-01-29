@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +23,7 @@ func TestCreateDirAndCopy(t *testing.T) {
 	// Create source file
 	src := filepath.Join(tmp, "src.txt")
 	content := []byte("hello world")
-	if err := ioutil.WriteFile(src, content, 0644); err != nil {
+	if err := os.WriteFile(src, content, 0644); err != nil {
 		t.Fatalf("failed to write src: %v", err)
 	}
 
@@ -33,7 +32,7 @@ func TestCreateDirAndCopy(t *testing.T) {
 		t.Fatalf("Copy failed: %v", err)
 	}
 
-	data, err := ioutil.ReadFile(dest)
+	data, err := os.ReadFile(dest)
 	if err != nil {
 		t.Fatalf("failed to read dest: %v", err)
 	}
@@ -54,7 +53,7 @@ func TestDryRunRecordsOperations(t *testing.T) {
 
 	// Dry-run copy
 	src := filepath.Join(tmp, "src2.txt")
-	if err := ioutil.WriteFile(src, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(src, []byte("x"), 0644); err != nil {
 		t.Fatalf("write src2 failed: %v", err)
 	}
 	dest := filepath.Join(tmp, "dest2.txt")

@@ -31,12 +31,14 @@ type Progress struct {
 
 // Result holds batch processing result
 type Result struct {
-	TotalFiles  int
-	Successful  int
-	Failed      int
-	FailedFiles []string
-	Summary     string
-	Duration    time.Duration
+	TotalFiles   int
+	Successful   int
+	Failed       int
+	FailedFiles  []string
+	Summary      string
+	Duration     time.Duration
+	Skipped      int
+	ErrorsByFile map[string]string
 }
 
 // BatchProcessor handles batch file processing
@@ -93,21 +95,98 @@ func (bp *BatchProcessor) ProcessAll(ctx context.Context) (*Result, error) {
 	var failedFiles []string
 	var mu sync.Mutex
 	totalFiles := len(files)
+	errorsByFile := make(map[string]string)
+	detector := audio.NewFormatDetector()
+
 	for _, file := range files {
 		filePath := file
 		task := func() error {
-			// Idempotency: audio.Converter.ConvertFile now skips already-processed files
-			_, err := bp.converter.ConvertFile(ctx, filePath)
+			// Detect source format (if possible) and handle unsupported/skip cases
+			srcFormat, detectErr := detector.DetectFormat(filePath)
 			atomic.AddInt32(&processed, 1)
+			if detectErr != nil {
+				atomic.AddInt32(&failed, 1)
+				mu.Lock()
+				failedFiles = append(failedFiles, filepath.Base(filePath))
+				errorsByFile[filepath.Base(filePath)] = detectErr.Error()
+				mu.Unlock()
+				bp.logger.Error("detection failed", zap.String("file", filePath), zap.Error(detectErr))
+				if bp.progressCallback != nil {
+					p := atomic.LoadInt32(&processed)
+					progress := Progress{
+						Processed:   int(p),
+						Total:       totalFiles,
+						Percentage:  float64(p) / float64(totalFiles) * 100,
+						CurrentFile: filepath.Base(filePath),
+						ETASeconds:  bp.estimateETA(int(p), totalFiles, time.Since(startTime)),
+					}
+					bp.progressCallback(progress)
+				}
+				return detectErr
+			}
+			// If format unsupported
+			if !detector.IsSupported(srcFormat) {
+				atomic.AddInt32(&failed, 1)
+				mu.Lock()
+				failedFiles = append(failedFiles, filepath.Base(filePath))
+				errorsByFile[filepath.Base(filePath)] = "Unsupported format"
+				mu.Unlock()
+				bp.logger.Error("unsupported format", zap.String("file", filePath), zap.String("format", srcFormat))
+				if bp.progressCallback != nil {
+					p := atomic.LoadInt32(&processed)
+					progress := Progress{
+						Processed:   int(p),
+						Total:       totalFiles,
+						Percentage:  float64(p) / float64(totalFiles) * 100,
+						CurrentFile: filepath.Base(filePath),
+						ETASeconds:  bp.estimateETA(int(p), totalFiles, time.Since(startTime)),
+					}
+					bp.progressCallback(progress)
+				}
+				return fmt.Errorf("unsupported format: %s", srcFormat)
+			}
+			// If source already same as desired output, skip
+			if bp.config.AudioConfig.Format != "" && srcFormat == bp.config.AudioConfig.Format {
+				mu.Lock()
+				errorsByFile[filepath.Base(filePath)] = "skipped: already in target format"
+				mu.Unlock()
+				if bp.progressCallback != nil {
+					p := atomic.LoadInt32(&processed)
+					progress := Progress{
+						Processed:   int(p),
+						Total:       totalFiles,
+						Percentage:  float64(p) / float64(totalFiles) * 100,
+						CurrentFile: filepath.Base(filePath),
+						ETASeconds:  bp.estimateETA(int(p), totalFiles, time.Since(startTime)),
+					}
+					bp.progressCallback(progress)
+				}
+				return nil
+			}
+
+			// Perform conversion
+			_, err := bp.converter.ConvertFile(ctx, filePath)
 			if err != nil {
 				atomic.AddInt32(&failed, 1)
 				mu.Lock()
 				failedFiles = append(failedFiles, filepath.Base(filePath))
+				errorsByFile[filepath.Base(filePath)] = err.Error()
 				mu.Unlock()
 				bp.logger.Error("conversion failed", zap.String("file", filePath), zap.Error(err))
-			} else {
-				atomic.AddInt32(&successful, 1)
+				if bp.progressCallback != nil {
+					p := atomic.LoadInt32(&processed)
+					progress := Progress{
+						Processed:   int(p),
+						Total:       totalFiles,
+						Percentage:  float64(p) / float64(totalFiles) * 100,
+						CurrentFile: filepath.Base(filePath),
+						ETASeconds:  bp.estimateETA(int(p), totalFiles, time.Since(startTime)),
+					}
+					bp.progressCallback(progress)
+				}
+				return err
 			}
+			atomic.AddInt32(&successful, 1)
 			if bp.progressCallback != nil {
 				p := atomic.LoadInt32(&processed)
 				progress := Progress{
@@ -119,7 +198,7 @@ func (bp *BatchProcessor) ProcessAll(ctx context.Context) (*Result, error) {
 				}
 				bp.progressCallback(progress)
 			}
-			return err
+			return nil
 		}
 		if err := pool.Submit(ctx, task); err != nil {
 			return nil, fmt.Errorf("submit task: %w", err)
@@ -127,12 +206,21 @@ func (bp *BatchProcessor) ProcessAll(ctx context.Context) (*Result, error) {
 	}
 	pool.Wait()
 	duration := time.Since(startTime)
+	// Count skipped based on errorsByFile entries that mention "skipped"
+	skipped := 0
+	for _, v := range errorsByFile {
+		if v == "skipped: already in target format" {
+			skipped++
+		}
+	}
 	result := &Result{
-		TotalFiles:  totalFiles,
-		Successful:  int(atomic.LoadInt32(&successful)),
-		Failed:      int(atomic.LoadInt32(&failed)),
-		FailedFiles: failedFiles,
-		Duration:    duration,
+		TotalFiles:   totalFiles,
+		Successful:   int(atomic.LoadInt32(&successful)),
+		Failed:       int(atomic.LoadInt32(&failed)),
+		FailedFiles:  failedFiles,
+		Duration:     duration,
+		Skipped:      skipped,
+		ErrorsByFile: errorsByFile,
 	}
 	result.Summary = fmt.Sprintf("%d of %d successful", result.Successful, result.TotalFiles)
 	if result.Failed > 0 {
@@ -149,23 +237,13 @@ func (bp *BatchProcessor) ProcessAll(ctx context.Context) (*Result, error) {
 
 // findAudioFiles finds all audio files in input directory
 func (bp *BatchProcessor) findAudioFiles() ([]string, error) {
-	patterns := []string{
-		filepath.Join(bp.config.InputDir, "*.mp3"),
-		filepath.Join(bp.config.InputDir, "*.aac"),
-		filepath.Join(bp.config.InputDir, "*.m4a"),
-		filepath.Join(bp.config.InputDir, "*.ogg"),
-		filepath.Join(bp.config.InputDir, "*.wav"),
-		filepath.Join(bp.config.InputDir, "*.opus"),
+	// Include all files in the input directory; processing will filter/handle unsupported formats
+	pattern := filepath.Join(bp.config.InputDir, "*")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("glob pattern %s: %w", pattern, err)
 	}
-	var files []string
-	for _, pattern := range patterns {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return nil, fmt.Errorf("glob pattern %s: %w", pattern, err)
-		}
-		files = append(files, matches...)
-	}
-	return files, nil
+	return matches, nil
 }
 
 // estimateETA estimates time remaining

@@ -2,6 +2,8 @@ package audio
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/paruff/Media-Refinery/pkg/state"
 	"go.uber.org/zap"
@@ -20,6 +22,7 @@ type Config struct {
 	CompressionLevel int // FLAC: 0-8, higher = better compression
 	DryRun           bool
 	StateDir         string // Directory for state files
+	StateManager     *state.Manager
 	// Story 4 fields
 	AutoDetectFormat    bool
 	AdaptiveCompression bool
@@ -29,6 +32,8 @@ type Config struct {
 type Result struct {
 	Success    bool
 	OutputPath string
+	Checksum   string
+	Format     string
 }
 
 type Converter struct {
@@ -46,10 +51,28 @@ func (c *Converter) ConvertFile(ctx context.Context, inputPath string) (*Result,
 
 // NewConverter creates a new audio converter
 func NewConverter(config Config) *Converter {
-	mgr := state.NewManager(config.StateDir)
+	var mgr *state.Manager
+	if config.StateManager != nil {
+		mgr = config.StateManager
+	} else {
+		mgr = state.NewManager(config.StateDir)
+	}
 	return &Converter{
 		logger:   zap.L(),
 		config:   config,
 		stateMgr: mgr,
 	}
+}
+
+// ValidateInputFile performs basic validation on the input file used for conversion.
+// It ensures the file exists and is non-empty.
+func (c *Converter) ValidateInputFile(path string) error {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat input file %s: %w", path, err)
+	}
+	if fi.Size() == 0 {
+		return fmt.Errorf("input file %s is empty", path)
+	}
+	return nil
 }

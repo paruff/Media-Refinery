@@ -16,7 +16,7 @@ func TestStory2_BatchProcessing_ConcurrentWorkers(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping long-running batch test in short mode")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	_, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	tempDir := t.TempDir()
 	inputDir := filepath.Join(tempDir, "input")
@@ -30,7 +30,7 @@ func TestStory2_BatchProcessing_ConcurrentWorkers(t *testing.T) {
 // TestStory2_BatchProcessing_ProgressReporting tests progress updates
 // ACCEPTANCE CRITERIA: Scenario 2
 func TestStory2_BatchProcessing_ProgressReporting(t *testing.T) {
-	ctx := context.Background()
+	_ = context.Background()
 	tempDir := t.TempDir()
 	inputDir := filepath.Join(tempDir, "input")
 	outputDir := filepath.Join(tempDir, "output")
@@ -43,7 +43,7 @@ func TestStory2_BatchProcessing_ProgressReporting(t *testing.T) {
 // TestStory2_BatchProcessing_PartialFailures tests failure handling
 // ACCEPTANCE CRITERIA: Scenario 3
 func TestStory2_BatchProcessing_PartialFailures(t *testing.T) {
-	ctx := context.Background()
+	_ = context.Background()
 	tempDir := t.TempDir()
 	inputDir := filepath.Join(tempDir, "input")
 	outputDir := filepath.Join(tempDir, "output")
@@ -59,7 +59,7 @@ func TestStory2_BatchProcessing_WorkerPoolLimits(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping resource test in short mode")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	_, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	tempDir := t.TempDir()
 	inputDir := filepath.Join(tempDir, "input")

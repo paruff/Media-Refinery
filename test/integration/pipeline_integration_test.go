@@ -66,24 +66,24 @@ func TestPipelineIntegration_Run(t *testing.T) {
 					numSamples := sampleRate * durationSeconds
 					dataSize := uint32(numSamples) * uint32(blockAlign)
 					// RIFF
-					f.Write([]byte("RIFF"))
-					binary.Write(f, binary.LittleEndian, uint32(36+dataSize))
-					f.Write([]byte("WAVE"))
+					_, _ = f.Write([]byte("RIFF"))
+					_ = binary.Write(f, binary.LittleEndian, uint32(36+dataSize))
+					_, _ = f.Write([]byte("WAVE"))
 					// fmt
-					f.Write([]byte("fmt "))
-					binary.Write(f, binary.LittleEndian, uint32(16))
-					binary.Write(f, binary.LittleEndian, uint16(1))
-					binary.Write(f, binary.LittleEndian, channels)
-					binary.Write(f, binary.LittleEndian, sampleRate)
-					binary.Write(f, binary.LittleEndian, byteRate)
-					binary.Write(f, binary.LittleEndian, blockAlign)
-					binary.Write(f, binary.LittleEndian, bitsPerSample)
+					_, _ = f.Write([]byte("fmt "))
+					_ = binary.Write(f, binary.LittleEndian, uint32(16))
+					_ = binary.Write(f, binary.LittleEndian, uint16(1))
+					_ = binary.Write(f, binary.LittleEndian, channels)
+					_ = binary.Write(f, binary.LittleEndian, sampleRate)
+					_ = binary.Write(f, binary.LittleEndian, byteRate)
+					_ = binary.Write(f, binary.LittleEndian, blockAlign)
+					_ = binary.Write(f, binary.LittleEndian, bitsPerSample)
 					// data
-					f.Write([]byte("data"))
-					binary.Write(f, binary.LittleEndian, dataSize)
+					_, _ = f.Write([]byte("data"))
+					_ = binary.Write(f, binary.LittleEndian, dataSize)
 					silence := make([]byte, dataSize)
-					f.Write(silence)
-					f.Close()
+					_, _ = f.Write(silence)
+					_ = f.Close()
 				}
 				samplePath = wavPath
 			}
