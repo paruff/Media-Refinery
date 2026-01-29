@@ -519,3 +519,145 @@ func (p *VideoProcessor) CanProcess(path string) bool {
 func (p *VideoProcessor) GetOutputExtension() string {
 	return "." + p.outputFormat
 }
+
+// buildFFmpegArgs constructs the ffmpeg CLI args for the given input/output and metadata for audio.
+func (p *AudioProcessor) buildFFmpegArgs(input, output string, meta *metadata.Metadata) []string {
+	args := []string{"-i", input}
+
+	switch p.outputFormat {
+	case "flac":
+		args = append(args, "-c:a", "flac")
+		if p.bitDepth > 0 {
+			args = append(args, "-sample_fmt", fmt.Sprintf("s%d", p.bitDepth))
+		}
+	case "mp3":
+		args = append(args, "-c:a", "libmp3lame")
+		if p.outputQuality == "lossless" {
+			args = append(args, "-q:a", "0")
+		} else {
+			args = append(args, "-b:a", "320k")
+		}
+	case "aac":
+		args = append(args, "-c:a", "aac")
+		args = append(args, "-b:a", "256k")
+	default:
+		args = append(args, "-c:a", "copy")
+	}
+
+	if p.sampleRate > 0 {
+		args = append(args, "-ar", fmt.Sprintf("%d", p.sampleRate))
+	}
+
+	if meta != nil {
+		if meta.Title != "" && meta.Title != "Unknown" {
+			args = append(args, "-metadata", "title="+meta.Title)
+		}
+		if meta.Artist != "" && meta.Artist != "Unknown" {
+			args = append(args, "-metadata", "artist="+meta.Artist)
+		}
+		if meta.Album != "" && meta.Album != "Unknown" {
+			args = append(args, "-metadata", "album="+meta.Album)
+		}
+		if meta.AlbumArtist != "" && meta.AlbumArtist != "Unknown" {
+			args = append(args, "-metadata", "album_artist="+meta.AlbumArtist)
+		}
+		if meta.Year != "" && meta.Year != "Unknown" {
+			args = append(args, "-metadata", "date="+meta.Year)
+		}
+		if meta.Genre != "" && meta.Genre != "Unknown" {
+			args = append(args, "-metadata", "genre="+meta.Genre)
+		}
+		if meta.Track != "" && meta.Track != "Unknown" {
+			args = append(args, "-metadata", "track="+meta.Track)
+		}
+		if meta.Composer != "" && meta.Composer != "Unknown" {
+			args = append(args, "-metadata", "composer="+meta.Composer)
+		}
+	}
+
+	args = append(args, "-y", output)
+	return args
+}
+
+// buildFFmpegArgs constructs the ffmpeg CLI args for video conversion.
+func (p *VideoProcessor) buildFFmpegArgs(input, output string, meta *metadata.Metadata) []string {
+	args := []string{"-i", input, "-progress", "pipe:1", "-nostats"}
+
+	switch p.videoCodec {
+	case "h264":
+		args = append(args, "-c:v", "libx264")
+		switch p.quality {
+		case "high":
+			args = append(args, "-preset", "slow", "-crf", "16")
+		case "medium":
+			args = append(args, "-preset", "medium", "-crf", "20")
+		case "low":
+			args = append(args, "-preset", "fast", "-crf", "24")
+		default:
+			args = append(args, "-preset", "medium", "-crf", "20")
+		}
+	case "h265", "hevc":
+		args = append(args, "-c:v", "libx265")
+		switch p.quality {
+		case "high":
+			args = append(args, "-preset", "slow", "-crf", "18")
+		case "medium":
+			args = append(args, "-preset", "medium", "-crf", "22")
+		case "low":
+			args = append(args, "-preset", "fast", "-crf", "26")
+		default:
+			args = append(args, "-preset", "medium", "-crf", "22")
+		}
+	case "copy":
+		args = append(args, "-c:v", "copy")
+	default:
+		args = append(args, "-c:v", p.videoCodec)
+	}
+
+	switch p.audioCodec {
+	case "aac":
+		args = append(args, "-c:a", "aac", "-b:a", "192k")
+	case "ac3":
+		args = append(args, "-c:a", "ac3", "-b:a", "384k")
+	case "opus":
+		args = append(args, "-c:a", "libopus", "-b:a", "128k")
+	case "copy":
+		args = append(args, "-c:a", "copy")
+	default:
+		args = append(args, "-c:a", p.audioCodec)
+	}
+
+	if p.resolution != "" && p.resolution != "keep" {
+		args = append(args, "-s", p.resolution)
+	}
+
+	if meta != nil {
+		if meta.Title != "" && meta.Title != "Unknown" {
+			args = append(args, "-metadata", "title="+meta.Title)
+		}
+		if meta.Show != "" && meta.Show != "Unknown" {
+			args = append(args, "-metadata", "show="+meta.Show)
+		}
+		if meta.Season != "" && meta.Season != "Unknown" {
+			args = append(args, "-metadata", "season_number="+meta.Season)
+		}
+		if meta.Episode != "" && meta.Episode != "Unknown" {
+			args = append(args, "-metadata", "episode_sort="+meta.Episode)
+		}
+		if meta.Year != "" && meta.Year != "Unknown" {
+			args = append(args, "-metadata", "date="+meta.Year)
+		}
+		if meta.Genre != "" && meta.Genre != "Unknown" {
+			args = append(args, "-metadata", "genre="+meta.Genre)
+		}
+		if meta.Director != "" && meta.Director != "Unknown" {
+			args = append(args, "-metadata", "director="+meta.Director)
+		}
+		if meta.Comment != "" && meta.Comment != "Unknown" {
+			args = append(args, "-metadata", "comment="+meta.Comment)
+		}
+	}
+
+	args = append(args, "-y", output)
+	return args
+}
