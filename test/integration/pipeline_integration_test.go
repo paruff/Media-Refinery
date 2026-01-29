@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"encoding/binary"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,13 +44,53 @@ func TestPipelineIntegration_Run(t *testing.T) {
 			inputDir := t.TempDir()
 			outputDir := t.TempDir()
 			samplePath, _ := filepath.Abs("testdata/sample.mp3")
-			if _, err := os.Stat(samplePath); err != nil {
-				t.Fatalf("sample.mp3 not found at %s: %v", samplePath, err)
+			// If MP3 sample is missing, fall back to a WAV sample (generated if needed).
+			if _, err := os.Stat(samplePath); os.IsNotExist(err) {
+				wavPath := filepath.Join("testdata", "sample.wav")
+				if _, err := os.Stat(wavPath); os.IsNotExist(err) {
+					// generate a tiny WAV file (1s silence)
+					if err := os.MkdirAll(filepath.Dir(wavPath), 0755); err != nil {
+						t.Fatalf("failed to create testdata dir: %v", err)
+					}
+					f, err := os.Create(wavPath)
+					if err != nil {
+						t.Fatalf("create wav sample: %v", err)
+					}
+					// write minimal WAV header + 1s silence (8kHz, 16-bit mono)
+					sampleRate := uint32(8000)
+					bitsPerSample := uint16(16)
+					channels := uint16(1)
+					byteRate := sampleRate * uint32(channels) * uint32(bitsPerSample/8)
+					blockAlign := channels * (bitsPerSample / 8)
+					durationSeconds := uint32(1)
+					numSamples := sampleRate * durationSeconds
+					dataSize := uint32(numSamples) * uint32(blockAlign)
+					// RIFF
+					f.Write([]byte("RIFF"))
+					binary.Write(f, binary.LittleEndian, uint32(36+dataSize))
+					f.Write([]byte("WAVE"))
+					// fmt
+					f.Write([]byte("fmt "))
+					binary.Write(f, binary.LittleEndian, uint32(16))
+					binary.Write(f, binary.LittleEndian, uint16(1))
+					binary.Write(f, binary.LittleEndian, channels)
+					binary.Write(f, binary.LittleEndian, sampleRate)
+					binary.Write(f, binary.LittleEndian, byteRate)
+					binary.Write(f, binary.LittleEndian, blockAlign)
+					binary.Write(f, binary.LittleEndian, bitsPerSample)
+					// data
+					f.Write([]byte("data"))
+					binary.Write(f, binary.LittleEndian, dataSize)
+					silence := make([]byte, dataSize)
+					f.Write(silence)
+					f.Close()
+				}
+				samplePath = wavPath
 			}
-			dst := filepath.Join(inputDir, "sample.mp3")
+			dst := filepath.Join(inputDir, filepath.Base(samplePath))
 			srcData, err := os.ReadFile(samplePath)
-			require.NoError(t, err, "failed to read sample.mp3 for integration test")
-			require.NoError(t, os.WriteFile(dst, srcData, 0644), "failed to copy sample.mp3 to temp input dir")
+			require.NoError(t, err, "failed to read sample for integration test")
+			require.NoError(t, os.WriteFile(dst, srcData, 0644), "failed to copy sample to temp input dir")
 
 			log := logger.NewLogger("info", "text", os.Stdout)
 			tel, err := telemetry.Initialize(context.Background(), "Media-Refinery", "1.0.0")
