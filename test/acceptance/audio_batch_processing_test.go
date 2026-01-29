@@ -2,18 +2,11 @@ package acceptance_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/paruff/Media-Refinery/pkg/audio"
-	"github.com/paruff/Media-Refinery/pkg/processor"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 

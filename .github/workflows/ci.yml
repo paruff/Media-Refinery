@@ -12,64 +12,64 @@ permissions:
 jobs:
   test:
     name: Run Tests
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Pre-commit checks (format, imports, tidy, lint)
-        run: make precom
-      
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.21'
-
-    - name: Install ffmpeg (if missing)
-      run: |
-        if command -v ffprobe >/dev/null; then
-          echo "ffprobe already present: $(command -v ffprobe)"
-        else
-          echo "ffprobe not found — attempting to install ffmpeg"
-          if [ -f /etc/alpine-release ]; then
-            sudo apk add --no-cache ffmpeg || true
-          else
-            sudo apt-get update || true
-            sudo apt-get install -y ffmpeg || true
-          fi
-        fi
-
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-
-    - name: Download dependencies
-      run: go mod download
-
-    - name: Run Tests with Coverage
-      run: |
-        set -euo pipefail
-
-        go test -v -race -coverprofile=coverage.out ./...
-
-        # Ensure coverage file was generated
-        if [ ! -f coverage.out ]; then
-          echo "::error::coverage.out not found — test coverage report missing"
-          exit 1
-        fi
-
-        # Capture go tool cover output (may contain 'coverage: [no statements]')
-        cov_out="$(go tool cover -func=coverage.out 2>&1 || true)"
-
-        if echo "$cov_out" | grep -q "no statements"; then
-          echo "::error::Coverage report contains no statements (coverage: [no statements]). Failing to enforce threshold to avoid silent passes."
-          echo "$cov_out"
+    test:
+      name: Run Tests
+      runs-on: ubuntu-latest
+      permissions:
+        contents: read
+      steps:
+        - name: Pre-commit checks (format, imports, tidy, lint)
+          run: make precom
+        - name: Checkout code
+          uses: actions/checkout@v4
+        - name: Set up Go
+          uses: actions/setup-go@v5
+          with:
+            go-version: '1.21'
+        - name: Install ffmpeg (if missing)
+          run: |
+            if command -v ffprobe >/dev/null; then
+              echo "ffprobe already present: $(command -v ffprobe)"
+            else
+              echo "ffprobe not found — attempting to install ffmpeg"
+              if [ -f /etc/alpine-release ]; then
+                sudo apk add --no-cache ffmpeg || true
+              else
+                sudo apt-get update || true
+                sudo apt-get install -y ffmpeg || true
+              fi
+            fi
+        - name: Cache Go modules
+          uses: actions/cache@v4
+          with:
+            path: ~/go/pkg/mod
+            key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+            restore-keys: |
+              ${{ runner.os }}-go-
+        - name: Download dependencies
+          run: go mod download
+        - name: Run Tests with Coverage
+          run: |
+            set -euo pipefail
+            go test -v -race -coverprofile=coverage.out ./...
+            # Ensure coverage file was generated
+            if [ ! -f coverage.out ]; then
+              echo "::error::coverage.out not found — test coverage report missing"
+              exit 1
+            fi
+            # Capture go tool cover output (may contain 'coverage: [no statements]')
+            cov_out="$(go tool cover -func=coverage.out 2>&1 || true)"
+            if echo "$cov_out" | grep -q "no statements"; then
+              echo "::error::Coverage report contains no statements (coverage: [no statements]). Failing to enforce threshold to avoid silent passes."
+              echo "$cov_out"
+              exit 1
+            fi
+            # Extract total coverage line
+            total_line=$(printf "%s" "$cov_out" | grep -E '^total:' || true)
+            if [ -z "$total_line" ]; then
+              echo "::error::Unable to find total coverage line in coverage output. Output:\n$cov_out"
+              exit 1
+            fi
           exit 1
         fi
 
