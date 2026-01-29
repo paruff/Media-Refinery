@@ -2,7 +2,6 @@ package validator
 
 import (
     "io/ioutil"
-    "os"
     "testing"
 )
 

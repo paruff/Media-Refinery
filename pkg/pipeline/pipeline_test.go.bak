@@ -1,0 +1,176 @@
+package pipeline
+
+import (
+    "context"
+    "path/filepath"
+    "testing"
+
+    "github.com/paruff/Media-Refinery/pkg/config"
+    "github.com/paruff/Media-Refinery/pkg/logger"
+    "github.com/paruff/Media-Refinery/pkg/metadata"
+    "github.com/paruff/Media-Refinery/pkg/processors"
+    "github.com/paruff/Media-Refinery/pkg/validator"
+)
+
+// fakeProcessor implements processors.Processor for testing
+type fakeProcessor struct{}
+
+func (f *fakeProcessor) Process(ctx context.Context, input string, output string) error { return nil }
+func (f *fakeProcessor) CanProcess(path string) bool { return true }
+func (f *fakeProcessor) GetOutputExtension() string { return ".flac" }
+
+func TestDetermineOutputPath_AudioPattern(t *testing.T) {
+    cfg := config.DefaultConfig()
+    cfg.InputDir = "/input"
+    cfg.OutputDir = "/output"
+    cfg.Organization.MusicPattern = "{artist}/{album}/{title}"
+
+    p := &Pipeline{
+        config:   cfg,
+        logger:   logger.NewLogger("debug", "text", nil),
+        metadata: metadata.NewMetadataExtractor(false),
+        processors: []processors.Processor{
+            &fakeProcessor{},
+        },
+    }
+
+    file := &validator.FileInfo{
+        Path: "/input/Artist - Song.mp3",
+        Type: validator.AudioType,
+        Size: 123,
+    }
+
+    meta := &metadata.Metadata{
+        Title:  "Song",
+        Artist: "Artist",
+        Album:  "Album",
+    }
+
+    out := p.determineOutputPath(file, meta, &fakeProcessor{})
+    // Expect output to be under cfg.OutputDir and end with .flac
+    if filepath.Dir(out) == "" {
+        t.Fatalf("unexpected empty output path: %s", out)
+    }
+    if filepath.Ext(out) != ".flac" {
+        t.Fatalf("expected .flac extension, got %s (path=%s)", filepath.Ext(out), out)
+    }
+}
+
+func TestProcessFiles_CancellationReturnsContextError(t *testing.T) {
+    cfg := config.DefaultConfig()
+    cfg.InputDir = "/input"
+    cfg.OutputDir = "/output"
+    cfg.Concurrency = 2
+
+    p := &Pipeline{
+        config: cfg,
+        logger: logger.NewLogger("debug", "text", nil),
+    }
+
+    // Create a cancelled context
+    ctx, cancel := context.WithCancel(context.Background())
+    cancel()
+
+    files := []*validator.FileInfo{
+        {Path: "/input/a.mp3", Type: validator.AudioType, Size: 1},
+        {Path: "/input/b.mp3", Type: validator.AudioType, Size: 2},
+    }
+
+    err := p.processFiles(ctx, files)
+    if err == nil {
+        t.Fatalf("expected context error when cancelled, got nil")
+    }
+}
+package pipeline
+
+import (
+    "context"
+    "path/filepath"
+    "testing"
+
+    "github.com/paruff/Media-Refinery/pkg/config"
+    "github.com/paruff/Media-Refinery/pkg/logger"
+    "github.com/paruff/Media-Refinery/pkg/metadata"
+    "github.com/paruff/Media-Refinery/pkg/processors"
+    "github.com/paruff/Media-Refinery/pkg/validator"
+)
+
+// fakeProcessor implements processors.Processor for testing
+type fakeProcessor struct{}
+
+func (f *fakeProcessor) Process(ctx context.Context, input string, output string) error { return nil }
+func (f *fakeProcessor) CanProcess(path string) bool { return true }
+func (f *fakeProcessor) GetOutputExtension() string { return ".flac" }
+
+func TestDetermineOutputPath_AudioPattern(t *testing.T) {
+    cfg := config.DefaultConfig()
+    cfg.InputDir = "/input"
+    cfg.OutputDir = "/output"
+    cfg.Organization.MusicPattern = "{artist}/{album}/{title}"
+
+    p := &Pipeline{
+        config:   cfg,
+        logger:   logger.NewLogger("debug", "text", nil),
+        metadata: metadata.NewMetadataExtractor(false),
+        processors: []processors.Processor{
+            &fakeProcessor{},
+        },
+    }
+
+    file := &validator.FileInfo{
+        Path: "/input/Artist - Song.mp3",
+        Type: validator.AudioType,
+        Size: 123,
+    }
+
+    meta := &metadata.Metadata{
+        Title:  "Song",
+        Artist: "Artist",
+        Album:  "Album",
+    }
+
+    out := p.determineOutputPath(file, meta, &fakeProcessor{})
+    // Expect output to be under cfg.OutputDir and end with .flac
+    if filepath.Dir(out) == "" {
+        t.Fatalf("unexpected empty output path: %s", out)
+    }
+    if filepath.Ext(out) != ".flac" {
+        t.Fatalf("expected .flac extension, got %s (path=%s)", filepath.Ext(out), out)
+    }
+}
+
+func TestProcessFiles_CancellationReturnsContextError(t *testing.T) {
+    cfg := config.DefaultConfig()
+    cfg.InputDir = "/input"
+    cfg.OutputDir = "/output"
+    cfg.Concurrency = 2
+
+    p := &Pipeline{
+        config: cfg,
+        logger: logger.NewLogger("debug", "text", nil),
+    }
+
+    // Create a cancelled context
+    ctx, cancel := context.WithCancel(context.Background())
+    cancel()
+
+    files := []*validator.FileInfo{
+        {Path: "/input/a.mp3", Type: validator.AudioType, Size: 1},
+        {Path: "/input/b.mp3", Type: validator.AudioType, Size: 2},
+    }
+
+    err := p.processFiles(ctx, files)
+    if err == nil {
+        t.Fatalf("expected context error when cancelled, got nil")
+    }
+}
+// Corrected import paths to use the proper case for Media-Refinery
+package pipeline_test
+
+import (
+	"os"
+	"testing"
+
+	"github.com/paruff/Media-Refinery/pkg/config"
+	"github.com/paruff/Media-Refinery/pkg/logger"
+	"github.com/paruff/Media-Refinery/pkg/pipeline"
