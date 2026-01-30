@@ -40,7 +40,7 @@ flake8==7.0.0
 gherkin-official==29.0.0
 ghp-import==2.1.0
 gitdb==4.0.12
-GitPython==3.1.40
+GitPython>=3.1.44
 goodwe==0.2.31
 google-auth==2.41.1
 greenlet==3.3.1
