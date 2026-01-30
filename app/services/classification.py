@@ -38,18 +38,18 @@ class ClassificationService:
             title = guess.get('title')
             if title:
                 title = SCENE_TAGS_RE.sub('', title).replace('.', ' ').strip()
-            # Movie
+            # Stricter unknown detection
             if guess.get('type') == 'movie':
-                media_type = 'movie'
                 year = guess.get('year')
-                if not year:
-                    m = YEAR_RE.search(filename)
-                    if m:
-                        year = int(m.group())
-                enrichment_data = {
-                    'title': title,
-                    'year': year
-                }
+                # If no title or year, treat as unknown
+                if not title or not year:
+                    media_type = 'unknown'
+                else:
+                    media_type = 'movie'
+                    enrichment_data = {
+                        'title': title,
+                        'year': year
+                    }
             # Series
             elif guess.get('type') == 'episode':
                 media_type = 'series'
@@ -60,8 +60,7 @@ class ClassificationService:
                 }
             else:
                 # Unknown video
-                if guess.get('type') is None or guess.get('title') is None:
-                    media_type = 'unknown'
+                media_type = 'unknown'
         # Audio classification
         if ext in AUDIO_EXTS:
             media_type = 'music'
@@ -96,7 +95,7 @@ class ClassificationService:
             .values(
                 media_type=media_type,
                 enrichment_data=json.dumps(enrichment_data),
-                state='enriched' if media_type != 'unknown' else 'scanned'
+                state='enriched'
             )
         )
         await self.db.commit()

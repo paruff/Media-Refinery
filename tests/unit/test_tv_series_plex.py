@@ -4,7 +4,7 @@ from app.services.auditor import IssueDetectorService
 import json
 
 @pytest.mark.asyncio
-def test_standard_series_directory_layout(db):
+async def test_standard_series_directory_layout(db):
     item = MediaItem(id="tv1", source_path="/TV/Show Name/Season 01/Show Name - S01E01 - Pilot.mkv", state=FileState.enriched, media_type=MediaType.series)
     db.add(item)
     await db.commit()
@@ -12,14 +12,14 @@ def test_standard_series_directory_layout(db):
     assert "/TV/Show Name/" in item.source_path
 
 @pytest.mark.asyncio
-def test_standard_season_directory_layout(db):
+async def test_standard_season_directory_layout(db):
     item = MediaItem(id="tv2", source_path="/TV/Show Name/Season 01/Show Name - S01E02 - Second.mkv", state=FileState.enriched, media_type=MediaType.series)
     db.add(item)
     await db.commit()
     assert "/TV/Show Name/Season 01/" in item.source_path
 
 @pytest.mark.asyncio
-def test_episode_naming(db):
+async def test_episode_naming(db):
     item = MediaItem(id="tv3", source_path="/TV/Show Name/Season 01/Show Name - S01E02 - Second.mkv", state=FileState.enriched, media_type=MediaType.series)
     db.add(item)
     await db.commit()
@@ -28,7 +28,7 @@ def test_episode_naming(db):
     assert fname.endswith(".mkv")
 
 @pytest.mark.asyncio
-def test_multi_episode_file_naming(db):
+async def test_multi_episode_file_naming(db):
     item = MediaItem(id="tv4", source_path="/TV/Show Name/Season 01/Show Name - S01E01E02.mkv", state=FileState.enriched, media_type=MediaType.series)
     db.add(item)
     await db.commit()
@@ -36,7 +36,7 @@ def test_multi_episode_file_naming(db):
     assert "S01E01E02" in fname
 
 @pytest.mark.asyncio
-def test_supported_codecs(db):
+async def test_supported_codecs(db):
     item = MediaItem(id="tv5", source_path="/TV/Show Name/Season 01/Show Name - S01E03.mkv", state=FileState.enriched, media_type=MediaType.series, video_codec="h264", audio_codec="aac")
     db.add(item)
     await db.commit()
@@ -47,7 +47,7 @@ def test_supported_codecs(db):
     assert "UNSUPPORTED_AUDIO_CODEC" not in codes
 
 @pytest.mark.asyncio
-def test_unsupported_codecs(db):
+async def test_unsupported_codecs(db):
     item = MediaItem(id="tv6", source_path="/TV/Show Name/Season 01/Show Name - S01E04.mkv", state=FileState.enriched, media_type=MediaType.series, video_codec="mpeg2", audio_codec="mp2")
     db.add(item)
     await db.commit()
@@ -58,7 +58,7 @@ def test_unsupported_codecs(db):
     assert "UNSUPPORTED_AUDIO_CODEC" in codes
 
 @pytest.mark.asyncio
-def test_subtitle_compatibility(db):
+async def test_subtitle_compatibility(db):
     # Supported
     item = MediaItem(id="tv7", source_path="/TV/Show Name/Season 01/Show Name - S01E05.mkv", state=FileState.enriched, media_type=MediaType.series, subtitle_format="srt")
     db.add(item)
