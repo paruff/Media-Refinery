@@ -1,7 +1,13 @@
+
 import pytest
 from app.models.media import MediaItem, FileState, MediaType
 from app.services.auditor import IssueDetectorService
 import json
+
+# Provide db fixture using async_session from conftest.py
+@pytest.fixture
+async def db(async_session):
+    yield async_session
 
 @pytest.mark.asyncio
 async def test_standard_series_directory_layout(db):

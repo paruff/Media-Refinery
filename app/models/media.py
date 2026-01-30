@@ -1,6 +1,8 @@
 import enum
 import uuid
 from sqlalchemy import Column, String, DateTime, Enum, Boolean, Integer, Text
+from sqlalchemy import ForeignKey, UniqueConstraint, JSON
+from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.sqlite import BLOB
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
@@ -73,3 +75,52 @@ class MediaItem(Base):
     error_log = Column(Text, nullable=True)
     enrichment_data = Column(Text, nullable=True)  # JSON-encoded dict for classification tokens
     detected_issues = Column(Text, nullable=True)  # JSON-encoded list of audit issues
+    normalization_plan = relationship(
+        "NormalizationPlan",
+        uselist=False,
+        back_populates="media_item",
+        cascade="all, delete-orphan"
+    )
+
+class PlanStatus(enum.Enum):
+    draft = "draft"
+    approved = "approved"
+    executing = "executing"
+    completed = "completed"
+    failed = "failed"
+
+class NormalizationPlan(Base):
+    __tablename__ = "normalization_plans"
+    __table_args__ = (
+        UniqueConstraint("target_path", name="uq_normalizationplan_target_path"),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    media_item_id = Column(String, ForeignKey("media_items.id"), unique=True, nullable=False)
+    media_item = relationship("MediaItem", back_populates="normalization_plan")
+
+    # Action flags
+    needs_transcode = Column(Boolean, default=False, nullable=False)
+    needs_rename = Column(Boolean, default=False, nullable=False)
+    needs_subtitle_conversion = Column(Boolean, default=False, nullable=False)
+
+    # Execution data
+    target_path = Column(String, nullable=False)
+    ffmpeg_args = Column(JSON, nullable=True)  # List of strings
+    original_hash = Column(String, nullable=False)
+
+    # Status management
+    plan_status = Column(Enum(PlanStatus), default=PlanStatus.draft, nullable=False)
+    execution_log = Column(Text, default="", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    @property
+    def is_ready(self):
+        # Example: check if all enrichment data is present (placeholder logic)
+        # Replace with actual enrichment checks as needed
+        return all([
+            self.target_path,
+            self.ffmpeg_args is not None,
+            self.original_hash,
+            self.media_item is not None and getattr(self.media_item, "enrichment_complete", True)
+        ])

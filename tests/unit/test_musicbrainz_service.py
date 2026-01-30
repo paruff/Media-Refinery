@@ -161,30 +161,30 @@ async def test_musicbrainz_enrichment_caching(monkeypatch, async_session: AsyncS
             }
         ]
     }
-        from app.services.musicbrainz import AlbumCache, MusicBrainzService
-        cache = AlbumCache()
-        mock = MockMusicBrainz(releases)
-        # Patch the service to use the same cache as the mock
-        service = MusicBrainzService(cache=cache)
-        monkeypatch.setattr("musicbrainzngs.search_releases", mock.search_releases)
-        monkeypatch.setattr("musicbrainzngs.get_release_by_id", mock.get_release_by_id)
-        item1 = MediaItem(
-            id="m4",
-            source_path="/music/Daft Punk/Discovery/01 - Intro.flac",
-            enrichment_data='{"artist": "Daft Punk", "album": "Discovery", "track_number": 1, "track_title": "Intro"}',
-            media_type="music",
-            state="audited"
-        )
-        item2 = MediaItem(
-            id="m5",
-            source_path="/music/Daft Punk/Discovery/02 - Aerodynamic.flac",
-            enrichment_data='{"artist": "Daft Punk", "album": "Discovery", "track_number": 2, "track_title": "Aerodynamic"}',
-            media_type="music",
-            state="audited"
-        )
-        async_session.add_all([item1, item2])
-        await async_session.commit()
-        await service.enrich_music(async_session, "m4")
-        await service.enrich_music(async_session, "m5")
-        # Only one search call should be made for the album
-        assert mock.calls.count(("Daft Punk", "Discovery")) == 1
+    from app.services.musicbrainz import AlbumCache, MusicBrainzService
+    cache = AlbumCache()
+    mock = MockMusicBrainz(releases)
+    # Patch the service to use the same cache as the mock
+    service = MusicBrainzService(cache=cache)
+    monkeypatch.setattr("musicbrainzngs.search_releases", mock.search_releases)
+    monkeypatch.setattr("musicbrainzngs.get_release_by_id", mock.get_release_by_id)
+    item1 = MediaItem(
+        id="m4",
+        source_path="/music/Daft Punk/Discovery/01 - Intro.flac",
+        enrichment_data='{"artist": "Daft Punk", "album": "Discovery", "track_number": 1, "track_title": "Intro"}',
+        media_type="music",
+        state="audited"
+    )
+    item2 = MediaItem(
+        id="m5",
+    source_path="/music/Daft Punk/Discovery/02 - Aerodynamic.flac",
+    enrichment_data='{"artist": "Daft Punk", "album": "Discovery", "track_number": 2, "track_title": "Aerodynamic"}',
+    media_type="music",
+    state="audited"
+    )
+    async_session.add_all([item1, item2])
+    await async_session.commit()
+    await service.enrich_music(async_session, "m4")
+    await service.enrich_music(async_session, "m5")
+    # Only one search call should be made for the album
+    assert mock.calls.count(("Daft Punk", "Discovery")) == 1

@@ -20,8 +20,8 @@ async def test_tmdb_enrichment_success(async_session: AsyncSession):
     item = MediaItem(
         id="testid",
         source_path="/input/movies/Inception.2010.PROPER.1080p.mkv",
-        guessed_title="Inception",
-        guessed_year=2010,
+        canonical_title="Inception",
+        release_year=2010,
         media_type="movie",
         state="audited"
     )
@@ -59,8 +59,8 @@ async def test_tmdb_enrichment_no_results(async_session: AsyncSession):
     item = MediaItem(
         id="testid2",
         source_path="/input/movies/UnknownMovie.2020.mkv",
-        guessed_title="UnknownMovie",
-        guessed_year=2020,
+        canonical_title="UnknownMovie",
+        release_year=2020,
         media_type="movie",
         state="audited"
     )
@@ -80,8 +80,8 @@ async def test_tmdb_enrichment_401(async_session: AsyncSession):
     item = MediaItem(
         id="testid3",
         source_path="/input/movies/BadKey.2010.mkv",
-        guessed_title="BadKey",
-        guessed_year=2010,
+        canonical_title="BadKey",
+        release_year=2010,
         media_type="movie",
         state="audited"
     )
@@ -100,8 +100,8 @@ async def test_tmdb_enrichment_429(async_session: AsyncSession):
     item = MediaItem(
         id="testid4",
         source_path="/input/movies/RateLimit.2010.mkv",
-        guessed_title="RateLimit",
-        guessed_year=2010,
+        canonical_title="RateLimit",
+        release_year=2010,
         media_type="movie",
         state="audited"
     )
@@ -137,8 +137,8 @@ async def test_tmdb_enrichment_cache(async_session: AsyncSession):
     item = MediaItem(
         id="testid5",
         source_path="/input/movies/Cached.2010.mkv",
-        guessed_title="Cached",
-        guessed_year=2010,
+        canonical_title="Cached",
+        release_year=2010,
         media_type="movie",
         state="audited"
     )
@@ -164,8 +164,8 @@ async def test_tmdb_enrichment_cache(async_session: AsyncSession):
     item2 = MediaItem(
         id="testid6",
         source_path="/input/movies/Cached.2010.mkv",
-        guessed_title="Cached",
-        guessed_year=2010,
+        canonical_title="Cached",
+        release_year=2010,
         media_type="movie",
         state="audited"
     )

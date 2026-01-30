@@ -46,18 +46,30 @@ class TMDBService:
         self._lock = asyncio.Lock()
 
     async def fetch_movie_metadata(self, session: AsyncSession, media_id: int) -> Optional[Dict[str, Any]]:
-        # Fetch guessed title/year from DB
+        # Fetch canonical_title/year from DB (fallback to parsing from source_path if needed)
         stmt = select(MediaItem).where(MediaItem.id == media_id)
         result = await session.execute(stmt)
         media = result.scalar_one_or_none()
         if not media:
             logger.error(f"MediaItem {media_id} not found")
             return None
-        title = media.guessed_title
-        year = media.guessed_year
+        # Use canonical_title and release_year if present, else try to parse from source_path
+        title = media.canonical_title
+        year = media.release_year
         if not title:
-            logger.error(f"No guessed title for media {media_id}")
-            return None
+            # Fallback: parse from source_path (very basic)
+            import re
+            m = re.match(r".*/(.+?)(?:[ .(](\d{4}))[)/.].*", media.source_path)
+            if m:
+                title = m.group(1).replace('.', ' ').replace('_', ' ').strip()
+                if not year:
+                    try:
+                        year = int(m.group(2))
+                    except Exception:
+                        year = None
+            else:
+                logger.error(f"No title found for media {media_id}")
+                return None
         cache_key = f"{title.lower()}_{year or ''}"
         cached = self.cache.get(cache_key)
         if cached:
