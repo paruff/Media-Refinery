@@ -1,5 +1,6 @@
 from typing import Callable, List, Any
 
+
 class Pipeline:
     """
     A processing pipeline that executes a series of steps in sequence.

@@ -1,10 +1,11 @@
 import pytest
-from pathlib import Path
 from src.storage.storage import Storage
+
 
 @pytest.fixture
 def storage():
     return Storage()
+
 
 def test_save_file(storage, tmp_path):
     file_path = tmp_path / "test.txt"
@@ -14,6 +15,7 @@ def test_save_file(storage, tmp_path):
 
     assert result is True
     assert file_path.read_text() == content
+
 
 def test_delete_file(storage, tmp_path):
     file_path = tmp_path / "test.txt"

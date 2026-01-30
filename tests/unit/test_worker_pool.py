@@ -1,6 +1,6 @@
 import pytest
-import asyncio
 from src.processor.worker_pool import WorkerPool
+
 
 @pytest.mark.asyncio
 async def test_worker_pool():

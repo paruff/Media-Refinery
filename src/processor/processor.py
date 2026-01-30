@@ -1,5 +1,6 @@
 from typing import Any, Callable, List
 
+
 class Processor:
     """
     A generic processor that applies a series of processing functions to data.

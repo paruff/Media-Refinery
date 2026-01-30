@@ -1,8 +1,18 @@
 import os
 import logging
 
+
 class Config:
-    def __init__(self, input_dir, output_dir, format, preserve_metadata, compression_level, dry_run, state_dir):
+    def __init__(
+        self,
+        input_dir,
+        output_dir,
+        format,
+        preserve_metadata,
+        compression_level,
+        dry_run,
+        state_dir,
+    ):
         self.input_dir = input_dir
         self.output_dir = output_dir
         self.format = format
@@ -11,12 +21,14 @@ class Config:
         self.dry_run = dry_run
         self.state_dir = state_dir
 
+
 class Result:
     def __init__(self, success, output_path, checksum, format):
         self.success = success
         self.output_path = output_path
         self.checksum = checksum
         self.format = format
+
 
 class Converter:
     def __init__(self, config):
@@ -60,7 +72,9 @@ class Converter:
         self.logger.info(f"Converting file: {input_path} with bitrate: {bitrate}")
 
         # Stub: always return success for now
-        return Result(success=True, output_path=input_path, checksum="", format=self.config.format)
+        return Result(
+            success=True, output_path=input_path, checksum="", format=self.config.format
+        )
 
     def validate_input_file(self, path):
         """
@@ -70,6 +84,7 @@ class Converter:
             raise FileNotFoundError(f"Input file {path} does not exist.")
         if os.path.getsize(path) == 0:
             raise ValueError(f"Input file {path} is empty.")
+
 
 class VideoConverter:
     def __init__(self, config):
@@ -83,7 +98,9 @@ class VideoConverter:
         """
         self.logger.info(f"Converting file: {input_path}")
         # Stub: always return success for now
-        return Result(success=True, output_path=input_path, checksum="", format=self.config.format)
+        return Result(
+            success=True, output_path=input_path, checksum="", format=self.config.format
+        )
 
     def convert(self, input_path, output_dir):
         """

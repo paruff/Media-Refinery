@@ -6,7 +6,6 @@ from typing import Optional, Dict, Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from app.core import database
 from app.models.media import MediaItem
 
 TMDB_API_URL = "https://api.themoviedb.org/3/search/movie"
@@ -14,6 +13,7 @@ TMDB_API_KEY = "${TMDB_API_KEY}"
 TMDB_RATE_LIMIT = 0.3  # seconds between requests
 
 logger = logging.getLogger("tmdb")
+
 
 # Simple in-memory LRU cache (can be replaced with DB table)
 class LRUCache:
@@ -38,14 +38,22 @@ class LRUCache:
         self.cache[key] = value
         self.order.insert(0, key)
 
+
 class TMDBService:
-    def __init__(self, api_key: str = TMDB_API_KEY, cache: Optional[LRUCache] = None, client: Optional[httpx.AsyncClient] = None):
+    def __init__(
+        self,
+        api_key: str = TMDB_API_KEY,
+        cache: Optional[LRUCache] = None,
+        client: Optional[httpx.AsyncClient] = None,
+    ):
         self.api_key = api_key
         self.cache = cache or LRUCache()
         self.client = client or httpx.AsyncClient()
         self._lock = asyncio.Lock()
 
-    async def fetch_movie_metadata(self, session: AsyncSession, media_id: int) -> Optional[Dict[str, Any]]:
+    async def fetch_movie_metadata(
+        self, session: AsyncSession, media_id: int
+    ) -> Optional[Dict[str, Any]]:
         # Fetch canonical_title/year from DB (fallback to parsing from source_path if needed)
         stmt = select(MediaItem).where(MediaItem.id == media_id)
         result = await session.execute(stmt)
@@ -59,9 +67,10 @@ class TMDBService:
         if not title:
             # Fallback: parse from source_path (very basic)
             import re
+
             m = re.match(r".*/(.+?)(?:[ .(](\d{4}))[)/.].*", media.source_path)
             if m:
-                title = m.group(1).replace('.', ' ').replace('_', ' ').strip()
+                title = m.group(1).replace(".", " ").replace("_", " ").strip()
                 if not year:
                     try:
                         year = int(m.group(2))
@@ -122,7 +131,11 @@ class TMDBService:
             # Prepare canonical data
             canonical = {
                 "canonical_title": best["title"],
-                "release_year": int(best["release_date"].split("-")[0]) if best.get("release_date") else None,
+                "release_year": (
+                    int(best["release_date"].split("-")[0])
+                    if best.get("release_date")
+                    else None
+                ),
                 "tmdb_id": best["id"],
                 "poster_path": best.get("poster_path"),
             }
@@ -133,13 +146,20 @@ class TMDBService:
     def _select_best_match(self, title: str, results: list) -> Optional[dict]:
         # Use difflib for title similarity
         for result in results:
-            sim = difflib.SequenceMatcher(None, title.lower(), result["title"].lower()).ratio() * 100
+            sim = (
+                difflib.SequenceMatcher(
+                    None, title.lower(), result["title"].lower()
+                ).ratio()
+                * 100
+            )
             if sim > 90 and result.get("popularity", 0) > 10:
                 return result
         # Fallback: first result
         return results[0] if results else None
 
-    async def _update_media(self, session: AsyncSession, media: MediaItem, canonical: dict):
+    async def _update_media(
+        self, session: AsyncSession, media: MediaItem, canonical: dict
+    ):
         stmt = (
             update(MediaItem)
             .where(MediaItem.id == media.id)

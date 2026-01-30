@@ -2,9 +2,11 @@ import pytest
 from pathlib import Path
 from src.audio.converter import AudioConverter
 
+
 @pytest.fixture
 def audio_converter():
     return AudioConverter()
+
 
 def test_validate_input_file(audio_converter):
     valid_file = Path("test.mp3")
@@ -13,6 +15,7 @@ def test_validate_input_file(audio_converter):
     valid_file.touch()
     assert audio_converter.validate_input_file(valid_file) is True
     assert audio_converter.validate_input_file(invalid_file) is False
+
 
 @pytest.mark.asyncio
 async def test_convert(audio_converter, tmp_path):

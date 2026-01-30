@@ -1,25 +1,5 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
-*.exe
-*.exe~
-
-
-# Binaries
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Test artifacts
-*.test
-*.out
-coverage.html
-coverage.out
-.pytest_cache/
-.coverage
-htmlcov/
+env.bak/
+venv.bak/
 
 # Python
 __pycache__/
@@ -41,34 +21,49 @@ pip-wheel-metadata/
 *.egg
 *.manifest
 *.spec
-*.log
 *.sqlite3
 *.db
-*.DS_Store
+*.log
+.DS_Store
+
+# Test artifacts
+.pytest_cache/
+.coverage
+coverage.out
+coverage.html
+htmlcov/
+*.test
+*.out
 
 # Working directories
 /work/
 /input/
 /output/
-*.log
+output/
+input/
 
 # Configuration (keep examples)
 config.yaml
 !config.example.yaml
 
-
 # Dependencies
 /vendor/
 
-
-# IDE
+# IDE/editor
 .vscode/
 .idea/
 *.swp
 *.swo
-__pycache__/
-# Editor/IDE
-# .idea/
-# .vscode/
-output
-input
+
+# macOS
+.DS_Store
+
+# Byte-compiled / optimized / DLL files
+*.pyc
+*.pyd
+*.pyo
+
+# VS Code settings
+.history/
+
+# End of file

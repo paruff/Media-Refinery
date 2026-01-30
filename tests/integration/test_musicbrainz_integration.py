@@ -1,8 +1,8 @@
 import pytest
-import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.musicbrainz import MusicBrainzService
 from app.models.media import MediaItem
+
 
 @pytest.mark.asyncio
 async def test_musicbrainz_integration(async_session: AsyncSession):
@@ -13,7 +13,7 @@ async def test_musicbrainz_integration(async_session: AsyncSession):
         source_path="/music/Radiohead/OK Computer/01 - Airbag.flac",
         enrichment_data='{"artist": "Radiohead", "album": "OK Computer", "track_number": 1, "track_title": "Airbag"}',
         media_type="music",
-        state="audited"
+        state="audited",
     )
     async_session.add(item)
     await async_session.commit()
@@ -29,5 +29,5 @@ async def test_musicbrainz_integration(async_session: AsyncSession):
     db_item = await async_session.get(MediaItem, "int1")
     assert db_item.album_artist.lower() == "radiohead"
     assert db_item.album_name.lower() == "ok computer"
-    assert db_item.state == "ready_to_plan"
+    assert db_item.state == "planned"
     assert db_item.enrichment_failed is False

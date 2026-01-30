@@ -1,5 +1,6 @@
 from typing import Dict, Any
 
+
 class IntegrationManager:
     """
     Manages integrations with external services.

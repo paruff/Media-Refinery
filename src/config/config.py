@@ -2,6 +2,7 @@ from pathlib import Path
 import yaml
 from typing import Any, Dict
 
+
 class ConfigLoader:
     """
     Handles loading and parsing configuration files.

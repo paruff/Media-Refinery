@@ -1,4 +1,3 @@
-
 import pytest
 import pytest_asyncio
 import json
@@ -6,6 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.models.media import Base, MediaItem, FileState, MediaType
 from app.services.auditor import IssueDetectorService
+
 
 @pytest_asyncio.fixture(scope="function")
 async def db():
@@ -18,9 +18,15 @@ async def db():
     await session.close()
     await engine.dispose()
 
+
 @pytest.mark.asyncio
 async def test_filename_rule(db):
-    item = MediaItem(id="f1", source_path="/media/Bad:Movie.2010.mkv", state=FileState.enriched, media_type=MediaType.movie)
+    item = MediaItem(
+        id="f1",
+        source_path="/media/Bad:Movie.2010.mkv",
+        state=FileState.enriched,
+        media_type=MediaType.movie,
+    )
     db.add(item)
     await db.commit()
     auditor = IssueDetectorService(db)
@@ -29,9 +35,18 @@ async def test_filename_rule(db):
     refreshed = await db.get(MediaItem, "f1")
     assert refreshed.state == FileState.audited
 
+
 @pytest.mark.asyncio
 async def test_codec_rule(db):
-    item = MediaItem(id="c1", source_path="/media/CodecTest.2010.mkv", state=FileState.enriched, media_type=MediaType.movie, video_codec="vc-1", audio_codec="dts-hd", container="avi")
+    item = MediaItem(
+        id="c1",
+        source_path="/media/CodecTest.2010.mkv",
+        state=FileState.enriched,
+        media_type=MediaType.movie,
+        video_codec="vc-1",
+        audio_codec="dts-hd",
+        container="avi",
+    )
     db.add(item)
     await db.commit()
     auditor = IssueDetectorService(db)
@@ -43,9 +58,15 @@ async def test_codec_rule(db):
     refreshed = await db.get(MediaItem, "c1")
     assert refreshed.state == FileState.audited
 
+
 @pytest.mark.asyncio
 async def test_subtitle_rule(db):
-    item = MediaItem(id="s1", source_path="/media/NoSubs.2010.mkv", state=FileState.enriched, media_type=MediaType.movie)
+    item = MediaItem(
+        id="s1",
+        source_path="/media/NoSubs.2010.mkv",
+        state=FileState.enriched,
+        media_type=MediaType.movie,
+    )
     db.add(item)
     await db.commit()
     auditor = IssueDetectorService(db)
@@ -60,10 +81,19 @@ async def test_subtitle_rule(db):
     refreshed = await db.get(MediaItem, "s1")
     assert refreshed.state == FileState.audited
 
+
 @pytest.mark.asyncio
 async def test_metadata_rule(db):
-    enrichment = json.dumps({"artist": "Test Artist", "album": "Test Album", "track_title": "Test Song"})
-    item = MediaItem(id="m1", source_path="/music/01 - Test Song.flac", state=FileState.enriched, media_type=MediaType.music, enrichment_data=enrichment)
+    enrichment = json.dumps(
+        {"artist": "Test Artist", "album": "Test Album", "track_title": "Test Song"}
+    )
+    item = MediaItem(
+        id="m1",
+        source_path="/music/01 - Test Song.flac",
+        state=FileState.enriched,
+        media_type=MediaType.music,
+        enrichment_data=enrichment,
+    )
     db.add(item)
     await db.commit()
     auditor = IssueDetectorService(db)
@@ -74,9 +104,15 @@ async def test_metadata_rule(db):
     refreshed = await db.get(MediaItem, "m1")
     assert refreshed.state == FileState.audited
 
+
 @pytest.mark.asyncio
 async def test_state_transitions(db):
-    item = MediaItem(id="st1", source_path="/media/StateTest.2010.mkv", state=FileState.enriched, media_type=MediaType.movie)
+    item = MediaItem(
+        id="st1",
+        source_path="/media/StateTest.2010.mkv",
+        state=FileState.enriched,
+        media_type=MediaType.movie,
+    )
     db.add(item)
     await db.commit()
     auditor = IssueDetectorService(db)

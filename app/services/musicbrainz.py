@@ -9,23 +9,31 @@ from app.models.media import MediaItem
 
 logger = logging.getLogger("musicbrainz")
 
-musicbrainzngs.set_useragent("Media Normalizer", "1.0", "https://github.com/paruff/Media-Refinery")
+musicbrainzngs.set_useragent(
+    "Media Normalizer", "1.0", "https://github.com/paruff/Media-Refinery"
+)
 musicbrainzngs.set_rate_limit(limit_or_interval=1.0)
+
 
 class AlbumCache:
     def __init__(self):
         self.cache = {}  # (artist, album) -> release data
+
     def get(self, artist, album):
         return self.cache.get((artist.lower(), album.lower()))
+
     def set(self, artist, album, data):
         self.cache[(artist.lower(), album.lower())] = data
+
 
 class MusicBrainzService:
     def __init__(self, cache: Optional[AlbumCache] = None):
         self.cache = cache or AlbumCache()
         self._lock = asyncio.Lock()
 
-    async def enrich_music(self, session: AsyncSession, media_id: int) -> Optional[Dict[str, Any]]:
+    async def enrich_music(
+        self, session: AsyncSession, media_id: int
+    ) -> Optional[Dict[str, Any]]:
         stmt = select(MediaItem).where(MediaItem.id == media_id)
         result = await session.execute(stmt)
         media = result.scalar_one_or_none()
@@ -47,7 +55,7 @@ class MusicBrainzService:
                         musicbrainzngs.search_releases,
                         artist=artist,
                         release=album,
-                        limit=1
+                        limit=1,
                     )
                     releases = result.get("release-list", [])
                     if not releases:
@@ -59,7 +67,7 @@ class MusicBrainzService:
                     release_data = await asyncio.to_thread(
                         musicbrainzngs.get_release_by_id,
                         release_id,
-                        includes=["recordings", "artist-credits"]
+                        includes=["recordings", "artist-credits"],
                     )
                     album_data = release_data["release"]
                 except Exception as e:
@@ -77,7 +85,12 @@ class MusicBrainzService:
         for disc, tr in tracks:
             if str(tr.get("number")) == str(track_number):
                 tr_title = tr["recording"]["title"]
-                sim = difflib.SequenceMatcher(None, title.lower(), tr_title.lower()).ratio() * 100
+                sim = (
+                    difflib.SequenceMatcher(
+                        None, title.lower(), tr_title.lower()
+                    ).ratio()
+                    * 100
+                )
                 if sim > 80:
                     best = (disc, tr)
                     break
@@ -106,6 +119,7 @@ class MusicBrainzService:
 
     def _extract_tokens(self, media: MediaItem):
         import json
+
         if media.enrichment_data:
             try:
                 data = json.loads(media.enrichment_data)
@@ -125,7 +139,9 @@ class MusicBrainzService:
             return "".join([c["artist"]["name"] for c in credits if "artist" in c])
         return None
 
-    async def _update_media(self, session: AsyncSession, media: MediaItem, canonical: dict):
+    async def _update_media(
+        self, session: AsyncSession, media: MediaItem, canonical: dict
+    ):
         stmt = (
             update(MediaItem)
             .where(MediaItem.id == media.id)

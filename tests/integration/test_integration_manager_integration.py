@@ -1,6 +1,7 @@
 import pytest
 from src.integrations.integration_manager import IntegrationManager
 
+
 class MockIntegration:
     def __init__(self, name):
         self.name = name
@@ -8,9 +9,11 @@ class MockIntegration:
     def perform_action(self):
         return f"Action performed by {self.name}"
 
+
 @pytest.fixture
 def integration_manager():
     return IntegrationManager()
+
 
 def test_integration_manager_with_mock_integration(integration_manager):
     mock_integration = MockIntegration("TestIntegration")

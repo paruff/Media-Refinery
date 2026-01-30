@@ -2,15 +2,15 @@ import asyncio
 import os
 import time
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedEvent
-from sqlalchemy.ext.asyncio import AsyncSession
+from watchdog.events import FileSystemEventHandler
 from sqlalchemy.future import select
 from app.models.media import MediaItem, FileState, MediaType
 import hashlib
 import logging
 
-EXCLUDE_PATTERNS = ('.DS_Store', '.tmp', '.part')
+EXCLUDE_PATTERNS = (".DS_Store", ".tmp", ".part")
 STABILITY_WINDOW = 5  # seconds
+
 
 class DebounceHandler(FileSystemEventHandler):
     def __init__(self, queue, loop):
@@ -26,6 +26,7 @@ class DebounceHandler(FileSystemEventHandler):
         if event.is_directory or any(p in event.dest_path for p in EXCLUDE_PATTERNS):
             return
         self.queue[event.dest_path] = time.time()
+
 
 class InputWatcher:
     def __init__(self, input_dir, db_session_factory, logger=None, coordinator=None):
@@ -67,7 +68,9 @@ class InputWatcher:
 
     async def insert_if_new(self, path):
         async with self.db_session_factory() as session:
-            exists = await session.execute(select(MediaItem).where(MediaItem.source_path == path))
+            exists = await session.execute(
+                select(MediaItem).where(MediaItem.source_path == path)
+            )
             if exists.scalar_one_or_none():
                 return
             file_hash = hashlib.sha256(path.encode()).hexdigest()
@@ -75,7 +78,7 @@ class InputWatcher:
                 source_path=path,
                 state=FileState.pending,
                 media_type=MediaType.unknown,
-                id=file_hash
+                id=file_hash,
             )
             session.add(item)
             await session.commit()

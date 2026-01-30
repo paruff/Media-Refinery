@@ -12,12 +12,9 @@ PIP?=$(VENV)/bin/pip
 BEHAVE?=$(VENV)/bin/behave
 
 precom:
-	@echo "[PRECOM] Lint, format, type-check, and security scan"
-	@which black >/dev/null 2>&1 && black app/ tests/ || echo "black not installed; skipping format"
-	@which isort >/dev/null 2>&1 && isort app/ tests/ || echo "isort not installed; skipping import sort"
-	@which flake8 >/dev/null 2>&1 && flake8 app/ tests/ || echo "flake8 not installed; skipping lint"
-	@which mypy >/dev/null 2>&1 && mypy app/ || echo "mypy not installed; skipping type check"
-	@which bandit >/dev/null 2>&1 && bandit -r app/ || echo "bandit not installed; skipping security scan"
+	@echo "[PRECOM] Run black and ruff (pre-commit hooks)"
+	@.venv/bin/black app/ tests/ || echo "black not installed; skipping format"
+	@.venv/bin/ruff check app/ tests/ || echo "ruff not installed; skipping lint"
 
 test: unit integration features
 

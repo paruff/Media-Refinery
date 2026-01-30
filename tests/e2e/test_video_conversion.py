@@ -1,6 +1,6 @@
 import pytest
-from pathlib import Path
 from src.video.converter import VideoConverter, Config
+
 
 @pytest.fixture
 def video_converter():
@@ -11,9 +11,10 @@ def video_converter():
         preserve_metadata=True,
         compression_level=5,
         dry_run=True,
-        state_dir="/tmp/state"
+        state_dir="/tmp/state",
     )
     return VideoConverter(config=config)
+
 
 @pytest.mark.e2e
 def test_video_conversion_e2e(video_converter, tmp_path):

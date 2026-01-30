@@ -1,17 +1,19 @@
-import asyncio
 import pytest
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.tmdb import TMDBService
 from app.models.media import MediaItem
 
+
 class MockTransport(httpx.AsyncBaseTransport):
     def __init__(self, response_data):
         self.response_data = response_data
         self.called = False
+
     async def handle_async_request(self, request):
         self.called = True
         return httpx.Response(200, json=self.response_data)
+
 
 @pytest.mark.asyncio
 async def test_tmdb_enrichment_success(async_session: AsyncSession):
@@ -22,7 +24,7 @@ async def test_tmdb_enrichment_success(async_session: AsyncSession):
         guessed_title="Inception",
         guessed_year=2010,
         media_type="movie",
-        state="audited"
+        state="audited",
     )
     async_session.add(item)
     await async_session.commit()
@@ -34,7 +36,7 @@ async def test_tmdb_enrichment_success(async_session: AsyncSession):
                 "id": 27205,
                 "release_date": "2010-07-15",
                 "popularity": 100,
-                "poster_path": "/poster.jpg"
+                "poster_path": "/poster.jpg",
             }
         ]
     }

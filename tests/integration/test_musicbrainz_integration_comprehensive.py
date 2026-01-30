@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.musicbrainz import MusicBrainzService
 from app.models.media import MediaItem
 
+
 @pytest.mark.asyncio
 async def test_musicbrainz_integration_various_tracks(async_session: AsyncSession):
     # Test multiple tracks from the same album
@@ -20,7 +21,7 @@ async def test_musicbrainz_integration_various_tracks(async_session: AsyncSessio
             source_path=f"/music/Radiohead/OK Computer/{track_number:02d} - {track_title}.flac",
             enrichment_data=f'{{"artist": "Radiohead", "album": "OK Computer", "track_number": {track_number}, "track_title": "{track_title}"}}',
             media_type="music",
-            state="audited"
+            state="audited",
         )
         items.append(item)
     async_session.add_all(items)
@@ -38,8 +39,9 @@ async def test_musicbrainz_integration_various_tracks(async_session: AsyncSessio
         db_item = await async_session.get(MediaItem, f"int_{i}")
         assert db_item.album_artist.lower() == "radiohead"
         assert db_item.album_name.lower() == "ok computer"
-        assert db_item.state == "ready_to_plan"
+        assert db_item.state == "planned"
         assert db_item.enrichment_failed is False
+
 
 @pytest.mark.asyncio
 async def test_musicbrainz_integration_no_match(async_session: AsyncSession):
@@ -48,7 +50,7 @@ async def test_musicbrainz_integration_no_match(async_session: AsyncSession):
         source_path="/music/Unknown Artist/Unknown Album/01 - Mystery.flac",
         enrichment_data='{"artist": "Unknown Artist", "album": "Unknown Album", "track_number": 1, "track_title": "Mystery"}',
         media_type="music",
-        state="audited"
+        state="audited",
     )
     async_session.add(item)
     await async_session.commit()

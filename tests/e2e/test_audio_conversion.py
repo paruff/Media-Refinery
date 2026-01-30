@@ -1,10 +1,11 @@
 import pytest
-from pathlib import Path
 from src.audio.converter import AudioConverter
+
 
 @pytest.fixture
 def audio_converter():
     return AudioConverter()
+
 
 @pytest.mark.asyncio
 @pytest.mark.e2e

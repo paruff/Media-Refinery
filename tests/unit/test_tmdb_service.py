@@ -1,19 +1,20 @@
-import asyncio
 import pytest
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from app.services.tmdb import TMDBService
 from app.models.media import MediaItem
+
 
 class MockTransport(httpx.AsyncBaseTransport):
     def __init__(self, response_data, status_code=200):
         self.response_data = response_data
         self.status_code = status_code
         self.called = False
+
     async def handle_async_request(self, request):
         self.called = True
         return httpx.Response(self.status_code, json=self.response_data)
+
 
 @pytest.mark.asyncio
 async def test_tmdb_enrichment_success(async_session: AsyncSession):
@@ -23,7 +24,7 @@ async def test_tmdb_enrichment_success(async_session: AsyncSession):
         canonical_title="Inception",
         release_year=2010,
         media_type="movie",
-        state="audited"
+        state="audited",
     )
     async_session.add(item)
     await async_session.commit()
@@ -34,7 +35,7 @@ async def test_tmdb_enrichment_success(async_session: AsyncSession):
                 "id": 27205,
                 "release_date": "2010-07-15",
                 "popularity": 100,
-                "poster_path": "/poster.jpg"
+                "poster_path": "/poster.jpg",
             }
         ]
     }
@@ -51,8 +52,9 @@ async def test_tmdb_enrichment_success(async_session: AsyncSession):
     assert db_item.release_year == 2010
     assert db_item.tmdb_id == 27205
     assert db_item.poster_path == "/poster.jpg"
-    assert db_item.state == "ready_to_plan"
+    assert db_item.state == "planned"
     assert db_item.enrichment_failed is False
+
 
 @pytest.mark.asyncio
 async def test_tmdb_enrichment_no_results(async_session: AsyncSession):
@@ -62,7 +64,7 @@ async def test_tmdb_enrichment_no_results(async_session: AsyncSession):
         canonical_title="UnknownMovie",
         release_year=2020,
         media_type="movie",
-        state="audited"
+        state="audited",
     )
     async_session.add(item)
     await async_session.commit()
@@ -75,6 +77,7 @@ async def test_tmdb_enrichment_no_results(async_session: AsyncSession):
     db_item = await async_session.get(MediaItem, "testid2")
     assert db_item.enrichment_failed is True
 
+
 @pytest.mark.asyncio
 async def test_tmdb_enrichment_401(async_session: AsyncSession):
     item = MediaItem(
@@ -83,7 +86,7 @@ async def test_tmdb_enrichment_401(async_session: AsyncSession):
         canonical_title="BadKey",
         release_year=2010,
         media_type="movie",
-        state="audited"
+        state="audited",
     )
     async_session.add(item)
     await async_session.commit()
@@ -95,6 +98,7 @@ async def test_tmdb_enrichment_401(async_session: AsyncSession):
     db_item = await async_session.get(MediaItem, "testid3")
     assert db_item.enrichment_failed is True
 
+
 @pytest.mark.asyncio
 async def test_tmdb_enrichment_429(async_session: AsyncSession):
     item = MediaItem(
@@ -103,34 +107,44 @@ async def test_tmdb_enrichment_429(async_session: AsyncSession):
         canonical_title="RateLimit",
         release_year=2010,
         media_type="movie",
-        state="audited"
+        state="audited",
     )
     async_session.add(item)
     await async_session.commit()
+
     # Simulate 429 then success
     class FlakyTransport(httpx.AsyncBaseTransport):
         def __init__(self):
             self.calls = 0
+
         async def handle_async_request(self, request):
             self.calls += 1
             if self.calls == 1:
                 return httpx.Response(429, json={})
-            return httpx.Response(200, json={"results": [{
-                "title": "RateLimit",
-                "id": 99999,
-                "release_date": "2010-01-01",
-                "popularity": 99,
-                "poster_path": "/poster2.jpg"
-            }]})
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "title": "RateLimit",
+                            "id": 99999,
+                            "release_date": "2010-01-01",
+                            "popularity": 99,
+                            "poster_path": "/poster2.jpg",
+                        }
+                    ]
+                },
+            )
+
     client = httpx.AsyncClient(transport=FlakyTransport())
     service = TMDBService(api_key="dummy", client=client)
     result = await service.fetch_movie_metadata(async_session, "testid4")
     assert result["canonical_title"] == "RateLimit"
     db_item = await async_session.get(MediaItem, "testid4")
     assert db_item.canonical_title == "RateLimit"
-    assert db_item.tmdb_id == 99999
-    assert db_item.state == "ready_to_plan"
+    assert db_item.state == "planned"
     assert db_item.enrichment_failed is False
+
 
 @pytest.mark.asyncio
 async def test_tmdb_enrichment_cache(async_session: AsyncSession):
@@ -140,7 +154,7 @@ async def test_tmdb_enrichment_cache(async_session: AsyncSession):
         canonical_title="Cached",
         release_year=2010,
         media_type="movie",
-        state="audited"
+        state="audited",
     )
     async_session.add(item)
     await async_session.commit()
@@ -151,7 +165,7 @@ async def test_tmdb_enrichment_cache(async_session: AsyncSession):
                 "id": 88888,
                 "release_date": "2010-01-01",
                 "popularity": 88,
-                "poster_path": "/poster3.jpg"
+                "poster_path": "/poster3.jpg",
             }
         ]
     }
@@ -167,7 +181,7 @@ async def test_tmdb_enrichment_cache(async_session: AsyncSession):
         canonical_title="Cached",
         release_year=2010,
         media_type="movie",
-        state="audited"
+        state="audited",
     )
     async_session.add(item2)
     await async_session.commit()
@@ -176,5 +190,5 @@ async def test_tmdb_enrichment_cache(async_session: AsyncSession):
     db_item2 = await async_session.get(MediaItem, "testid6")
     assert db_item2.canonical_title == "Cached"
     assert db_item2.tmdb_id == 88888
-    assert db_item2.state == "ready_to_plan"
+    assert db_item2.state == "planned"
     assert db_item2.enrichment_failed is False

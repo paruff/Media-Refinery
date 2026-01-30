@@ -1,6 +1,7 @@
 import asyncio
 from typing import Callable, Any, List
 
+
 class WorkerPool:
     """
     A worker pool to manage concurrent tasks.

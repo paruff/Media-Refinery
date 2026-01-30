@@ -5,6 +5,7 @@ from app.models.media import MediaItem, FileState
 import logging
 import os
 
+
 class ScannerService:
     def __init__(self, db_session_factory, logger=None):
         self.db_session_factory = db_session_factory
@@ -12,7 +13,9 @@ class ScannerService:
 
     async def run(self, media_id):
         async with self.db_session_factory() as session:
-            result = await session.execute(select(MediaItem).where(MediaItem.id == media_id))
+            result = await session.execute(
+                select(MediaItem).where(MediaItem.id == media_id)
+            )
             item = result.scalar_one_or_none()
             if not item:
                 self.logger.error(f"MediaItem {media_id} not found.")
@@ -28,8 +31,16 @@ class ScannerService:
                 return
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    "ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", path,
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-print_format",
+                    "json",
+                    "-show_format",
+                    "-show_streams",
+                    path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
                 stdout, stderr = await proc.communicate()
                 if proc.returncode != 0:
@@ -73,6 +84,6 @@ class ScannerService:
         item.title = tags.get("title")
         item.year = tags.get("date")
         # Compliance (example: Samsung-safe)
-        item.is_standard_compliant = (
-            (item.container in ("mp4", "mkv")) and (item.video_codec in ("h264", "hevc"))
+        item.is_standard_compliant = (item.container in ("mp4", "mkv")) and (
+            item.video_codec in ("h264", "hevc")
         )

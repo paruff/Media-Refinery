@@ -1,17 +1,17 @@
 import asyncio
-import json
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from app.models.media import Base, MediaItem, FileState, MediaType
+from app.models.media import Base, MediaItem, FileState
 from app.services.classification import ClassificationService
+
 
 @pytest.fixture(scope="module")
 def event_loop():
     loop = asyncio.get_event_loop()
     yield loop
 
-import pytest_asyncio
 
 @pytest_asyncio.fixture(scope="function")
 async def db():
@@ -24,61 +24,76 @@ async def db():
     await session.close()
     await engine.dispose()
 
+
 @pytest.mark.asyncio
 async def test_classify_movie(db):
-    item = MediaItem(id="m1", source_path="/movies/Inception.2010.mkv", state=FileState.pending)
+    item = MediaItem(
+        id="m1", source_path="/movies/Inception.2010.mkv", state=FileState.pending
+    )
     db.add(item)
     await db.commit()
     classifier = ClassificationService(db)
-    result = await classifier.classify_file("m1")
+    await classifier.classify_file("m1")
     refreshed = await db.get(MediaItem, "m1")
     assert refreshed.media_type == "movie"
     assert refreshed.state == FileState.enriched
     assert refreshed.enrichment_data is not None
 
+
 @pytest.mark.asyncio
 async def test_classify_series(db):
-    item = MediaItem(id="s1", source_path="/tv/Breaking.Bad.S01E01.mkv", state=FileState.pending)
+    item = MediaItem(
+        id="s1", source_path="/tv/Breaking.Bad.S01E01.mkv", state=FileState.pending
+    )
     db.add(item)
     await db.commit()
     classifier = ClassificationService(db)
-    result = await classifier.classify_file("s1")
+    await classifier.classify_file("s1")
     refreshed = await db.get(MediaItem, "s1")
     assert refreshed.media_type == "series"
     assert refreshed.state == FileState.enriched
     assert refreshed.enrichment_data is not None
 
+
 @pytest.mark.asyncio
 async def test_classify_music(db):
-    item = MediaItem(id="mu1", source_path="/music/01 - Song.flac", state=FileState.pending)
+    item = MediaItem(
+        id="mu1", source_path="/music/01 - Song.flac", state=FileState.pending
+    )
     db.add(item)
     await db.commit()
     classifier = ClassificationService(db)
-    result = await classifier.classify_file("mu1")
+    await classifier.classify_file("mu1")
     refreshed = await db.get(MediaItem, "mu1")
     assert refreshed.media_type == "music"
     assert refreshed.state == FileState.enriched
     assert refreshed.enrichment_data is not None
 
+
 @pytest.mark.asyncio
 async def test_classify_unknown(db):
-    item = MediaItem(id="u1", source_path="/unknown/strange.filetype", state=FileState.pending)
+    item = MediaItem(
+        id="u1", source_path="/unknown/strange.filetype", state=FileState.pending
+    )
     db.add(item)
     await db.commit()
     classifier = ClassificationService(db)
-    result = await classifier.classify_file("u1")
+    await classifier.classify_file("u1")
     refreshed = await db.get(MediaItem, "u1")
     assert refreshed.media_type == "unknown"
     assert refreshed.state == FileState.enriched
     assert refreshed.enrichment_data is not None
 
+
 @pytest.mark.asyncio
 async def test_classify_regex_fallback(db):
-    item = MediaItem(id="r1", source_path="/movies/SomeMovie.2020.avi", state=FileState.pending)
+    item = MediaItem(
+        id="r1", source_path="/movies/SomeMovie.2020.avi", state=FileState.pending
+    )
     db.add(item)
     await db.commit()
     classifier = ClassificationService(db)
-    result = await classifier.classify_file("r1")
+    await classifier.classify_file("r1")
     refreshed = await db.get(MediaItem, "r1")
     assert refreshed.media_type in ("movie", "unknown")
     assert refreshed.state == FileState.enriched

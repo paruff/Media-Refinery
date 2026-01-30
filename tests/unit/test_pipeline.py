@@ -1,5 +1,5 @@
-import pytest
 from src.pipeline.pipeline import Pipeline
+
 
 def test_pipeline():
     pipeline = Pipeline()

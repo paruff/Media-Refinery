@@ -1,4 +1,3 @@
-import os
 import json
 import subprocess
 from pathlib import Path
@@ -8,6 +7,7 @@ import re
 # Initialize logger
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING)
+
 
 class Metadata:
     def __init__(self):
@@ -35,6 +35,7 @@ class Metadata:
         self.format = ""
         self.file_path = ""
 
+
 class MetadataExtractor:
     def __init__(self, cleanup_tags=False):
         self.cleanup_tags = cleanup_tags
@@ -45,13 +46,25 @@ class MetadataExtractor:
         meta.format = Path(path).suffix.lstrip(".")
 
         try:
-            output = subprocess.check_output([
-                "ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_format", "-show_streams", path
-            ], text=True)
+            output = subprocess.check_output(
+                [
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-print_format",
+                    "json",
+                    "-show_format",
+                    "-show_streams",
+                    path,
+                ],
+                text=True,
+            )
             result = json.loads(output)
 
-            tags = {k.lower(): v for k, v in result.get("format", {}).get("tags", {}).items()}
+            tags = {
+                k.lower(): v
+                for k, v in result.get("format", {}).get("tags", {}).items()
+            }
 
             meta.title = self.get_tag(tags, "title")
             meta.artist = self.get_tag(tags, "artist")

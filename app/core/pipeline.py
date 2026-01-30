@@ -2,11 +2,11 @@ import asyncio
 import logging
 from app.models.media import MediaItem, FileState
 from sqlalchemy.future import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from app.core.scanner import ScannerService
 
 MAX_CONCURRENT_SCANS = 2
+
 
 class PipelineCoordinator:
     def __init__(self, db_session_factory, logger=None):
@@ -36,7 +36,9 @@ class PipelineCoordinator:
 
     async def process(self, media_id):
         async with self.db_session_factory() as session:
-            result = await session.execute(select(MediaItem).where(MediaItem.id == media_id))
+            result = await session.execute(
+                select(MediaItem).where(MediaItem.id == media_id)
+            )
             item = result.scalar_one_or_none()
             if not item:
                 self.logger.error(f"MediaItem {media_id} not found.")
@@ -53,13 +55,16 @@ class PipelineCoordinator:
             await self.scanner.run(media_id)
         except Exception as e:
             async with self.db_session_factory() as session:
-                result = await session.execute(select(MediaItem).where(MediaItem.id == media_id))
+                result = await session.execute(
+                    select(MediaItem).where(MediaItem.id == media_id)
+                )
                 item = result.scalar_one_or_none()
                 if item:
                     item.state = FileState.error
                     item.error_log = str(e)
                     await session.commit()
             self.logger.error(f"Scanner failed for {media_id}: {e}")
+
 
 # Example MediaScanner stub
 class MediaScanner:

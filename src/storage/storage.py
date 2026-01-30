@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Union
 
+
 class Storage:
     """
     Handles file storage operations such as saving and deleting files.

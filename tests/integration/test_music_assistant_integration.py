@@ -1,6 +1,6 @@
 import pytest
-from pathlib import Path
 from src.audio.converter import AudioConverter
+
 
 @pytest.mark.asyncio
 async def test_music_album_conversion(tmp_path):
@@ -23,6 +23,7 @@ async def test_music_album_conversion(tmp_path):
         assert result.exists()
         assert result.suffix == ".flac"
 
+
 @pytest.mark.asyncio
 async def test_music_structure_and_naming(tmp_path):
     # Simulate Music Assistant structure: Artist/Album/Track
@@ -37,6 +38,7 @@ async def test_music_structure_and_naming(tmp_path):
     assert track.exists()
     assert track.name.startswith("01 - ")
     assert track.suffix == ".flac"
+
 
 @pytest.mark.asyncio
 async def test_multi_disc_album(tmp_path):

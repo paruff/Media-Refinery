@@ -1,13 +1,21 @@
 from pathlib import Path
 from typing import List
 
+
 class Validator:
     """
     Validates files and directories based on predefined rules.
     """
 
     def __init__(self, allowed_extensions: List[str] = None):
-        self.allowed_extensions = allowed_extensions or [".mp3", ".flac", ".aac", ".m4a", ".ogg", ".wav"]
+        self.allowed_extensions = allowed_extensions or [
+            ".mp3",
+            ".flac",
+            ".aac",
+            ".m4a",
+            ".ogg",
+            ".wav",
+        ]
 
     def validate_file(self, file_path: Path) -> bool:
         """

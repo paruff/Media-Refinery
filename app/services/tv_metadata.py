@@ -13,6 +13,7 @@ TMDB_RATE_LIMIT = 0.3  # seconds between requests
 
 logger = logging.getLogger("tmdb.tv")
 
+
 class TVSeriesCache:
     def __init__(self):
         self.series_id_cache = {}  # title.lower() -> id
@@ -23,14 +24,22 @@ class TVSeriesCache:
     def set(self, title, series_id):
         self.series_id_cache[title.lower()] = series_id
 
+
 class TVMetadataService:
-    def __init__(self, api_key: str = TMDB_API_KEY, cache: Optional[TVSeriesCache] = None, client: Optional[httpx.AsyncClient] = None):
+    def __init__(
+        self,
+        api_key: str = TMDB_API_KEY,
+        cache: Optional[TVSeriesCache] = None,
+        client: Optional[httpx.AsyncClient] = None,
+    ):
         self.api_key = api_key
         self.cache = cache or TVSeriesCache()
         self.client = client or httpx.AsyncClient()
         self._lock = asyncio.Lock()
 
-    async def fetch_series_metadata(self, session: AsyncSession, media_id: int) -> Optional[Dict[str, Any]]:
+    async def fetch_series_metadata(
+        self, session: AsyncSession, media_id: int
+    ) -> Optional[Dict[str, Any]]:
         stmt = select(MediaItem).where(MediaItem.id == media_id)
         result = await session.execute(stmt)
         media = result.scalar_one_or_none()
@@ -74,7 +83,9 @@ class TVMetadataService:
         params = {"api_key": self.api_key}
         resp = await self.client.get(ep_url, params=params)
         if resp.status_code == 404:
-            logger.warning(f"TMDB episode not found for {title} S{season:02d}E{episode:02d}")
+            logger.warning(
+                f"TMDB episode not found for {title} S{season:02d}E{episode:02d}"
+            )
             await self._flag_mismatch(session, media)
             return None
         if resp.status_code != 200:
@@ -95,6 +106,7 @@ class TVMetadataService:
     def _extract_tokens(self, media: MediaItem):
         # Try to extract from enrichment_data or filename
         import json
+
         tokens = None
         if media.enrichment_data:
             try:
@@ -111,12 +123,19 @@ class TVMetadataService:
 
     def _select_best_match(self, title: str, results: list) -> Optional[dict]:
         for result in results:
-            sim = difflib.SequenceMatcher(None, title.lower(), result["name"].lower()).ratio() * 100
+            sim = (
+                difflib.SequenceMatcher(
+                    None, title.lower(), result["name"].lower()
+                ).ratio()
+                * 100
+            )
             if sim > 90:
                 return result
         return results[0] if results else None
 
-    async def _update_media(self, session: AsyncSession, media: MediaItem, canonical: dict):
+    async def _update_media(
+        self, session: AsyncSession, media: MediaItem, canonical: dict
+    ):
         stmt = (
             update(MediaItem)
             .where(MediaItem.id == media.id)
@@ -152,4 +171,6 @@ class TVMetadataService:
         )
         await session.execute(stmt)
         await session.commit()
-        logger.info(f"Media {media.id} flagged as metadata_mismatch (episode not found)")
+        logger.info(
+            f"Media {media.id} flagged as metadata_mismatch (episode not found)"
+        )

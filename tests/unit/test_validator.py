@@ -1,10 +1,11 @@
 import pytest
-from pathlib import Path
 from src.validator.validator import Validator
+
 
 @pytest.fixture
 def validator():
     return Validator()
+
 
 def test_validate_file(validator, tmp_path):
     valid_file = tmp_path / "test.mp3"
@@ -14,6 +15,7 @@ def test_validate_file(validator, tmp_path):
 
     assert validator.validate_file(valid_file) is True
     assert validator.validate_file(invalid_file) is False
+
 
 def test_validate_directory(validator, tmp_path):
     valid_file = tmp_path / "test.mp3"
