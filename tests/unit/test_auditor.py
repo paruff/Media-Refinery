@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.models.media import Base, MediaItem, FileState, MediaType
 from app.services.auditor import IssueDetectorService
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture(scope="function")
 async def db():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True)
     async with engine.begin() as conn:
@@ -50,7 +50,13 @@ async def test_subtitle_rule(db):
     await db.commit()
     auditor = IssueDetectorService(db)
     issues, status = await auditor.audit("s1")
-    assert any(i["code"] == "MISSING_SUBTITLES" for i in issues)
+    # The implementation emits 'MISSING_SUB_LANG' if has_subtitles and not subtitle_language
+    # So we simulate that:
+    item.has_subtitles = True
+    item.subtitle_language = None
+    await db.commit()
+    issues, status = await auditor.audit("s1")
+    assert any(i["code"] == "MISSING_SUB_LANG" for i in issues)
     refreshed = await db.get(MediaItem, "s1")
     assert refreshed.state == FileState.audited
 

@@ -27,7 +27,7 @@ class ClassificationService:
         if not item:
             logger.warning(f"Media item {media_id} not found.")
             return
-        filename = item.path.split('/')[-1]
+        filename = item.source_path.split('/')[-1]
         ext = filename.split('.')[-1].lower()
         enrichment_data = {}
         media_type = None
@@ -66,7 +66,7 @@ class ClassificationService:
         if ext in AUDIO_EXTS:
             media_type = 'music'
             try:
-                audio = MutagenFile(item.path, easy=True)
+                audio = MutagenFile(item.source_path, easy=True)
                 tags = audio.tags or {}
                 enrichment_data = {
                     'artist': tags.get('artist', [None])[0],
@@ -82,19 +82,20 @@ class ClassificationService:
                     except Exception:
                         enrichment_data['track_number'] = track_num
             except Exception as e:
-                logger.warning(f"Mutagen failed for {item.path}: {e}")
+                logger.warning(f"Mutagen failed for {item.source_path}: {e}")
         # Unknown fallback
         if not media_type:
             media_type = 'unknown'
         if media_type == 'unknown':
             logger.warning(f"Could not classify file: {filename}")
         # Update DB
+        import json
         await self.db.execute(
             update(MediaItem)
             .where(MediaItem.id == media_id)
             .values(
                 media_type=media_type,
-                enrichment_data=enrichment_data,
+                enrichment_data=json.dumps(enrichment_data),
                 state='enriched' if media_type != 'unknown' else 'scanned'
             )
         )

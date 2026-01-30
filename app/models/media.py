@@ -15,6 +15,7 @@ class FileState(str, enum.Enum):
     planned = "planned"
     executed = "executed"
     validated = "validated"
+    audited = "audited"
     error = "error"
 
 class MediaType(str, enum.Enum):
