@@ -14,9 +14,9 @@ Feature: Detect messy or inconsistent media library elements
       | Season/Episode (for series) |
       | Artist/Album (for music) |
 
-  Scenario: Detect non‑UTF8 filenames
+  Scenario: Detect non–UTF8 filenames
     Given a filename
-    Then flag it if it contains non‑UTF8 characters
+    Then flag it if it contains non–UTF8 characters
 
   Scenario: Detect illegal filesystem characters
     Given a filename
