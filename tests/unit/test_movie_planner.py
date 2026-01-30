@@ -22,7 +22,7 @@ async def test_movie_planner_path_and_codec(async_session):
     plan = await planner.create_plan("movie1")
     assert plan.target_path == "/output/movies/Inception (2010)/Inception (2010).mkv"
     assert "-c:a" in plan.ffmpeg_args and "aac" in plan.ffmpeg_args
-    assert plan.status == PlanStatus.planned
+    assert plan.plan_status == PlanStatus.draft
 
 
 @pytest.mark.asyncio
@@ -45,7 +45,7 @@ async def test_movie_planner_transcode_flags(async_session):
     assert plan.target_path == "/output/movies/Old-Movie (1999)/Old-Movie (1999).mkv"
     assert "libx264" in plan.ffmpeg_args
     assert "-c:a" in plan.ffmpeg_args and "aac" in plan.ffmpeg_args
-    assert plan.status == PlanStatus.planned
+    assert plan.plan_status == PlanStatus.draft
 
 
 @pytest.mark.asyncio
@@ -66,5 +66,5 @@ async def test_movie_planner_subtitle_flag(async_session):
     await async_session.commit()
     planner = MoviePlanningService(async_session)
     plan = await planner.create_plan("movie3")
-    assert plan.fix_subtitles is True
-    assert plan.status == PlanStatus.planned
+    assert plan.needs_subtitle_conversion is True
+    assert plan.plan_status == PlanStatus.draft

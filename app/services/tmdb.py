@@ -52,7 +52,7 @@ class TMDBService:
         self._lock = asyncio.Lock()
 
     async def fetch_movie_metadata(
-        self, session: AsyncSession, media_id: int
+        self, session: AsyncSession, media_id: int, max_retries: int = 3
     ) -> Optional[Dict[str, Any]]:
         # Fetch canonical_title/year from DB (fallback to parsing from source_path if needed)
         stmt = select(MediaItem).where(MediaItem.id == media_id)
@@ -104,8 +104,15 @@ class TMDBService:
                 return None
             if resp.status_code == 429:
                 logger.warning("TMDB rate limited (429)")
-                await asyncio.sleep(2)
-                return await self.fetch_movie_metadata(session, media_id)
+                if max_retries > 0:
+                    await asyncio.sleep(2)
+                    return await self.fetch_movie_metadata(
+                        session, media_id, max_retries=max_retries - 1
+                    )
+                else:
+                    logger.error("TMDB rate limit exceeded, max retries reached")
+                    await self._flag_failed(session, media)
+                    return None
             if resp.status_code == 404:
                 logger.warning("TMDB not found (404)")
                 await self._flag_failed(session, media)

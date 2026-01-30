@@ -119,6 +119,7 @@ class NormalizationPlan(Base):
     needs_transcode = Column(Boolean, default=False, nullable=False)
     needs_rename = Column(Boolean, default=False, nullable=False)
     needs_subtitle_conversion = Column(Boolean, default=False, nullable=False)
+    needs_tagging = Column(Boolean, default=False, nullable=False)
 
     # Execution data
     target_path = Column(String, nullable=False)

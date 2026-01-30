@@ -1,11 +1,10 @@
 import re
 from pathlib import Path
-from app.models.media import MediaItem, MediaType, NormalizationPlan
+from app.models.media import MediaItem, MediaType, NormalizationPlan, PlanStatus
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update
 
-# Supported codecs for Samsung Series 65
 SUPPORTED_VIDEO_CODECS = {"h264", "hevc"}
 SUPPORTED_AUDIO_CODECS = {"aac", "ac3"}
 UNSAFE_SUBS = {"pgs", "vobsub"}
@@ -29,58 +28,74 @@ def clean_title(title: str) -> str:
     return re.sub(r"\s+", " ", title).strip()
 
 
-class MoviePlanningService:
+class SeriesPlanningService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
     async def create_plan(self, media_id: str) -> NormalizationPlan:
-        # Fetch the MediaItem
         result = await self.db.execute(
             select(MediaItem).where(MediaItem.id == media_id)
         )
         item = result.scalar_one_or_none()
-        if not item or item.media_type != MediaType.movie:
-            raise ValueError("MediaItem not found or not a movie")
+        if not item or item.media_type != MediaType.series:
+            raise ValueError("MediaItem not found or not a series")
 
-        # Extract title/year, clean for path
-        title = clean_title(item.title or item.guessed_title or "Unknown")
-        year = item.year or item.guessed_year or "0000"
+        # Canonical show name and year
+        show = clean_title(
+            item.canonical_series_name or item.title or item.guessed_title or "Unknown"
+        )
+        year = item.release_year or item.guessed_year or item.year or "0000"
         ext = (item.container or "mkv").lower()
-        target_dir = Path("/output/movies") / f"{title} ({year})"
-        target_file = f"{title} ({year}).{ext}"
+        season = int(item.season_number or 0)
+        episode = int(item.episode_number or 0)
+        episode_title = clean_title(item.episode_title or "Episode")
+
+        # Zero-padding
+        season_str = f"{season:02d}"
+        episode_str = f"{episode:02d}"
+        # Specials
+        season_folder = f"Season {season_str}" if season > 0 else "Season 00"
+        # Folder path
+        show_folder = f"{show} ({year})"
+        target_dir = Path("/output/series") / show_folder / season_folder
+        # Multi-episode support (e.g., S01E01-E02)
+        if (
+            hasattr(item, "episode_end")
+            and item.episode_end
+            and item.episode_end != episode
+        ):
+            episode_end_str = f"{int(item.episode_end):02d}"
+            episode_code = f"S{season_str}E{episode_str}-E{episode_end_str}"
+        else:
+            episode_code = f"S{season_str}E{episode_str}"
+        target_file = f"{show_folder} - {episode_code} - {episode_title}.{ext}"
         target_path = target_dir / target_file
 
-        # Determine ffmpeg args
+        # FFMPEG args (reuse movie logic)
         ffmpeg_args = ["-i", item.source_path]
-        # Video
         vcodec = (item.video_codec or "").lower()
         if vcodec in SUPPORTED_VIDEO_CODECS:
             ffmpeg_args += ["-c:v", "copy"]
-        elif vcodec in {"vc-1", "mpeg2", "mpeg-2"}:
-            ffmpeg_args += ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
         else:
             ffmpeg_args += ["-c:v", "libx264"]
-        # Audio
         acodec = (item.audio_codec or "").lower()
         if acodec in SUPPORTED_AUDIO_CODECS:
             ffmpeg_args += ["-c:a", "copy"]
-        elif acodec in {"dts", "dts-hd"}:
-            ffmpeg_args += ["-c:a", "aac", "-b:a", "192k"]
         else:
             ffmpeg_args += ["-c:a", "aac"]
-        # Subtitles
-        # If any unsafe subs, flag for removal (actual removal logic handled elsewhere)
         ffmpeg_args += ["-map", "0", str(target_path)]
 
-        # Create NormalizationPlan
         plan = NormalizationPlan(
             media_item_id=item.id,
             target_path=str(target_path),
             ffmpeg_args=ffmpeg_args,
-            original_hash="dummy_hash_for_test",
+            plan_status=PlanStatus.draft,
+            needs_transcode="copy" not in ffmpeg_args,
+            needs_rename=True,
+            needs_subtitle_conversion=False,
+            original_hash="",  # Should be set elsewhere
         )
         self.db.add(plan)
-        # Update MediaItem state
         await self.db.execute(
             update(MediaItem).where(MediaItem.id == item.id).values(state="planned")
         )

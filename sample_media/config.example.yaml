@@ -1,0 +1,29 @@
+# Example configuration for Media Refinery
+input_dir: ./input
+output_dir: ./output
+dry_run: true
+
+# Audio settings
+audio:
+  enabled: true
+  output_format: flac
+
+# Video settings
+video:
+  enabled: true
+  output_format: mkv
+  video_codec: h264
+
+# Integrations
+integrations:
+  beets:
+    enabled: true
+    url: http://beets:8337
+  radarr:
+    enabled: true
+    url: http://radarr:7878
+    api_key: YOUR_KEY
+  sonarr:
+    enabled: true
+    url: http://sonarr:8989
+    api_key: YOUR_KEY

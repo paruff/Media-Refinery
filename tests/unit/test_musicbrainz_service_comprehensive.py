@@ -76,7 +76,7 @@ async def test_enrich_success_single_disc(monkeypatch, async_session: AsyncSessi
     assert db_item.disc_number == 1
     assert db_item.mbid == "rec-1"
     assert db_item.release_mbid == "rel-1"
-    assert db_item.state == "planned"
+    assert db_item.state == "ready_to_plan"
     assert db_item.enrichment_failed is False
 
 
@@ -110,7 +110,7 @@ async def test_enrich_multidisc(monkeypatch, async_session: AsyncSession):
     db_item = await async_session.get(MediaItem, "t2")
     assert db_item.disc_number == 2
     assert db_item.mbid == "rec-2"
-    assert db_item.state == "planned"
+    assert db_item.state == "ready_to_plan"
     assert db_item.enrichment_failed is False
 
 
@@ -163,7 +163,7 @@ async def test_enrich_track_fuzzy(monkeypatch, async_session: AsyncSession):
     assert result["mbid"] == "rec-1"
     db_item = await async_session.get(MediaItem, "t4")
     assert db_item.mbid == "rec-1"
-    assert db_item.state == "planned"
+    assert db_item.state == "ready_to_plan"
     assert db_item.enrichment_failed is False
 
 

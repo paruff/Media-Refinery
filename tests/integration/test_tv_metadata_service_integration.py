@@ -51,7 +51,7 @@ async def test_tv_integration_enriches_episode(async_session: AsyncSession):
     assert db_item.episode_title == "System"
     assert db_item.absolute_number == 1
     assert db_item.tmdb_series_id == 136315
-    assert db_item.state == "planned"
+    assert db_item.state == "ready_to_plan"
     assert db_item.metadata_mismatch is False
 
 

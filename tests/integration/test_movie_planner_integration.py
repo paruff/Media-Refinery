@@ -22,14 +22,14 @@ async def test_movie_planner_creates_plan_integration(async_session):
     plan = await planner.create_plan("movie_integ1")
     assert plan.target_path == "/output/movies/The Matrix (1999)/The Matrix (1999).mkv"
     assert "-c:a" in plan.ffmpeg_args and "aac" in plan.ffmpeg_args
-    assert plan.status == PlanStatus.planned
+    assert plan.plan_status == PlanStatus.draft
 
 
 @pytest.mark.asyncio
 async def test_movie_planner_handles_missing_item(async_session):
     planner = MoviePlanningService(async_session)
-    plan = await planner.create_plan("nonexistent_id")
-    assert plan is None
+    with pytest.raises(ValueError, match="MediaItem not found or not a movie"):
+        await planner.create_plan("nonexistent_id")
 
 
 @pytest.mark.asyncio
@@ -52,4 +52,4 @@ async def test_movie_planner_integration_transcode(async_session):
     assert plan.target_path == "/output/movies/Classic (1980)/Classic (1980).mkv"
     assert "libx264" in plan.ffmpeg_args
     assert "-c:a" in plan.ffmpeg_args and "aac" in plan.ffmpeg_args
-    assert plan.status == PlanStatus.planned
+    assert plan.plan_status == PlanStatus.draft

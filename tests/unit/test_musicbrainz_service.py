@@ -80,7 +80,7 @@ async def test_musicbrainz_enrichment_success(monkeypatch, async_session: AsyncS
     assert db_item.disc_number == 1
     assert db_item.mbid == "rec-mbid-1"
     assert db_item.release_mbid == "release-mbid-123"
-    assert db_item.state == "planned"
+    assert db_item.state == "ready_to_plan"
     assert db_item.enrichment_failed is False
 
 

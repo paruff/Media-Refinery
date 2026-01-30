@@ -1,8 +1,10 @@
 
 # Media Refinery
 
+
 ![CI](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml/badge.svg)
 ![Coverage](https://codecov.io/gh/paruff/Media-Refinery/branch/main/graph/badge.svg)
+![Coverage Status](https://img.shields.io/codecov/c/github/paruff/Media-Refinery/main?label=coverage)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 Media Refinery is a Python-based media processing pipeline designed to handle audio and video processing tasks efficiently. This project is a conversion from a Go-based implementation to Python, leveraging modern Python practices.
@@ -47,6 +49,7 @@ Media Refinery can help you convert a messy music library into a well-structured
 
 
 
+
 ## Quickstart
 
 ```bash
@@ -55,6 +58,7 @@ cd Media-Refinery
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pre-commit install  # optional, for auto-formatting
 ```
 
 
@@ -88,8 +92,33 @@ All detailed documentation is now in the [docs/](docs/README.md) directory:
 - [Maintainers Guide](docs/MAINTAINERS_GUIDE.md)
 - [Legacy Docs](docs/legacy/)
 
-## Testing
-Run tests using pytest:
+
+## Testing & Quality
+
+Run all tests and check coverage:
 ```bash
-pytest
+pytest --cov=app --cov=src --cov-report=term-missing
 ```
+
+Test types:
+- **Unit tests:** `pytest tests/unit/`
+- **Integration tests:** `pytest tests/integration/`
+- **End-to-end tests:** `pytest tests/e2e/`
+- **BDD tests:** `behave tests/features/`
+
+Lint and format:
+```bash
+make precom
+```
+
+Pre-commit hooks are configured for linting and formatting. Install with `pre-commit install`.
+## FAQ
+
+See [FAQ.md](FAQ.md) for common questions and troubleshooting.
+## Security & Observability
+
+- See [SECURITY.md](SECURITY.md) for security practices and how to report vulnerabilities.
+- See [METRICS.md](METRICS.md) for metrics and observability endpoints.
+## Example Config & Sample Media
+
+See [sample_media/README.md](sample_media/README.md) and [sample_media/config.example.yaml](sample_media/config.example.yaml) for example files.

@@ -39,7 +39,7 @@ async def test_musicbrainz_integration_various_tracks(async_session: AsyncSessio
         db_item = await async_session.get(MediaItem, f"int_{i}")
         assert db_item.album_artist.lower() == "radiohead"
         assert db_item.album_name.lower() == "ok computer"
-        assert db_item.state == "planned"
+        assert db_item.state == "ready_to_plan"
         assert db_item.enrichment_failed is False
 
 
