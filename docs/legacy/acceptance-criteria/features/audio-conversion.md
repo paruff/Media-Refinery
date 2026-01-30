@@ -2,8 +2,8 @@
 
 ## User Story
 
-**As a** media library curator  
-**I want to** convert audio files from various formats to FLAC  
+**As a** media library curator
+**I want to** convert audio files from various formats to FLAC
 **So that** I have a consistent, lossless, high-quality audio archive
 
 ---
@@ -35,24 +35,24 @@ Media libraries often contain mixed formats (MP3, AAC, M4A, OGG, WAV) with varyi
 
 ### Scenario 1: Basic MP3 to FLAC Conversion ✅
 
-**Given** a valid MP3 file located at `/input/test-song.mp3`  
-**And** the file is 5.2 MB in size  
+**Given** a valid MP3 file located at `/input/test-song.mp3`
+**And** the file is 5.2 MB in size
 **And** the file has ID3v2.3 tags with:
   - Artist: "Test Artist"
   - Album: "Test Album"
   - Title: "Test Song"
   - Year: "2024"
-**When** the audio conversion process is executed  
-**Then** a FLAC file should be created at `/output/test-song.flac`  
-**And** the FLAC file should be a valid FLAC audio stream  
+**When** the audio conversion process is executed
+**Then** a FLAC file should be created at `/output/test-song.flac`
+**And** the FLAC file should be a valid FLAC audio stream
 **And** the FLAC file should contain Vorbis comments with:
   - ARTIST: "Test Artist"
   - ALBUM: "Test Album"
   - TITLE: "Test Song"
   - DATE: "2024"
-**And** the audio data should be bit-identical to source (lossless)  
-**And** the original MP3 file should remain unchanged at `/input/test-song.mp3`  
-**And** a SHA256 checksum should be calculated and stored for the output  
+**And** the audio data should be bit-identical to source (lossless)
+**And** the original MP3 file should remain unchanged at `/input/test-song.mp3`
+**And** a SHA256 checksum should be calculated and stored for the output
 **And** the conversion should complete in <10 seconds
 
 **Test File**: `test/acceptance/audio_conversion_test.go::TestMP3toFLACConversion`
@@ -68,8 +68,8 @@ Media libraries often contain mixed formats (MP3, AAC, M4A, OGG, WAV) with varyi
   - `song4.ogg` (Vorbis/q8)
   - `song5.wav` (PCM/44.1kHz/16-bit)
   - `song6.opus` (Opus/128kbps)
-**When** the batch conversion process is executed  
-**Then** 6 FLAC files should be created in `/output/`  
+**When** the batch conversion process is executed
+**Then** 6 FLAC files should be created in `/output/`
 **And** each output file should:
   - Be a valid FLAC file
   - Preserve original audio quality
@@ -94,7 +94,7 @@ Genre: Progressive Rock
 Album Artist: Pink Floyd
 Comment: Remastered 2011
 Album Art: [embedded JPEG, 600x600px, 150KB]
-**When** the file is converted to FLAC  
+**When** the file is converted to FLAC
 **Then** all metadata should be converted to Vorbis comments:
 ARTIST=Pink Floyd
 ALBUM=The Dark Side of the Moon
@@ -107,8 +107,8 @@ TOTALDISCS=1
 GENRE=Progressive Rock
 ALBUMARTIST=Pink Floyd
 COMMENT=Remastered 2011
-**And** the album art should be embedded as FLAC PICTURE block  
-**And** the album art should maintain original resolution (600x600px)  
+**And** the album art should be embedded as FLAC PICTURE block
+**And** the album art should maintain original resolution (600x600px)
 **And** all tags should be readable by `metaflac --list`
 
 **Test File**: `test/acceptance/audio_conversion_test.go::TestMetadataPreservation`
@@ -121,18 +121,18 @@ COMMENT=Remastered 2011
   - Invalid audio data (random bytes)
   - Correct `.mp3` extension
   - Readable file permissions
-**When** conversion is attempted  
-**Then** the conversion should fail immediately  
+**When** conversion is attempted
+**Then** the conversion should fail immediately
 **And** the error message should be:
 Error: Invalid audio file 'corrupted.mp3'
 Reason: File header validation failed
 Details: Not a valid MP3/audio file
-**And** no output file should be created  
+**And** no output file should be created
 **And** the failure should be logged at ERROR level with:
   - File path
   - Error reason
   - Timestamp
-**And** if in batch mode, processing should continue with next file  
+**And** if in batch mode, processing should continue with next file
 **And** the final summary should report this as a failure
 
 **Test File**: `test/acceptance/audio_conversion_test.go::TestInvalidFileRejection`
@@ -141,11 +141,11 @@ Details: Not a valid MP3/audio file
 
 ### Scenario 5: Dry Run Mode 🔍
 
-**Given** dry run mode is enabled (`--dry-run` flag)  
-**And** there are 10 MP3 files in `/input/` (total 50 MB)  
-**When** the conversion process is executed  
-**Then** no output files should be created in `/output/`  
-**And** no changes should be made to the filesystem  
+**Given** dry run mode is enabled (`--dry-run` flag)
+**And** there are 10 MP3 files in `/input/` (total 50 MB)
+**When** the conversion process is executed
+**Then** no output files should be created in `/output/`
+**And** no changes should be made to the filesystem
 **And** a preview report should be generated showing:
 Dry Run Summary:
 Input files: 10
@@ -165,7 +165,7 @@ Invalid files: 0
 Disk space required: 48.5 MB
 Disk space available: 500 GB ✓
 
-**And** validation errors (if any) should be reported  
+**And** validation errors (if any) should be reported
 **And** the exit code should be 0 (success)
 
 **Test File**: `test/acceptance/audio_conversion_test.go::TestDryRunMode`
@@ -174,16 +174,16 @@ Disk space available: 500 GB ✓
 
 ### Scenario 6: Idempotent Re-runs ♻️
 
-**Given** `/input/song.mp3` has been converted to `/output/song.flac`  
-**And** the checksum matches database record (SHA256: abc123...)  
-**And** both files exist and are unchanged  
-**When** the conversion process is run again on the same input  
-**Then** the system should detect the existing output  
-**And** should verify the checksum matches  
-**And** should skip re-conversion  
-**And** should log: "File already converted, checksum verified, skipping"  
-**And** should not consume CPU/disk I/O for conversion  
-**And** should return success (not an error)  
+**Given** `/input/song.mp3` has been converted to `/output/song.flac`
+**And** the checksum matches database record (SHA256: abc123...)
+**And** both files exist and are unchanged
+**When** the conversion process is run again on the same input
+**Then** the system should detect the existing output
+**And** should verify the checksum matches
+**And** should skip re-conversion
+**And** should log: "File already converted, checksum verified, skipping"
+**And** should not consume CPU/disk I/O for conversion
+**And** should return success (not an error)
 **And** the total processing time should be minimal (<1 second)
 
 **Test File**: `test/acceptance/audio_conversion_test.go::TestIdempotentRerun`
@@ -192,19 +192,19 @@ Disk space available: 500 GB ✓
 
 ### Scenario 7: Partial Processing Recovery 🔄
 
-**Given** a batch of 100 files is being processed  
-**And** 42 files have been successfully converted  
-**And** the checksums for these 42 files are stored in the database  
-**When** the process is interrupted (SIGINT, power loss, crash)  
-**And** the process is restarted  
+**Given** a batch of 100 files is being processed
+**And** 42 files have been successfully converted
+**And** the checksums for these 42 files are stored in the database
+**When** the process is interrupted (SIGINT, power loss, crash)
+**And** the process is restarted
 **Then** the system should:
   - Scan the output directory
   - Verify checksums of existing outputs
   - Skip the 42 already-processed files
   - Resume processing from file #43
   - Complete the remaining 58 files
-**And** the progress should show: "Resuming from 42/100"  
-**And** no files should be re-processed  
+**And** the progress should show: "Resuming from 42/100"
+**And** no files should be re-processed
 **And** the final summary should report: "100 of 100 successful"
 
 **Test File**: `test/acceptance/audio_conversion_test.go::TestPartialRecovery`
@@ -213,19 +213,19 @@ Disk space available: 500 GB ✓
 
 ### Scenario 8: Context Cancellation 🛑
 
-**Given** a long-running batch conversion is in progress  
-**And** 25 of 100 files have been processed  
-**And** 4 workers are actively converting files  
-**When** the user sends SIGINT (Ctrl+C)  
-**Then** the context should be cancelled  
-**And** currently processing files (4) should complete gracefully  
-**And** no new files should start processing  
-**And** partial/incomplete output files should be cleaned up  
+**Given** a long-running batch conversion is in progress
+**And** 25 of 100 files have been processed
+**And** 4 workers are actively converting files
+**When** the user sends SIGINT (Ctrl+C)
+**Then** the context should be cancelled
+**And** currently processing files (4) should complete gracefully
+**And** no new files should start processing
+**And** partial/incomplete output files should be cleaned up
 **And** the cleanup should include:
   - Removing any `.tmp` files
   - Removing outputs without matching checksums
-**And** a cancellation message should be logged: "Received cancellation signal, shutting down gracefully"  
-**And** the exit code should be 130 (SIGINT)  
+**And** a cancellation message should be logged: "Received cancellation signal, shutting down gracefully"
+**And** the exit code should be 130 (SIGINT)
 **And** the database should be updated with completed files
 
 **Test File**: `test/acceptance/audio_conversion_test.go::TestContextCancellation`
@@ -234,18 +234,18 @@ Disk space available: 500 GB ✓
 
 ### Scenario 9: Disk Space Validation 💾
 
-**Given** the output directory `/output/` has only 100 MB free space  
-**And** the conversion job requires 500 MB (estimated)  
-**When** the conversion process starts  
-**Then** the system should check available disk space before processing  
+**Given** the output directory `/output/` has only 100 MB free space
+**And** the conversion job requires 500 MB (estimated)
+**When** the conversion process starts
+**Then** the system should check available disk space before processing
 **And** should fail immediately with error:
 Error: Insufficient disk space
 Required: 500 MB
 Available: 100 MB
 Location: /output
-**And** no conversions should be attempted  
-**And** no temporary files should be created  
-**And** the error should be logged at ERROR level  
+**And** no conversions should be attempted
+**And** no temporary files should be created
+**And** the error should be logged at ERROR level
 **And** the exit code should be 1 (error)
 
 **Test File**: `test/acceptance/audio_conversion_test.go::TestDiskSpaceValidation`
@@ -254,18 +254,18 @@ Location: /output
 
 ### Scenario 10: Concurrent Processing ⚡
 
-**Given** 100 MP3 files in `/input/` directory  
-**And** concurrency is set to 4 workers (`concurrency: 4` in config)  
-**When** batch conversion is executed  
+**Given** 100 MP3 files in `/input/` directory
+**And** concurrency is set to 4 workers (`concurrency: 4` in config)
+**When** batch conversion is executed
 **Then** the system should:
   - Process exactly 4 files concurrently
   - Not exceed 4 concurrent FFmpeg processes
   - Use worker pool pattern for file distribution
   - Report progress: "Processing 4/100 files..."
-**And** the total processing time should be ~25% of sequential processing  
-**And** memory usage should remain under 400 MB (100 MB per worker)  
-**And** CPU utilization should scale with worker count  
-**And** all 100 files should complete successfully  
+**And** the total processing time should be ~25% of sequential processing
+**And** memory usage should remain under 400 MB (100 MB per worker)
+**And** CPU utilization should scale with worker count
+**And** all 100 files should complete successfully
 **And** no race conditions should occur (verified with `-race` flag)
 
 **Test File**: `test/acceptance/audio_conversion_test.go::TestConcurrentProcessing`

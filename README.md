@@ -57,6 +57,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+
 ## Project Structure
 
 ```
@@ -67,7 +68,7 @@ media-refinery/
 ├── tests/          # Unit, integration, and BDD tests
 ├── sample_media/   # Sample media files for testing/demo
 ├── work/           # Working directory for runtime artifacts, logs, and db
-├── docs/           # Documentation (architecture, acceptance criteria, etc.)
+├── docs/           # Documentation (see below)
 ├── .github/        # GitHub Actions workflows and templates
 ├── Makefile        # Common development commands
 ├── requirements.txt# Python dependencies
@@ -75,6 +76,17 @@ media-refinery/
 ├── README.md       # Project overview and usage
 └── ...             # Other supporting files
 ```
+
+## Documentation
+
+All detailed documentation is now in the [docs/](docs/README.md) directory:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Product Vision](docs/PRODUCT_VISION.md)
+- [Implementation Summary](docs/SUMMARY.md)
+- [Contribution Guide](docs/CONTRIBUTING.md)
+- [Maintainers Guide](docs/MAINTAINERS_GUIDE.md)
+- [Legacy Docs](docs/legacy/)
 
 ## Testing
 Run tests using pytest:
