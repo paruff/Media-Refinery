@@ -131,6 +131,7 @@ benchmark-test:
 # BDD/E2E Tests
 bdd-test:
 	go test ./test/bdd -v
+	behave features/
 
 # Security Scans
 security-scan:

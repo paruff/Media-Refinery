@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/paruff/Media-Refinery/pkg/state"
 	"go.uber.org/zap"
