@@ -76,3 +76,17 @@ def step_then_directory_structure(context):
     # Placeholder for directory structure validation
     if not context.output_path:
         raise AssertionError("Output path is not set.")
+
+@then(u'the metadata should include artist, album, title, and album art')
+def step_validate_flac_metadata(context):
+    # Simulate metadata validation for .flac file
+    expected_metadata = {
+        "artist": "Example Artist",
+        "album": "Example Album",
+        "title": "Example Title",
+        "album_art": "example_art.jpg"
+    }
+
+    for key, value in expected_metadata.items():
+        if context.metadata.get(key) != value:
+            raise AssertionError(f"Metadata mismatch for {key}: expected {value}, got {context.metadata.get(key)}")

@@ -76,3 +76,19 @@ func (c *Converter) ValidateInputFile(path string) error {
 	}
 	return nil
 }
+
+func addMetadataToFlac(inputPath, outputPath string, metadata map[string]string) error {
+	args := []string{"-i", inputPath, "-y"}
+
+	for key, value := range metadata {
+		args = append(args, "-metadata", fmt.Sprintf("%s=%s", key, value))
+	}
+
+	args = append(args, outputPath)
+
+	cmd := exec.Command("ffmpeg", args...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to add metadata to FLAC: %w", err)
+	}
+	return nil
+}
