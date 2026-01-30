@@ -4,37 +4,66 @@
 # Binaries for programs and plugins
 *.exe
 *.exe~
+
+# Binaries
+/media-refinery
+*.exe
 *.dll
 *.so
 *.dylib
-media-refinery
 
-# Test binary, built with `go test -c`
+# Test artifacts
 *.test
-
-# Code coverage profiles and other test artifacts
 *.out
-coverage.*
-*.coverprofile
-profile.cov
+coverage.html
+coverage.out
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
-go.work
-go.work.sum
-
-# env file
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+*.egg
+*.manifest
+*.spec
+*.log
+*.sqlite3
+*.db
+*.DS_Store
 
-# Config files with secrets
+# Working directories
+/work/
+/input/
+/output/
+*.log
+
+# Configuration (keep examples)
 config.yaml
-*.local.yaml
+!config.example.yaml
 
-# Service configuration directories (Docker volumes)
-/config/
+# Dependencies
+/vendor/
 
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 # Editor/IDE
 # .idea/
 # .vscode/
