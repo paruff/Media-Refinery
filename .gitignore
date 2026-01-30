@@ -5,8 +5,8 @@
 *.exe
 *.exe~
 
+
 # Binaries
-/media-refinery
 *.exe
 *.dll
 *.so
@@ -56,14 +56,17 @@ pip-wheel-metadata/
 config.yaml
 !config.example.yaml
 
+
 # Dependencies
 /vendor/
+
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+__pycache__/
 # Editor/IDE
 # .idea/
 # .vscode/

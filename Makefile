@@ -1,3 +1,5 @@
+requirements:
+	$(PIP) install -r requirements.txt
 
 # Python-centric Makefile for Media-Refinery
 

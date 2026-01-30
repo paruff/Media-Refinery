@@ -4,13 +4,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.musicbrainz import MusicBrainzService
 from app.models.media import MediaItem
 
+
 class MockMusicBrainz:
     def __init__(self, releases):
         self.releases = releases
         self.calls = []
-    def search_releases(self, artist, release, limit, includes):
+    def search_releases(self, artist, release, limit, includes=None):
         self.calls.append((artist, release))
         return {"release-list": self.releases.get((artist, release), [])}
+
+    def get_release_by_id(self, release_id, includes=None):
+        # Find the release by id in self.releases
+        for releases in self.releases.values():
+            for release in releases:
+                if release["id"] == release_id:
+                    return {"release": release}
+        raise Exception(f"Release id {release_id} not found in mock")
 
 @pytest.mark.asyncio
 async def test_musicbrainz_enrichment_success(monkeypatch, async_session: AsyncSession):
@@ -34,7 +43,9 @@ async def test_musicbrainz_enrichment_success(monkeypatch, async_session: AsyncS
             }
         ]
     }
-    monkeypatch.setattr("musicbrainzngs.search_releases", MockMusicBrainz(releases).search_releases)
+    mock = MockMusicBrainz(releases)
+    monkeypatch.setattr("musicbrainzngs.search_releases", mock.search_releases)
+    monkeypatch.setattr("musicbrainzngs.get_release_by_id", mock.get_release_by_id)
     item = MediaItem(
         id="m1",
         source_path="/music/Daft Punk/Discovery/01 - Intro.flac",
@@ -65,7 +76,9 @@ async def test_musicbrainz_enrichment_success(monkeypatch, async_session: AsyncS
 @pytest.mark.asyncio
 async def test_musicbrainz_enrichment_no_match(monkeypatch, async_session: AsyncSession):
     releases = { ("Unknown Artist", "Unknown Album"): [] }
-    monkeypatch.setattr("musicbrainzngs.search_releases", MockMusicBrainz(releases).search_releases)
+    mock = MockMusicBrainz(releases)
+    monkeypatch.setattr("musicbrainzngs.search_releases", mock.search_releases)
+    monkeypatch.setattr("musicbrainzngs.get_release_by_id", mock.get_release_by_id)
     item = MediaItem(
         id="m2",
         source_path="/music/Unknown Artist/Unknown Album/01 - Mystery.flac",
@@ -107,7 +120,9 @@ async def test_musicbrainz_enrichment_multidisc(monkeypatch, async_session: Asyn
             }
         ]
     }
-    monkeypatch.setattr("musicbrainzngs.search_releases", MockMusicBrainz(releases).search_releases)
+    mock = MockMusicBrainz(releases)
+    monkeypatch.setattr("musicbrainzngs.search_releases", mock.search_releases)
+    monkeypatch.setattr("musicbrainzngs.get_release_by_id", mock.get_release_by_id)
     item = MediaItem(
         id="m3",
         source_path="/music/Daft Punk/Alive 2007/2-04 - Human After All.flac",
@@ -146,26 +161,30 @@ async def test_musicbrainz_enrichment_caching(monkeypatch, async_session: AsyncS
             }
         ]
     }
-    mock = MockMusicBrainz(releases)
-    monkeypatch.setattr("musicbrainzngs.search_releases", mock.search_releases)
-    item1 = MediaItem(
-        id="m4",
-        source_path="/music/Daft Punk/Discovery/01 - Intro.flac",
-        enrichment_data='{"artist": "Daft Punk", "album": "Discovery", "track_number": 1, "track_title": "Intro"}',
-        media_type="music",
-        state="audited"
-    )
-    item2 = MediaItem(
-        id="m5",
-        source_path="/music/Daft Punk/Discovery/02 - Aerodynamic.flac",
-        enrichment_data='{"artist": "Daft Punk", "album": "Discovery", "track_number": 2, "track_title": "Aerodynamic"}',
-        media_type="music",
-        state="audited"
-    )
-    async_session.add_all([item1, item2])
-    await async_session.commit()
-    service = MusicBrainzService()
-    await service.enrich_music(async_session, "m4")
-    await service.enrich_music(async_session, "m5")
-    # Only one search call should be made for the album
-    assert mock.calls.count(("Daft Punk", "Discovery")) == 1
+        from app.services.musicbrainz import AlbumCache, MusicBrainzService
+        cache = AlbumCache()
+        mock = MockMusicBrainz(releases)
+        # Patch the service to use the same cache as the mock
+        service = MusicBrainzService(cache=cache)
+        monkeypatch.setattr("musicbrainzngs.search_releases", mock.search_releases)
+        monkeypatch.setattr("musicbrainzngs.get_release_by_id", mock.get_release_by_id)
+        item1 = MediaItem(
+            id="m4",
+            source_path="/music/Daft Punk/Discovery/01 - Intro.flac",
+            enrichment_data='{"artist": "Daft Punk", "album": "Discovery", "track_number": 1, "track_title": "Intro"}',
+            media_type="music",
+            state="audited"
+        )
+        item2 = MediaItem(
+            id="m5",
+            source_path="/music/Daft Punk/Discovery/02 - Aerodynamic.flac",
+            enrichment_data='{"artist": "Daft Punk", "album": "Discovery", "track_number": 2, "track_title": "Aerodynamic"}',
+            media_type="music",
+            state="audited"
+        )
+        async_session.add_all([item1, item2])
+        await async_session.commit()
+        await service.enrich_music(async_session, "m4")
+        await service.enrich_music(async_session, "m5")
+        # Only one search call should be made for the album
+        assert mock.calls.count(("Daft Punk", "Discovery")) == 1

@@ -3,71 +3,25 @@ version: '3.9'
 services:
   # Media Refinery - The main application
   media-refinery:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: media-refinery
-    labels:
-      - "com.media-refinery.description=Main media processing application"
-      - "com.media-refinery.service=core"
-    volumes:
-      - ./input:/input
-      - ./output:/output
-      - ./work:/work
-      - ./config.yaml:/app/config.yaml
-    environment:
-      - TZ=America/New_York
-      # OpenTelemetry Configuration
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
-      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-      - OTEL_SERVICE_NAME=media-refinery
-      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=media-processing,service.version=1.0.0
-      - OTEL_TRACES_EXPORTER=otlp
-      - OTEL_METRICS_EXPORTER=otlp
-      - OTEL_LOGS_EXPORTER=otlp
-      # Loki logging
-      - LOKI_URL=http://loki:3100/loki/api/v1/push
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
-        labels: "com.media-refinery.service"
-        tag: "{{.Name}}/{{.ID}}"
-    depends_on:
-      beets:
-        condition: service_healthy
-      tdarr:
-        condition: service_healthy
-      radarr:
-        condition: service_healthy
-      sonarr:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - media-refinery-network
-      - observability-lab
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f media-refinery || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+    version: '3.9'
 
-  # Beets - Music library management
-  beets:
-    image: linuxserver/beets:latest
-    container_name: beets
+    services:
+      media-refinery:
+        build:
+          context: .
+          dockerfile: Dockerfile
+        image: media-refinery:latest
+        container_name: media-refinery
+        environment:
+          - TZ=${TZ:-UTC}
+          - LOG_LEVEL=${LOG_LEVEL:-info}
+          - DRY_RUN=${DRY_RUN:-false}
+        volumes:
+          - ./config.yaml:/app/config.yaml:ro
+          - ${INPUT_DIR:-./input}:/input:ro
+          - ${OUTPUT_DIR:-./output}:/output
+          - ${WORK_DIR:-./work}:/work
+        restart: unless-stopped
     labels:
       - "com.media-refinery.description=Music library management"
       - "com.media-refinery.service=audio"
