@@ -1,4 +1,9 @@
+
 # Media Refinery
+
+![CI](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml/badge.svg)
+![Coverage](https://codecov.io/gh/paruff/Media-Refinery/branch/main/graph/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 Media Refinery is a Python-based media processing pipeline designed to handle audio and video processing tasks efficiently. This project is a conversion from a Go-based implementation to Python, leveraging modern Python practices.
 
@@ -39,6 +44,37 @@ Media Refinery can help you convert a messy music library into a well-structured
 
 3. **Verify the Output**:
    Check the `/path/to/output` directory for `.flac` files with embedded metadata (e.g., artist, album, title, album art).
+
+
+
+## Quickstart
+
+```bash
+git clone https://github.com/paruff/Media-Refinery.git
+cd Media-Refinery
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Project Structure
+
+```
+media-refinery/
+├── app/            # Main FastAPI application code (API, models, services)
+├── src/            # Supporting modules (audio, video, pipeline, etc.)
+├── config/         # Configuration files and templates
+├── tests/          # Unit, integration, and BDD tests
+├── sample_media/   # Sample media files for testing/demo
+├── work/           # Working directory for runtime artifacts, logs, and db
+├── docs/           # Documentation (architecture, acceptance criteria, etc.)
+├── .github/        # GitHub Actions workflows and templates
+├── Makefile        # Common development commands
+├── requirements.txt# Python dependencies
+├── pyproject.toml  # Project metadata and tool config
+├── README.md       # Project overview and usage
+└── ...             # Other supporting files
+```
 
 ## Testing
 Run tests using pytest:
