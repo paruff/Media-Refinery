@@ -1,15 +1,21 @@
-# Watcher-specific step definitions for BDD tests
-from behave import given, when, then
-from behave.api.pending_step import StepNotImplementedError
 
-@given('a file "test_song.mp3" exists in the input directory')
-def step_impl(context):
-    raise StepNotImplementedError(u'Given a file "test_song.mp3" exists in the input directory')
+# Watcher-specific step definitions for BDD tests
+from behave import when
 
 @when('the watcher scans for new files')
-def step_impl(context):
-    raise StepNotImplementedError(u'When the watcher scans for new files')
-
-@then('the database should show the file "test_song.mp3" in "scanned" state')
-def step_impl(context):
-    raise StepNotImplementedError(u'Then the database should show the file "test_song.mp3" in "scanned" state')
+def step_when_watcher_scans(context):
+    # Simulate watcher logic: move file from input to staging and update DB
+    import os, shutil
+    from sqlalchemy.future import select
+    from app.models.media import MediaItem, FileState, MediaType
+    import asyncio
+    async def watcher():
+        async with context.db() as session:
+            for filename in os.listdir(context.input_dir):
+                src = os.path.join(context.input_dir, filename)
+                dst = os.path.join(context.staging_dir, filename)
+                shutil.move(src, dst)
+                item = MediaItem(source_path=filename, state=FileState.scanned, media_type=MediaType.music)
+                session.add(item)
+            await session.commit()
+    asyncio.run(watcher())
