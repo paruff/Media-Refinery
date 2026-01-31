@@ -1,15 +1,14 @@
 import sys
 import os
-from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-from alembic import context
 
-# Import the SQLAlchemy Base metadata for autogenerate support
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "app", "models"))
 )
 from app.models.media import Base
+from logging.config import fileConfig
+from sqlalchemy import engine_from_config
+from sqlalchemy import pool
+from alembic import context
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
