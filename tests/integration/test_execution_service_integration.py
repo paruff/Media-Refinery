@@ -55,21 +55,22 @@ async def test_execution_service_integration(tmp_path):
             Path(path).mkdir(parents=True, exist_ok=True)
 
         exec_mod.os.makedirs = fake_makedirs
-        # Patch any hardcoded '/staging' in ExecutionService if needed
-        orig_staging_dir = (
-            exec_mod.ExecutionService.STAGING_DIR
-            if hasattr(exec_mod.ExecutionService, "STAGING_DIR")
-            else None
-        )
-        if hasattr(exec_mod.ExecutionService, "STAGING_DIR"):
-            exec_mod.ExecutionService.STAGING_DIR = str(staging_dir)
+        # Patch Path in ExecutionService to use temp staging dir
+        orig_new = exec_mod.Path.__new__
+
+        def path_new(cls, *args, **kwargs):
+            if args and isinstance(args[0], str) and args[0].startswith("/staging/"):
+                return tmp_path / args[0].replace("/staging/", "")
+            return orig_new(cls, *args, **kwargs)
+
+        exec_mod.Path.__new__ = path_new
         try:
             executor = ExecutionService(session)
             await executor.execute_plan(plan)
         finally:
+            exec_mod.Path.__new__ = orig_new
             exec_mod.os.makedirs = orig_makedirs
-            if orig_staging_dir is not None:
-                exec_mod.ExecutionService.STAGING_DIR = orig_staging_dir
+            # Remove reference to orig_staging_dir, which may not be defined
         session.add(plan)
         await session.commit()
         # Run executor

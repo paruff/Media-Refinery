@@ -7,6 +7,7 @@ from datetime import datetime
 from app.models.media import NormalizationPlan, MediaItem
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import update
+from app.core.ffmpeg_profiles import get_ffmpeg_args
 
 
 class ExecutionService:
@@ -26,22 +27,82 @@ class ExecutionService:
             shutil.move(str(src), str(staged_file))
             log.append(f"[{start_time}] Moved to staging: {staged_file}")
 
-            # Stage 2: Transformation
+            # Stage 2: Transformation (Transcoding)
             final_file = staged_file
             if plan.needs_transcode:
-                transcode_out = staging_dir / (src.stem + ".normalized" + src.suffix)
-                proc = await asyncio.create_subprocess_exec(
-                    "ffmpeg",
-                    *plan.ffmpeg_args[1:-1],
+                # Determine profile and resolution (simple heuristic)
+                profile = "Samsung_Series_65"
+                # Use ffprobe to detect resolution
+                probe_cmd = [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=width,height",
+                    "-of",
+                    "csv=p=0",
                     str(staged_file),
-                    str(transcode_out),
+                ]
+                proc_probe = await asyncio.create_subprocess_exec(
+                    *probe_cmd,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                out, _ = await proc.communicate()
-                log.append(out.decode())
+                out_probe, _ = await proc_probe.communicate()
+                width, height = 0, 0
+                try:
+                    width, height = map(int, out_probe.decode().strip().split(","))
+                except Exception:
+                    pass
+                resolution = "4k" if width >= 3840 or height >= 2160 else "1080p"
+                surround = getattr(plan, "surround", False)
+                ffmpeg_args = get_ffmpeg_args(profile, resolution, surround)
+                # Always use -map 0 to preserve all streams
+                transcode_out = staging_dir / (src.stem + ".normalized" + src.suffix)
+                ffmpeg_cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(staged_file),
+                    *ffmpeg_args,
+                    str(transcode_out),
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *ffmpeg_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                # Optional: parse progress from stderr
+                out, err = await proc.communicate()
+                log.append((out + err).decode())
                 if proc.returncode != 0:
-                    raise RuntimeError(f"FFMPEG failed: {out.decode()}")
+                    raise RuntimeError(f"FFMPEG failed: {(out + err).decode()}")
+                # Verify output with ffprobe
+                verify_cmd = [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=codec_name",
+                    "-of",
+                    "csv=p=0",
+                    str(transcode_out),
+                ]
+                proc_verify = await asyncio.create_subprocess_exec(
+                    *verify_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                out_verify, _ = await proc_verify.communicate()
+                codec = out_verify.decode().strip()
+                if resolution == "4k" and codec != "hevc":
+                    raise RuntimeError(f"Transcoded video is not HEVC: {codec}")
+                if resolution == "1080p" and codec != "h264":
+                    raise RuntimeError(f"Transcoded video is not H264: {codec}")
                 final_file = transcode_out
             if getattr(plan, "needs_tagging", False):
                 # Mutagen tagging logic placeholder

@@ -39,18 +39,32 @@ async def test_execute_plan_atomic_commit(mock_makedirs):
         plan.media_item.source_path = str(staged_file)
         plan.target_path = str(staging_dir / "final.flac")
 
-        # Patch Path.stat and shutil.move to create the output file
-        def fake_move(src, dst):
-            Path(dst).parent.mkdir(parents=True, exist_ok=True)
-            with open(dst, "wb") as f:
-                f.write(b"data")
+        # Patch Path in ExecutionService to redirect /staging to temp dir
+        import app.services.execution_service as exec_mod
 
-        with (
-            patch.object(Path, "stat", return_value=MagicMock(st_size=1)),
-            patch("shutil.move", side_effect=fake_move),
-        ):
-            service = ExecutionService(db)
-            await service.execute_plan(plan)
+        orig_new = exec_mod.Path.__new__
+
+        def path_new(cls, *args, **kwargs):
+            if args and isinstance(args[0], str) and args[0].startswith("/staging/"):
+                return Path(staging) / args[0].replace("/staging/", "")
+            return orig_new(cls, *args, **kwargs)
+
+        exec_mod.Path.__new__ = path_new
+        try:
+
+            def fake_move(src, dst):
+                Path(dst).parent.mkdir(parents=True, exist_ok=True)
+                with open(dst, "wb") as f:
+                    f.write(b"data")
+
+            with (
+                patch.object(Path, "stat", return_value=MagicMock(st_size=1)),
+                patch("shutil.move", side_effect=fake_move),
+            ):
+                service = ExecutionService(db)
+                await service.execute_plan(plan)
+        finally:
+            exec_mod.Path.__new__ = orig_new
     # DB state updates
     db.execute.assert_any_call(
         update(MediaItem)
@@ -95,17 +109,32 @@ async def test_execute_plan_overwrite_protection(mock_makedirs):
         plan.media_item.source_path = str(staged_file)
         plan.target_path = str(staging_dir / "final.flac")
 
-        # Patch Path.stat and shutil.move to create the output file
-        def fake_move(src, dst):
-            Path(dst).parent.mkdir(parents=True, exist_ok=True)
-            with open(dst, "wb") as f:
-                f.write(b"data")
+        # Patch Path in ExecutionService to redirect /staging to temp dir
+        import app.services.execution_service as exec_mod
 
-        with (
-            patch.object(Path, "stat", return_value=MagicMock(st_size=1)),
-            patch("shutil.move", side_effect=fake_move),
-        ):
-            service = ExecutionService(db)
+        orig_new = exec_mod.Path.__new__
+
+        def path_new(cls, *args, **kwargs):
+            if args and isinstance(args[0], str) and args[0].startswith("/staging/"):
+                return Path(staging) / args[0].replace("/staging/", "")
+            return orig_new(cls, *args, **kwargs)
+
+        exec_mod.Path.__new__ = path_new
+        try:
+
+            def fake_move(src, dst):
+                Path(dst).parent.mkdir(parents=True, exist_ok=True)
+                with open(dst, "wb") as f:
+                    f.write(b"data")
+
+            with (
+                patch.object(Path, "stat", return_value=MagicMock(st_size=1)),
+                patch("shutil.move", side_effect=fake_move),
+            ):
+                service = ExecutionService(db)
+                await service.execute_plan(plan)
+        finally:
+            exec_mod.Path.__new__ = orig_new
             await service.execute_plan(plan)
     assert db.commit.called
 
