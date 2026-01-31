@@ -266,3 +266,51 @@ def test_case2(): ...
 ---
 
 *This document should be reviewed and updated regularly as the project evolves and new patterns emerge.*
+
+
+1. Core Architectural Principles
+The Single Source of Truth: The Database (NormalizationPlan and MediaItem) is the only source of truth for file state. Never rely on the filesystem to determine if a job is "done."
+
+Decoupled Services: Logic is divided into Scanners, Enrichers, Planners, and Executors.
+
+Scanners analyze raw bits.
+
+Enrichers fetch external metadata.
+
+Planners create a blueprint (the "Plan").
+
+Executors carry out the plan (Distributable via Worker Queue).
+
+The Staging Protocol: No file is ever modified in /input or /output. Transformations occur in /staging. Moves to /output must be atomic (Rename-after-Copy).
+
+2. Technical Standards
+Asynchronous First: Use asyncio for all I/O, subprocesses (FFmpeg), and database calls.
+
+Type Safety: Use Pydantic for all data transfer objects (DTOs) and strict Python Type Hinting.
+
+Defensive I/O: Assume every filesystem operation can fail (NAS disconnects, permissions). Use pathlib and shutil with robust error handling.
+
+Hardware Agnostic: Orchestration logic must not assume it is running on the same machine as the FFmpeg worker. Use Redis for task distribution.
+
+3. Specific Domain Definitions
+"Samsung-Safe": Implies video/audio compliance for 2026-era Tizen OS (H.264/HEVC, AAC/AC3/EAC3, MKV/MP4 container).
+
+"MA-Safe": Music Archive standard. Directory: Artist/Year - Album/Track - Title.ext. Internal tags must match MusicBrainz MBIDs exactly.
+
+"The Fortress": Our testing standard.
+
+Unit Tests: Must be hermetic (no real FFmpeg). Mock all subprocesses.
+
+Integration Tests: Use Testcontainers for Postgres/Redis.
+
+Features: Defined via Behave/Gherkin scenarios.
+
+4. Operational Guardrails
+Idempotency: Every task must be safely retryable. Check for existing partial files in /staging before starting a transcode.
+
+The 0.5% Rule: Optimize for observability. Every task failure must log the full stderr of the failing binary to the database.
+
+VMAF Verification: All video transcodes should be verified for visual quality using the VMAF metrics to ensure no "garbage-in-garbage-out" regressions.
+
+5. Testing Commandment
+"Before generating code for a new feature, first generate the Mock-based Unit Test and the Behave Gherkin Scenario. If the code cannot be tested without a real FFmpeg binary, the architectural design is incorrect."
