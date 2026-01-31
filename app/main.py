@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.core.database import init_db, AsyncSessionLocal
 from app.api.v1.health import router as health_router
+from app.api.v1.summary import router as summary_router
 import logging
 import sys
 import asyncio
@@ -48,3 +49,4 @@ def on_shutdown():
 
 
 app.include_router(health_router, prefix="/health")
+app.include_router(summary_router)
