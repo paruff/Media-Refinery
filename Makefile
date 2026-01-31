@@ -1,9 +1,19 @@
-requirements:
-	$(PIP) install -r requirements.txt
+requirements: check-venv
+precom: check-venv
+test: check-venv unit integration features
+unit: check-venv
+integration: check-venv
+features: check-venv
+run: check-venv
+lint: check-venv
+fmt: check-venv
+type-check: check-venv
+coverage: check-venv
+test-report: check-venv
 
 # Python-centric Makefile for Media-Refinery
 
-.PHONY: precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help
+.PHONY: precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
 
 VENV?=.venv
 PYTHON?=$(VENV)/bin/python
@@ -47,6 +57,19 @@ clean:
 	rm -rf .pytest_cache .coverage htmlcov
 	rm -rf $(VENV)
 
+# Comprehensive test summary including mutation analysis
+.PHONY: test-report
+test-report:
+	@echo "[TEST-REPORT] Running unit, integration, and BDD tests with coverage and mutation analysis"
+	$(PYTEST) --cov=app --cov=tests --cov-report=term-missing --cov-report=html
+	@echo "[TEST-REPORT] Running behave BDD tests (if available)"
+	@which behave >/dev/null 2>&1 && $(BEHAVE) features/ || echo "behave not installed; skipping BDD features"
+	@echo "[TEST-REPORT] Running mutation analysis with mutmut (if available)"
+	@which mutmut >/dev/null 2>&1 && mutmut run || echo "mutmut not installed; skipping mutation analysis"
+	@which mutmut >/dev/null 2>&1 && mutmut results || echo "mutmut not installed; skipping mutation results"
+	@echo "[TEST-REPORT] See htmlcov/index.html for detailed coverage report."
+	@echo "[TEST-REPORT] See above for mutation analysis summary."
+
 container: container-build container-up
 
 container-build:
@@ -76,3 +99,13 @@ help:
 	@echo "  container-up   Start Docker containers"
 	@echo "  container-down Stop Docker containers"
 	@echo "  help           Show this help message"
+
+.PHONY: check-venv
+
+check-venv:
+    @venv_path="$(VENV)"; \
+    if [ -z "$${VIRTUAL_ENV}" ] || [ "$${VIRTUAL_ENV}" != "$$(cd $(VENV) && pwd)" ]; then \
+      echo "[ERROR] You are not running in the correct virtual environment ($(VENV))."; \
+      echo "Please activate it with: source $(VENV)/bin/activate"; \
+      exit 1; \
+    fi

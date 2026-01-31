@@ -35,6 +35,10 @@ htmlcov/
 *.test
 *.out
 
+# Mutation testing artifacts
+mutants/
+.mutmut-cache/
+
 # Working directories
 /work/
 /input/
