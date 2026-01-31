@@ -78,6 +78,9 @@ class MediaItem(Base):
     subtitle_format = Column(String, nullable=True)
     subtitle_language = Column(String, nullable=True)
     artist = Column(String, nullable=True)
+    # Fingerprint fields
+    audio_fingerprint = Column(String, nullable=True, unique=False, index=True)
+    video_fingerprint = Column(String, nullable=True, unique=False, index=True)
     album = Column(String, nullable=True)
     title = Column(String, nullable=True)
     year = Column(String, nullable=True)

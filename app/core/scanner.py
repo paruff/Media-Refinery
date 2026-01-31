@@ -29,6 +29,42 @@ class ScannerService:
                 item.error_log = "File not found."
                 await session.commit()
                 return
+            # --- FINGERPRINTING & DUPLICATE DETECTION ---
+            from app.services.fingerprint_service import FingerprintService
+
+            # Determine type (audio/video)
+            media_type = "audio" if (item.audio_codec or item.artist) else "video"
+            audio_fp = None
+            video_fp = None
+            if media_type == "audio":
+                audio_fp = FingerprintService.fingerprint_audio(path)
+                item.audio_fingerprint = audio_fp
+            else:
+                video_fp = FingerprintService.fingerprint_video(path)
+                item.video_fingerprint = video_fp
+            # Check for duplicate in output library
+            if audio_fp:
+                dup = await session.execute(
+                    select(MediaItem).where(
+                        MediaItem.audio_fingerprint == audio_fp, MediaItem.id != item.id
+                    )
+                )
+                if dup.scalar_one_or_none():
+                    item.state = FileState.error
+                    item.error_log = "Duplicate audio fingerprint detected. Skipping."
+                    await session.commit()
+                    return
+            if video_fp:
+                dup = await session.execute(
+                    select(MediaItem).where(
+                        MediaItem.video_fingerprint == video_fp, MediaItem.id != item.id
+                    )
+                )
+                if dup.scalar_one_or_none():
+                    item.state = FileState.error
+                    item.error_log = "Duplicate video fingerprint detected. Skipping."
+                    await session.commit()
+                    return
             try:
                 proc = await asyncio.create_subprocess_exec(
                     "ffprobe",

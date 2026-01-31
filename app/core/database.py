@@ -20,3 +20,9 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         # Simple migration: ensure table exists
         await conn.execute(text("PRAGMA journal_mode=WAL;"))
+
+
+# Dependency for FastAPI and BDD tests
+async def get_async_session() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        yield session
