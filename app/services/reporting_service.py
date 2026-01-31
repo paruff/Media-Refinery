@@ -54,12 +54,16 @@ class ReportingService:
         validated = next((c.count for c in by_state if c.state == "validated"), 0)
         validated_success_rate = (validated / total) * 100 if total else 0.0
         # Error log (last 10 unique)
+        # from sqlalchemy.orm import joinedload (unused)
+        from app.models.media import NormalizationPlan
+
         error_rows = (
             (
                 await self.db.execute(
-                    select(MediaItem.execution_log)
+                    select(NormalizationPlan.execution_log)
+                    .join(MediaItem, NormalizationPlan.media_item_id == MediaItem.id)
                     .where(MediaItem.state == "error")
-                    .where(MediaItem.execution_log.is_not(None))
+                    .where(NormalizationPlan.execution_log.is_not(None))
                     .order_by(desc(MediaItem.updated_at))
                 )
             )
@@ -71,15 +75,16 @@ class ReportingService:
         warning_rows = (
             (
                 await self.db.execute(
-                    select(MediaItem.execution_log)
+                    select(NormalizationPlan.execution_log)
+                    .join(MediaItem, NormalizationPlan.media_item_id == MediaItem.id)
                     .where(MediaItem.state != "error")
-                    .where(MediaItem.execution_log.contains("missing metadata"))
+                    .where(NormalizationPlan.execution_log.contains("missing metadata"))
                 )
             )
             .scalars()
             .all()
         )
-        warnings = list(dict.fromkeys([w for w in warning_rows if w]))
+        warnings = list(dict.fromkeys([w for w in warning_rows if w]))[:10]
         # Storage impact (sum of file sizes if available)
         size_rows = (
             await self.db.execute(

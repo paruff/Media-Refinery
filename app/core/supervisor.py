@@ -4,7 +4,7 @@ import os
 import signal
 import sys
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.orchestrator import PipelineOrchestrator
 from app.services.reporting_service import ReportingService
 
@@ -27,7 +27,7 @@ class DaemonSupervisor:
         self._backoff = 1
         self._max_backoff = 300
         self._heartbeat_interval = 3600  # 60 minutes
-        self._last_heartbeat = datetime.now(datetime.UTC)
+        self._last_heartbeat = datetime.now(timezone.utc)
 
     async def run(self):
         loop = asyncio.get_running_loop()

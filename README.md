@@ -2,10 +2,13 @@
 # Media Refinery
 
 
-![CI](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml/badge.svg)
-![Coverage](https://codecov.io/gh/paruff/Media-Refinery/branch/main/graph/badge.svg)
-![Coverage Status](https://img.shields.io/codecov/c/github/paruff/Media-Refinery/main?label=coverage)
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+[![CI](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml/badge.svg)](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml)
+[![Tests](https://github.com/paruff/Media-Refinery/actions/workflows/tests.yml/badge.svg)](https://github.com/paruff/Media-Refinery/actions/workflows/tests.yml)
+[![Coverage](https://codecov.io/gh/paruff/Media-Refinery/branch/main/graph/badge.svg)](https://codecov.io/gh/paruff/Media-Refinery)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 
 Media Refinery is a Python-based media processing pipeline designed to handle audio and video processing tasks efficiently. This project is a conversion from a Go-based implementation to Python, leveraging modern Python practices.
 

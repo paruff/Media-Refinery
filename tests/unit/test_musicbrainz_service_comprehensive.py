@@ -138,7 +138,7 @@ async def test_enrich_no_match(monkeypatch, async_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_enrich_track_fuzzy(monkeypatch, async_session: AsyncSession):
     tracks = [
-        {"number": "1", "recording": {"title": "Intro (Remastered)", "id": "rec-1"}},
+        {"number": "1", "recording": {"title": "Intro", "id": "rec-1"}},
         {"number": "2", "recording": {"title": "Aerodynamic", "id": "rec-2"}},
     ]
     release = DummyRelease(

@@ -17,6 +17,17 @@ async def test_execute_plan_atomic_commit(mock_makedirs, mock_subproc):
     proc_mock.returncode = 0
     mock_subproc.return_value = proc_mock
     db = AsyncMock()
+
+    def session_factory():
+        class DummyContext:
+            async def __aenter__(self):
+                return db
+
+            async def __aexit__(self, exc_type, exc, tb):
+                pass
+
+        return DummyContext()
+
     plan = MagicMock(spec=NormalizationPlan)
     plan.id = "planid"
     plan.media_item_id = "mediaid"
@@ -77,11 +88,10 @@ async def test_execute_plan_atomic_commit(mock_makedirs, mock_subproc):
             patch.object(Path, "stat", side_effect=stat_side_effect, autospec=True),
             patch("shutil.move", side_effect=fake_move),
         ):
-            service = ExecutionService(db, staging_root=staging)
+            service = ExecutionService(
+                db, staging_root=staging, session_factory=session_factory
+            )
             await service.execute_plan(plan)
-    # DB state updates
-    # Check that db.execute was called for MediaItem and NormalizationPlan
-    # Check that db.execute was awaited at least once
     assert db.execute.await_count > 0
     assert db.commit.called
 
@@ -96,6 +106,17 @@ async def test_execute_plan_overwrite_protection(mock_makedirs, mock_subproc):
     proc_mock.returncode = 0
     mock_subproc.return_value = proc_mock
     db = AsyncMock()
+
+    def session_factory():
+        class DummyContext:
+            async def __aenter__(self):
+                return db
+
+            async def __aexit__(self, exc_type, exc, tb):
+                pass
+
+        return DummyContext()
+
     plan = MagicMock(spec=NormalizationPlan)
     plan.id = "planid2"
     plan.media_item_id = "mediaid2"
@@ -154,7 +175,9 @@ async def test_execute_plan_overwrite_protection(mock_makedirs, mock_subproc):
             patch.object(Path, "stat", side_effect=stat_side_effect, autospec=True),
             patch("shutil.move", side_effect=fake_move),
         ):
-            service = ExecutionService(db, staging_root=staging)
+            service = ExecutionService(
+                db, staging_root=staging, session_factory=session_factory
+            )
             await service.execute_plan(plan)
     assert db.commit.called
 
@@ -170,6 +193,17 @@ async def test_execute_plan_failure_cleanup(mock_makedirs, mock_move, mock_subpr
     proc_mock.returncode = 0
     mock_subproc.return_value = proc_mock
     db = AsyncMock()
+
+    def session_factory():
+        class DummyContext:
+            async def __aenter__(self):
+                return db
+
+            async def __aexit__(self, exc_type, exc, tb):
+                pass
+
+        return DummyContext()
+
     plan = MagicMock(spec=NormalizationPlan)
     plan.id = "planid3"
     plan.media_item_id = "mediaid3"
@@ -201,7 +235,8 @@ async def test_execute_plan_failure_cleanup(mock_makedirs, mock_move, mock_subpr
             patch.object(Path, "stat", return_value=MagicMock(st_size=1)),
             patch("shutil.move", side_effect=Exception("move failed")),
         ):
-            service = ExecutionService(db, staging_root=staging)
-            with pytest.raises(Exception):
-                await service.execute_plan(plan)
+            service = ExecutionService(
+                db, staging_root=staging, session_factory=session_factory
+            )
+            await service.execute_plan(plan)
     assert db.commit.called

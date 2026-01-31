@@ -14,6 +14,12 @@ def test_reporting_service_summary(monkeypatch):
         def all(self):
             return self._rows
 
+        def scalars(self):
+            return self
+
+        def first(self):
+            return self._rows[0] if self._rows else None
+
     execute_results = [
         FakeResult([("validated", 3), ("error", 2)]),  # by_state
         FakeResult([("music", 2), ("movie", 3)]),  # by_media_type

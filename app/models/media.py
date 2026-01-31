@@ -44,6 +44,7 @@ class MediaItem(Base):
     video_width = Column(Integer, nullable=True)
     video_height = Column(Integer, nullable=True)
     video_bitrate = Column(Integer, nullable=True)
+    size = Column(Integer, nullable=True)  # File size in bytes
     subtitles = Column(
         String, nullable=True
     )  # JSON-encoded list or comma-separated string

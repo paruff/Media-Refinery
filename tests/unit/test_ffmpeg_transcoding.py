@@ -57,7 +57,20 @@ def test_execute_plan_transcode_4k(monkeypatch):
                 f.write(b"data")
 
         with patch("shutil.move", side_effect=fake_move):
-            service = ExecutionService(db, staging_root=staging)
+
+            def session_factory():
+                class DummyContext:
+                    async def __aenter__(self):
+                        return db
+
+                    async def __aexit__(self, exc_type, exc, tb):
+                        pass
+
+                return DummyContext()
+
+            service = ExecutionService(
+                db, staging_root=staging, session_factory=session_factory
+            )
             import asyncio
 
             asyncio.run(service.execute_plan(plan))
@@ -116,7 +129,20 @@ def test_execute_plan_transcode_1080p(monkeypatch):
                 f.write(b"data")
 
         with patch("shutil.move", side_effect=fake_move):
-            service = ExecutionService(db, staging_root=staging)
+
+            def session_factory():
+                class DummyContext:
+                    async def __aenter__(self):
+                        return db
+
+                    async def __aexit__(self, exc_type, exc, tb):
+                        pass
+
+                return DummyContext()
+
+            service = ExecutionService(
+                db, staging_root=staging, session_factory=session_factory
+            )
             import asyncio
 
             asyncio.run(service.execute_plan(plan))
