@@ -51,9 +51,13 @@ def _execute_normalization_plan(plan_dict):
         logger.error(f"Invalid NormalizationPlan: {e}\nInput: {plan_dict}")
         return
 
+    from app.models.saga import SagaFileMoveLog, SagaLogStatus
+    from sqlalchemy import select
+
     src = Path(plan.target_path)  # For demo, use target_path as src
-    staging_dir = Path("/tmp/staging") / plan.id
+    # staging_dir = Path("/tmp/staging") / plan.id
     output_file = Path(plan.target_path)
+    tmp_output_file = output_file.with_suffix(output_file.suffix + ".tmp")
     lock_path = output_file.with_suffix(output_file.suffix + ".lock")
     lock = FileLock(str(lock_path))
 
@@ -83,15 +87,42 @@ def _execute_normalization_plan(plan_dict):
                         )
                         await session.commit()
                         return
-                    # Stage: copy to staging (simulate atomic op)
-                    os.makedirs(staging_dir, exist_ok=True)
-                    staged_file = staging_dir / src.name
+                    # --- SAGA: PREPARE ---
+                    # Write WAL entry (prepared)
+                    saga_log = SagaFileMoveLog(
+                        plan_id=plan.id,
+                        src_path=str(src),
+                        tmp_path=str(tmp_output_file),
+                        dest_path=str(output_file),
+                        status=SagaLogStatus.prepared,
+                    )
+                    session.add(saga_log)
+                    await session.commit()
+                    # Copy to .tmp file
                     try:
-                        shutil.copy2(src, staged_file)
+                        os.makedirs(output_file.parent, exist_ok=True)
+                        shutil.copy2(src, tmp_output_file)
                     except Exception as e:
-                        logger.error(f"Failed to copy to staging: {e}")
+                        logger.error(f"Failed to copy to .tmp: {e}")
+                        saga_log.status = SagaLogStatus.failed
+                        saga_log.error = str(e)
+                        await session.commit()
+                        # Rollback .tmp
+                        if tmp_output_file.exists():
+                            os.remove(tmp_output_file)
                         raise
+                    # --- SAGA: VERIFY ---
+                    # Optionally: checksum/size verification here
+                    if (
+                        not tmp_output_file.exists()
+                        or tmp_output_file.stat().st_size == 0
+                    ):
+                        saga_log.status = SagaLogStatus.failed
+                        saga_log.error = "tmp file missing or empty"
+                        await session.commit()
+                        raise RuntimeError("tmp file missing or empty")
 
+                    # --- SAGA: COMMIT ---
                     # Transcode (simulate with async subprocess)
                     async def run_ffmpeg():
                         proc = await asyncio.create_subprocess_exec(
@@ -108,31 +139,29 @@ def _execute_normalization_plan(plan_dict):
                         await run_ffmpeg()
                     except Exception as e:
                         logger.error(f"Transcode failed: {e}")
-                        # Rollback staging
-                        if staged_file.exists():
-                            os.remove(staged_file)
-                        await session.execute(
-                            update(DBPlan)
-                            .where(DBPlan.id == plan.id)
-                            .values(plan_status=PlanStatus.failed, execution_log=str(e))
-                        )
+                        saga_log.status = SagaLogStatus.failed
+                        saga_log.error = str(e)
                         await session.commit()
+                        # Rollback .tmp
+                        if tmp_output_file.exists():
+                            os.remove(tmp_output_file)
                         raise
-                    # Atomic move to output
+                    # Verify .tmp file again if needed
+                    # --- SAGA: FINALIZE ---
                     try:
-                        shutil.move(str(staged_file), str(output_file))
+                        os.rename(tmp_output_file, output_file)
                     except Exception as e:
-                        logger.error(f"Atomic move failed: {e}")
-                        # Rollback staging
-                        if staged_file.exists():
-                            os.remove(staged_file)
-                        await session.execute(
-                            update(DBPlan)
-                            .where(DBPlan.id == plan.id)
-                            .values(plan_status=PlanStatus.failed, execution_log=str(e))
-                        )
+                        logger.error(f"Atomic rename failed: {e}")
+                        saga_log.status = SagaLogStatus.failed
+                        saga_log.error = str(e)
                         await session.commit()
+                        # Rollback .tmp
+                        if tmp_output_file.exists():
+                            os.remove(tmp_output_file)
                         raise
+                    # Mark WAL as committed
+                    saga_log.status = SagaLogStatus.committed
+                    await session.commit()
                     logger.info(f"[Worker] Done: {plan.id}")
                     await session.execute(
                         update(DBPlan)
@@ -140,6 +169,40 @@ def _execute_normalization_plan(plan_dict):
                         .values(plan_status=PlanStatus.completed)
                     )
                     await session.commit()
+
+                # --- SAGA: RECOVERY ON STARTUP ---
+                # This should be called on system startup, but for demo, run here
+                async def recover_unfinished_tmp_files():
+                    async with AsyncSessionLocal() as session:
+                        result = await session.execute(
+                            select(SagaFileMoveLog).where(
+                                SagaFileMoveLog.status == SagaLogStatus.prepared
+                            )
+                        )
+                        logs = result.scalars().all()
+                        for log in logs:
+                            tmp_path = Path(log.tmp_path)
+                            dest_path = Path(log.dest_path)
+                            try:
+                                if tmp_path.exists() and tmp_path.stat().st_size > 0:
+                                    os.rename(tmp_path, dest_path)
+                                    log.status = SagaLogStatus.committed
+                                    await session.commit()
+                                else:
+                                    log.status = SagaLogStatus.cleaned
+                                    await session.commit()
+                                    if tmp_path.exists():
+                                        os.remove(tmp_path)
+                            except Exception as e:
+                                log.status = SagaLogStatus.failed
+                                log.error = str(e)
+                                await session.commit()
+
+                # Optionally call recovery here (in real system, call on startup)
+                try:
+                    asyncio.run(recover_unfinished_tmp_files())
+                except Exception as e:
+                    logger.error(f"Saga recovery failed: {e}")
             except Timeout:
                 logger.error(f"Could not acquire lock for {output_file}")
                 await session.execute(

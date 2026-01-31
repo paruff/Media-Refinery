@@ -7,6 +7,17 @@ from app.main import app
 import asyncio
 
 
+def before_all(context):
+    # Ensure test DB is migrated before running features
+    async def create_all():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    from app.core.database import engine, Base
+
+    asyncio.run(create_all())
+
+
 def before_scenario(context, scenario):
     # Setup temp dirs
     context.tempdirs = {}

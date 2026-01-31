@@ -13,4 +13,4 @@ class NormalizationPlanSchema(BaseModel):
     # Add any other fields required for execution
 
     class Config:
-        orm_mode = True
+        from_attributes = True
