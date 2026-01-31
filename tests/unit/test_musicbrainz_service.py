@@ -167,7 +167,7 @@ async def test_musicbrainz_enrichment_multidisc(
     db_item = await async_session.get(MediaItem, "m3")
     assert db_item.disc_number == 2
     assert db_item.mbid == "rec-mbid-4"
-    assert db_item.state == "planned"
+    assert db_item.state == "ready_to_plan"
     assert db_item.enrichment_failed is False
 
 

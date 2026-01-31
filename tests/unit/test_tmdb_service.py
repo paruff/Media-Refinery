@@ -52,7 +52,7 @@ async def test_tmdb_enrichment_success(async_session: AsyncSession):
     assert db_item.release_year == 2010
     assert db_item.tmdb_id == 27205
     assert db_item.poster_path == "/poster.jpg"
-    assert db_item.state == "planned"
+    assert db_item.state == "ready_to_plan"
     assert db_item.enrichment_failed is False
 
 

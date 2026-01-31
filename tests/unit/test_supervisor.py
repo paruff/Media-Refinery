@@ -1,10 +1,8 @@
-import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock
 from app.core.supervisor import DaemonSupervisor
 
 
-@pytest.mark.asyncio
 def test_supervisor_backoff(monkeypatch):
     orchestrator = MagicMock()
     reporting_service = AsyncMock()
@@ -21,7 +19,6 @@ def test_supervisor_backoff(monkeypatch):
     assert supervisor._backoff == 4
 
 
-@pytest.mark.asyncio
 def test_supervisor_health_checks_disk_full(monkeypatch, tmp_path):
     orchestrator = MagicMock()
     reporting_service = AsyncMock()
@@ -41,9 +38,11 @@ def test_supervisor_health_checks_disk_full(monkeypatch, tmp_path):
     assert called
 
 
-@pytest.mark.asyncio
 def test_supervisor_health_checks_path_missing(monkeypatch, tmp_path):
     orchestrator = MagicMock()
+    # Ensure .running property returns True before, then False after health check
+    running_state = {"value": True}
+    type(orchestrator).running = property(lambda self: running_state["value"])
     reporting_service = AsyncMock()
     supervisor = DaemonSupervisor(
         orchestrator, reporting_service, str(tmp_path), str(tmp_path)
@@ -53,6 +52,7 @@ def test_supervisor_health_checks_path_missing(monkeypatch, tmp_path):
 
     async def fake_backoff():
         called.append(True)
+        running_state["value"] = False
 
     supervisor._backoff_wait = fake_backoff
     asyncio.run(supervisor._health_checks())

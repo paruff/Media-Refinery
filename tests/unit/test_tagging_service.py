@@ -25,6 +25,11 @@ def test_apply_tags_flac(monkeypatch):
     monkeypatch.setattr("mutagen.File", lambda f, easy=False: fake_audio)
     monkeypatch.setattr(fake_audio, "__class__", type("FLAC", (), {}))
     monkeypatch.setattr(svc, "_tag_flac", lambda a, m, c: True)
+    # Mock open to avoid FileNotFoundError
+    from io import BytesIO
+
+    monkeypatch.setattr("builtins.open", lambda *a, **kw: BytesIO(b"fakedata"))
+    monkeypatch.setattr("mutagen.File", lambda f, easy=False: fake_audio)
     assert svc.apply_tags("song.flac", make_metadata())
 
 
@@ -35,6 +40,10 @@ def test_apply_tags_mp3(monkeypatch):
     monkeypatch.setattr(fake_audio, "tags", MagicMock())
     monkeypatch.setattr(fake_audio.tags, "__class__", type("ID3", (), {}))
     monkeypatch.setattr(svc, "_tag_mp3", lambda a, m, c: True)
+    from io import BytesIO
+
+    monkeypatch.setattr("builtins.open", lambda *a, **kw: BytesIO(b"fakedata"))
+    monkeypatch.setattr("mutagen.File", lambda f, easy=False: fake_audio)
     assert svc.apply_tags("song.mp3", make_metadata())
 
 
@@ -44,6 +53,10 @@ def test_apply_tags_mp4(monkeypatch):
     monkeypatch.setattr("mutagen.File", lambda f, easy=False: fake_audio)
     monkeypatch.setattr(fake_audio, "__class__", type("MP4", (), {}))
     monkeypatch.setattr(svc, "_tag_mp4", lambda a, m, c: True)
+    from io import BytesIO
+
+    monkeypatch.setattr("builtins.open", lambda *a, **kw: BytesIO(b"fakedata"))
+    monkeypatch.setattr("mutagen.File", lambda f, easy=False: fake_audio)
     assert svc.apply_tags("song.m4a", make_metadata())
 
 
@@ -85,4 +98,7 @@ def test_tag_mp4_sets_tags(monkeypatch):
 def test_apply_tags_unsupported(monkeypatch):
     svc = TaggingService()
     monkeypatch.setattr("mutagen.File", lambda f, easy=False: None)
+    from io import BytesIO
+
+    monkeypatch.setattr("builtins.open", lambda *a, **kw: BytesIO(b"fakedata"))
     assert not svc.apply_tags("song.xyz", make_metadata())

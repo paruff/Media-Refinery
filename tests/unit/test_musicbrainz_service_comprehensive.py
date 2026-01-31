@@ -144,11 +144,13 @@ async def test_enrich_track_fuzzy(monkeypatch, async_session: AsyncSession):
     release = DummyRelease(
         "Discovery", "rel-3", "2001-03-12", "Daft Punk", tracks
     ).as_dict()
+    # Ensure the mock returns the expected release and track
     mock = MockMusicBrainz(
         {("Daft Punk", "Discovery"): [{"id": "rel-3"}]}, {"rel-3": release}
     )
     monkeypatch.setattr("musicbrainzngs.search_releases", mock.search_releases)
     monkeypatch.setattr("musicbrainzngs.get_release_by_id", mock.get_release_by_id)
+    # Patch MusicBrainzService to use the mock directly if needed
     item = MediaItem(
         id="t4",
         source_path="/music/Daft Punk/Discovery/01 - Intro.flac",
@@ -160,6 +162,7 @@ async def test_enrich_track_fuzzy(monkeypatch, async_session: AsyncSession):
     await async_session.commit()
     service = MusicBrainzService()
     result = await service.enrich_music(async_session, "t4")
+    assert result is not None, "enrich_music returned None, enrichment failed"
     assert result["mbid"] == "rec-1"
     db_item = await async_session.get(MediaItem, "t4")
     assert db_item.mbid == "rec-1"

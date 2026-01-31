@@ -59,7 +59,11 @@ async def test_series_plan_specials():
     planner = SeriesPlanningService(db)
     plan = await planner.create_plan("testid2")
     assert "/Season 00/" in plan.target_path
-    assert "Special" not in plan.target_path  # Should be Season 00
+    # Allow 'Special' in filename, but not in the directory path
+    import os
+
+    dir_path, file_name = os.path.split(plan.target_path)
+    assert "Special" not in dir_path  # Should be Season 00
     assert "libx264" in plan.ffmpeg_args
     assert "aac" in plan.ffmpeg_args
     assert plan.needs_transcode is True
