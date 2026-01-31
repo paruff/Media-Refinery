@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.tmdb import TMDBService
@@ -17,6 +18,7 @@ class MockTransport(httpx.AsyncBaseTransport):
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(10)
 async def test_tmdb_enrichment_success(async_session: AsyncSession):
     item = MediaItem(
         id="testid",
@@ -42,7 +44,9 @@ async def test_tmdb_enrichment_success(async_session: AsyncSession):
     transport = MockTransport(mock_data)
     async with httpx.AsyncClient(transport=transport, timeout=5.0) as client:
         service = TMDBService(api_key="dummy", client=client)
-        result = await service.fetch_movie_metadata(async_session, "testid")
+        result = await asyncio.wait_for(
+            service.fetch_movie_metadata(async_session, "testid"), timeout=8
+        )
     assert result["canonical_title"] == "Inception"
     assert result["release_year"] == 2010
     assert result["tmdb_id"] == 27205
@@ -57,6 +61,7 @@ async def test_tmdb_enrichment_success(async_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(10)
 async def test_tmdb_enrichment_no_results(async_session: AsyncSession):
     item = MediaItem(
         id="testid2",
@@ -72,13 +77,16 @@ async def test_tmdb_enrichment_no_results(async_session: AsyncSession):
     transport = MockTransport(mock_data)
     async with httpx.AsyncClient(transport=transport, timeout=5.0) as client:
         service = TMDBService(api_key="dummy", client=client)
-        result = await service.fetch_movie_metadata(async_session, "testid2")
+        result = await asyncio.wait_for(
+            service.fetch_movie_metadata(async_session, "testid2"), timeout=8
+        )
     assert result is None
     db_item = await async_session.get(MediaItem, "testid2")
     assert db_item.enrichment_failed is True
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(10)
 async def test_tmdb_enrichment_401(async_session: AsyncSession):
     item = MediaItem(
         id="testid3",
@@ -93,14 +101,19 @@ async def test_tmdb_enrichment_401(async_session: AsyncSession):
     transport = MockTransport({}, status_code=401)
     async with httpx.AsyncClient(transport=transport, timeout=5.0) as client:
         service = TMDBService(api_key="badkey", client=client)
-        result = await service.fetch_movie_metadata(async_session, "testid3")
+        result = await asyncio.wait_for(
+            service.fetch_movie_metadata(async_session, "testid3"), timeout=8
+        )
     assert result is None
     db_item = await async_session.get(MediaItem, "testid3")
     assert db_item.enrichment_failed is True
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(15)
 async def test_tmdb_enrichment_429(async_session: AsyncSession):
+    # NOTE: If this test times out, the asyncio.Lock in TMDBService may remain locked, causing deadlocks in later tests.
+    # Always ensure timeouts are handled and TMDBService is re-instantiated per test.
     item = MediaItem(
         id="testid4",
         source_path="/input/movies/RateLimit.2010.mkv",
@@ -138,15 +151,23 @@ async def test_tmdb_enrichment_429(async_session: AsyncSession):
 
     async with httpx.AsyncClient(transport=FlakyTransport(), timeout=5.0) as client:
         service = TMDBService(api_key="dummy", client=client)
-        result = await service.fetch_movie_metadata(async_session, "testid4")
-    assert result["canonical_title"] == "RateLimit"
-    db_item = await async_session.get(MediaItem, "testid4")
-    assert db_item.canonical_title == "RateLimit"
-    assert db_item.state == "ready_to_plan"
-    assert db_item.enrichment_failed is False
+        try:
+            result = await asyncio.wait_for(
+                service.fetch_movie_metadata(async_session, "testid4"), timeout=12
+            )
+        except asyncio.TimeoutError:
+            pytest.fail(
+                "TMDBService.fetch_movie_metadata timed out (possible lock deadlock after cancellation)"
+            )
+        assert result["canonical_title"] == "RateLimit"
+        db_item = await async_session.get(MediaItem, "testid4")
+        assert db_item.canonical_title == "RateLimit"
+        assert db_item.state == "ready_to_plan"
+        assert db_item.enrichment_failed is False
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(10)
 async def test_tmdb_enrichment_cache(async_session: AsyncSession):
     item = MediaItem(
         id="testid5",
@@ -173,11 +194,13 @@ async def test_tmdb_enrichment_cache(async_session: AsyncSession):
     async with httpx.AsyncClient(transport=transport, timeout=5.0) as client:
         service = TMDBService(api_key="dummy", client=client)
         # First call populates cache
-        await service.fetch_movie_metadata(async_session, "testid5")
+        await asyncio.wait_for(
+            service.fetch_movie_metadata(async_session, "testid5"), timeout=8
+        )
         # Second call should hit cache, not transport
         item2 = MediaItem(
             id="testid6",
-            source_path="/input/movies/Cached.2010.mkv",
+            source_path="/input/movies/Cached2.2010.mkv",  # Use unique source_path to avoid IntegrityError
             canonical_title="Cached",
             release_year=2010,
             media_type="movie",
@@ -185,7 +208,9 @@ async def test_tmdb_enrichment_cache(async_session: AsyncSession):
         )
         async_session.add(item2)
         await async_session.commit()
-        await service.fetch_movie_metadata(async_session, "testid6")
+        await asyncio.wait_for(
+            service.fetch_movie_metadata(async_session, "testid6"), timeout=8
+        )
     assert transport.called is True
     db_item2 = await async_session.get(MediaItem, "testid6")
     assert db_item2.canonical_title == "Cached"

@@ -7,8 +7,15 @@ from app.models.media import NormalizationPlan, MediaItem
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(10)
+@patch("asyncio.create_subprocess_exec")
 @patch("os.makedirs")
-async def test_execute_plan_atomic_commit(mock_makedirs):
+async def test_execute_plan_atomic_commit(mock_makedirs, mock_subproc):
+    # Mock subprocess to avoid real process hangs
+    proc_mock = MagicMock()
+    proc_mock.communicate = AsyncMock(return_value=(b"", b""))
+    proc_mock.returncode = 0
+    mock_subproc.return_value = proc_mock
     db = AsyncMock()
     plan = MagicMock(spec=NormalizationPlan)
     plan.id = "planid"
@@ -37,17 +44,37 @@ async def test_execute_plan_atomic_commit(mock_makedirs):
         plan.media_item.source_path = str(staged_file)
         plan.target_path = str(staging_dir / "final.flac")
 
+        # Simulate file system state
+        fs = set()
+        fs.add(str(staged_file))
+
         def fake_move(src, dst):
             Path(dst).parent.mkdir(parents=True, exist_ok=True)
             with open(dst, "wb") as f:
                 f.write(b"data")
+            fs.add(dst)
+            if src in fs:
+                fs.remove(src)
 
-        class FakeStat:
+        def exists_side_effect(self):
+            return str(self) in fs
+
+        class DirStat:
+            st_size = 0
+            st_mode = 0o40755  # Directory
+
+        class FileStat:
             st_size = 1
-            st_mode = 0o40755  # S_IFDIR | 0755
+            st_mode = 0o100644  # Regular file
+
+        def stat_side_effect(self):
+            if str(self) in fs and str(self).endswith("final.flac"):
+                return FileStat()
+            return DirStat()
 
         with (
-            patch.object(Path, "stat", return_value=FakeStat()),
+            patch.object(Path, "exists", side_effect=exists_side_effect, autospec=True),
+            patch.object(Path, "stat", side_effect=stat_side_effect, autospec=True),
             patch("shutil.move", side_effect=fake_move),
         ):
             service = ExecutionService(db, staging_root=staging)
@@ -60,8 +87,14 @@ async def test_execute_plan_atomic_commit(mock_makedirs):
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(10)
+@patch("asyncio.create_subprocess_exec")
 @patch("os.makedirs")
-async def test_execute_plan_overwrite_protection(mock_makedirs):
+async def test_execute_plan_overwrite_protection(mock_makedirs, mock_subproc):
+    proc_mock = MagicMock()
+    proc_mock.communicate = AsyncMock(return_value=(b"", b""))
+    proc_mock.returncode = 0
+    mock_subproc.return_value = proc_mock
     db = AsyncMock()
     plan = MagicMock(spec=NormalizationPlan)
     plan.id = "planid2"
@@ -89,17 +122,36 @@ async def test_execute_plan_overwrite_protection(mock_makedirs):
         plan.media_item.source_path = str(staged_file)
         plan.target_path = str(staging_dir / "final.flac")
 
+        fs = set()
+        fs.add(str(staged_file))
+
         def fake_move(src, dst):
             Path(dst).parent.mkdir(parents=True, exist_ok=True)
             with open(dst, "wb") as f:
                 f.write(b"data")
+            fs.add(dst)
+            if src in fs:
+                fs.remove(src)
 
-        class FakeStat:
+        def exists_side_effect(self):
+            return str(self) in fs
+
+        class DirStat:
+            st_size = 0
+            st_mode = 0o40755  # Directory
+
+        class FileStat:
             st_size = 1
-            st_mode = 0o40755
+            st_mode = 0o100644  # Regular file
+
+        def stat_side_effect(self):
+            if str(self) in fs and str(self).endswith("final.flac"):
+                return FileStat()
+            return DirStat()
 
         with (
-            patch.object(Path, "stat", return_value=FakeStat()),
+            patch.object(Path, "exists", side_effect=exists_side_effect, autospec=True),
+            patch.object(Path, "stat", side_effect=stat_side_effect, autospec=True),
             patch("shutil.move", side_effect=fake_move),
         ):
             service = ExecutionService(db, staging_root=staging)
@@ -108,9 +160,15 @@ async def test_execute_plan_overwrite_protection(mock_makedirs):
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(10)
+@patch("asyncio.create_subprocess_exec")
 @patch("shutil.move")
 @patch("os.makedirs")
-async def test_execute_plan_failure_cleanup(mock_makedirs, mock_move):
+async def test_execute_plan_failure_cleanup(mock_makedirs, mock_move, mock_subproc):
+    proc_mock = MagicMock()
+    proc_mock.communicate = AsyncMock(return_value=(b"", b""))
+    proc_mock.returncode = 0
+    mock_subproc.return_value = proc_mock
     db = AsyncMock()
     plan = MagicMock(spec=NormalizationPlan)
     plan.id = "planid3"

@@ -85,70 +85,87 @@ class TMDBService:
             logger.info(f"TMDB cache hit for {cache_key}")
             await self._update_media(session, media, cached)
             return cached
-        # Rate limit
-        async with self._lock:
-            await asyncio.sleep(TMDB_RATE_LIMIT)
-            # Primary: title + year
-            params = {"api_key": self.api_key, "query": title}
-            if year:
-                params["year"] = year
+        # Retry loop with guaranteed lock release
+        retries = 0
+        while retries <= max_retries:
             try:
-                resp = await self.client.get(TMDB_API_URL, params=params)
+                async with self._lock:
+                    await asyncio.sleep(TMDB_RATE_LIMIT)
+                    params = {"api_key": self.api_key, "query": title}
+                    if year:
+                        params["year"] = year
+                    try:
+                        resp = await self.client.get(TMDB_API_URL, params=params)
+                    except Exception as e:
+                        logger.error(f"TMDB request failed: {e}")
+                        await self._flag_failed(session, media)
+                        return None
+                    if resp.status_code == 401:
+                        logger.error("TMDB unauthorized (401)")
+                        await self._flag_failed(session, media)
+                        return None
+                    if resp.status_code == 429:
+                        logger.warning("TMDB rate limited (429)")
+                        if retries < max_retries:
+                            retries += 1
+                            await asyncio.sleep(2)
+                            continue
+                        else:
+                            logger.error(
+                                "TMDB rate limit exceeded, max retries reached"
+                            )
+                            await self._flag_failed(session, media)
+                            return None
+                    if resp.status_code == 404:
+                        logger.warning("TMDB not found (404)")
+                        await self._flag_failed(session, media)
+                        return None
+                    data = resp.json()
+                    results = data.get("results", [])
+                    # Fallback: title only
+                    if not results and year:
+                        params.pop("year")
+                        resp = await self.client.get(TMDB_API_URL, params=params)
+                        data = resp.json()
+                        results = data.get("results", [])
+                    if not results:
+                        logger.info(f"No TMDB match for {title}")
+                        await self._flag_failed(session, media)
+                        return None
+                    # Select best match
+                    best = self._select_best_match(title, results)
+                    if not best:
+                        logger.info(f"No suitable TMDB match for {title}")
+                        await self._flag_failed(session, media)
+                        return None
+                    # Prepare canonical data
+                    canonical = {
+                        "canonical_title": best["title"],
+                        "release_year": (
+                            int(best["release_date"].split("-")[0])
+                            if best.get("release_date")
+                            else None
+                        ),
+                        "tmdb_id": best["id"],
+                        "poster_path": best.get("poster_path"),
+                    }
+                    self.cache.set(cache_key, canonical)
+                    await self._update_media(session, media, canonical)
+                    return canonical
+            except asyncio.CancelledError:
+                logger.error(
+                    "TMDB fetch_movie_metadata cancelled (possible test timeout)"
+                )
+                # Lock is released by context manager
+                raise
             except Exception as e:
-                logger.error(f"TMDB request failed: {e}")
+                logger.error(f"Unexpected error in TMDB fetch_movie_metadata: {e}")
                 await self._flag_failed(session, media)
                 return None
-            if resp.status_code == 401:
-                logger.error("TMDB unauthorized (401)")
-                await self._flag_failed(session, media)
-                return None
-            if resp.status_code == 429:
-                logger.warning("TMDB rate limited (429)")
-                if max_retries > 0:
-                    await asyncio.sleep(2)
-                    return await self.fetch_movie_metadata(
-                        session, media_id, max_retries=max_retries - 1
-                    )
-                else:
-                    logger.error("TMDB rate limit exceeded, max retries reached")
-                    await self._flag_failed(session, media)
-                    return None
-            if resp.status_code == 404:
-                logger.warning("TMDB not found (404)")
-                await self._flag_failed(session, media)
-                return None
-            data = resp.json()
-            results = data.get("results", [])
-            # Fallback: title only
-            if not results and year:
-                params.pop("year")
-                resp = await self.client.get(TMDB_API_URL, params=params)
-                data = resp.json()
-                results = data.get("results", [])
-            if not results:
-                logger.info(f"No TMDB match for {title}")
-                await self._flag_failed(session, media)
-                return None
-            # Select best match
-            best = self._select_best_match(title, results)
-            if not best:
-                logger.info(f"No suitable TMDB match for {title}")
-                await self._flag_failed(session, media)
-                return None
-            # Prepare canonical data
-            canonical = {
-                "canonical_title": best["title"],
-                "release_year": (
-                    int(best["release_date"].split("-")[0])
-                    if best.get("release_date")
-                    else None
-                ),
-                "tmdb_id": best["id"],
-                "poster_path": best.get("poster_path"),
-            }
-            self.cache.set(cache_key, canonical)
-            await self._update_media(session, media, canonical)
-            return canonical
+        # If we exit loop without returning, treat as failure
+        logger.error("TMDB fetch_movie_metadata failed after retries")
+        await self._flag_failed(session, media)
+        return None
 
     def _select_best_match(self, title: str, results: list) -> Optional[dict]:
         # Use difflib for title similarity
