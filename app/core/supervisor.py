@@ -27,7 +27,7 @@ class DaemonSupervisor:
         self._backoff = 1
         self._max_backoff = 300
         self._heartbeat_interval = 3600  # 60 minutes
-        self._last_heartbeat = datetime.utcnow()
+        self._last_heartbeat = datetime.now(datetime.UTC)
 
     async def run(self):
         loop = asyncio.get_running_loop()

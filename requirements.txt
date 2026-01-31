@@ -1,3 +1,6 @@
+opencv-python
+
+
 musicbrainzngs==0.7.1
 celery==5.3.6
 aiosqlite==0.22.1

@@ -1,7 +1,14 @@
+import subprocess
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.models.media import Base
+
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
+def apply_alembic_migrations():
+    """Ensure all Alembic migrations are applied before tests run."""
+    subprocess.run(["alembic", "upgrade", "head"], check=True)
 
 
 @pytest_asyncio.fixture(scope="function")

@@ -77,7 +77,7 @@ class PipelineOrchestrator:
         stuck = result.scalars().all()
         for item in stuck:
             item.state = "planned"
-            item.updated_at = datetime.utcnow()
+            item.updated_at = datetime.now(datetime.UTC)
         await self.db.commit()
 
     async def _process_actionable_items(self):
@@ -126,7 +126,7 @@ class PipelineOrchestrator:
                     result = AsyncResult(task_id, app=celery_app)
                     if result.state == "SUCCESS":
                         item.state = state_info["next"]
-                        item.updated_at = datetime.utcnow()
+                        item.updated_at = datetime.now(datetime.UTC)
                         item.retry_count = 0
                     elif result.state in ("FAILURE", "REVOKED"):
                         item.state = state_info["fail"]

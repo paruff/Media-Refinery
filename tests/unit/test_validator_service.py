@@ -1,9 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock
 from app.services.validator_service import ValidatorService, ValidationReport
 
 
-@pytest.mark.asyncio
 def test_validator_path_compliance(tmp_path):
     db = AsyncMock()
     output = tmp_path / "output"
@@ -17,7 +15,6 @@ def test_validator_path_compliance(tmp_path):
     assert not validator._path_compliant("music/Artist/01 - Song.flac")
 
 
-@pytest.mark.asyncio
 def test_validator_ffprobe_check(monkeypatch, tmp_path):
     validator = ValidatorService(tmp_path, tmp_path, AsyncMock())
     f = tmp_path / "file.flac"
@@ -29,7 +26,6 @@ def test_validator_ffprobe_check(monkeypatch, tmp_path):
     assert "DTS" in validator._ffprobe_check(f)
 
 
-@pytest.mark.asyncio
 def test_validator_metadata_check(monkeypatch, tmp_path):
     validator = ValidatorService(tmp_path, tmp_path, AsyncMock())
     f = tmp_path / "file.flac"
@@ -42,7 +38,6 @@ def test_validator_metadata_check(monkeypatch, tmp_path):
     assert "Missing tag" in validator._metadata_check(f)
 
 
-@pytest.mark.asyncio
 def test_validator_cleanup_staging(tmp_path):
     staging = tmp_path / "staging"
     d = staging / "planid"
@@ -53,7 +48,6 @@ def test_validator_cleanup_staging(tmp_path):
     assert not d.exists()
 
 
-@pytest.mark.asyncio
 def test_validator_report_to_dict():
     report = ValidationReport()
     report.total_files = 2

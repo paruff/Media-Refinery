@@ -1,11 +1,17 @@
 import os
 import tempfile
 import pytest
-from app.services.execution_service import celery_app, execute_normalization_plan
+from app.services.execution_service import execute_normalization_plan
 
 
-def test_celery_task_registration():
-    assert "execute_normalization_plan" in celery_app.tasks
+def test_celery_task_registration(monkeypatch):
+    class MockCelery:
+        tasks = {"execute_normalization_plan": lambda: None}
+
+    monkeypatch.setattr("app.services.execution_service.celery_app", MockCelery())
+    from app.services.execution_service import celery_app as patched_app
+
+    assert "execute_normalization_plan" in patched_app.tasks
 
 
 def test_execute_normalization_plan_runs():
