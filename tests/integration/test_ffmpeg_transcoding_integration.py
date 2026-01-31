@@ -75,22 +75,8 @@ async def test_ffmpeg_transcoding_integration(monkeypatch, tmp_path):
         import shutil
 
         monkeypatch.setattr(shutil, "move", fake_move)
-        # Patch Path in ExecutionService to use temp staging dir
-        import app.services.execution_service as exec_mod
-
-        orig_new = exec_mod.Path.__new__
-
-        def path_new(cls, *args, **kwargs):
-            if args and isinstance(args[0], str) and args[0].startswith("/staging/"):
-                return tmp_path / args[0].replace("/staging/", "")
-            return orig_new(cls, *args, **kwargs)
-
-        exec_mod.Path.__new__ = path_new
-        try:
-            executor = ExecutionService(session)
-            await executor.execute_plan(plan)
-        finally:
-            exec_mod.Path.__new__ = orig_new
+        executor = ExecutionService(session, staging_root=tmp_path)
+        await executor.execute_plan(plan)
         # Check output
         out_file = tmp_path / "output" / "movie.mkv"
         assert out_file.exists()
@@ -99,5 +85,5 @@ async def test_ffmpeg_transcoding_integration(monkeypatch, tmp_path):
         updated_item = await session.get(MediaItem, "midint")
         assert updated_item.state == "executed"
         updated_plan = await session.get(NormalizationPlan, "pidint")
-        assert updated_plan.plan_status == PlanStatus.completed
+        assert updated_plan.plan_status == PlanStatus.completed.value
         assert "Moved to output" in updated_plan.execution_log

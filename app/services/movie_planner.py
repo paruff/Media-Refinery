@@ -68,8 +68,23 @@ class MoviePlanningService:
             ffmpeg_args += ["-c:a", "aac", "-b:a", "192k"]
         else:
             ffmpeg_args += ["-c:a", "aac"]
+
         # Subtitles
-        # If any unsafe subs, flag for removal (actual removal logic handled elsewhere)
+        needs_subtitle_conversion = False
+        subs = item.subtitles
+        if subs:
+            import json
+
+            try:
+                sublist = (
+                    json.loads(subs)
+                    if subs.strip().startswith("[")
+                    else [s.strip() for s in subs.split(",")]
+                )
+            except Exception:
+                sublist = [subs]
+            if any(s.lower() in UNSAFE_SUBS for s in sublist):
+                needs_subtitle_conversion = True
         ffmpeg_args += ["-map", "0", str(target_path)]
 
         # Create NormalizationPlan
@@ -78,6 +93,7 @@ class MoviePlanningService:
             target_path=str(target_path),
             ffmpeg_args=ffmpeg_args,
             original_hash="dummy_hash_for_test",
+            needs_subtitle_conversion=needs_subtitle_conversion,
         )
         self.db.add(plan)
         # Update MediaItem state

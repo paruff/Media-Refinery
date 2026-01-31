@@ -56,24 +56,11 @@ def test_execute_plan_transcode_4k(monkeypatch):
             with open(dst, "wb") as f:
                 f.write(b"data")
 
-        import app.services.execution_service as exec_mod
+        with patch("shutil.move", side_effect=fake_move):
+            service = ExecutionService(db, staging_root=staging)
+            import asyncio
 
-        orig_new = exec_mod.Path.__new__
-
-        def path_new(cls, *args, **kwargs):
-            if args and isinstance(args[0], str) and args[0].startswith("/staging/"):
-                return Path(staging) / args[0].replace("/staging/", "")
-            return orig_new(cls, *args, **kwargs)
-
-        exec_mod.Path.__new__ = path_new
-        try:
-            with patch("shutil.move", side_effect=fake_move):
-                service = ExecutionService(db)
-                import asyncio
-
-                asyncio.run(service.execute_plan(plan))
-        finally:
-            exec_mod.Path.__new__ = orig_new
+            asyncio.run(service.execute_plan(plan))
     assert db.execute.await_count > 0
     assert db.commit.await_count > 0
 
@@ -127,28 +114,12 @@ def test_execute_plan_transcode_1080p(monkeypatch):
             Path(dst).parent.mkdir(parents=True, exist_ok=True)
             with open(dst, "wb") as f:
                 f.write(b"data")
-            import app.services.execution_service as exec_mod
 
-            orig_new = exec_mod.Path.__new__
+        with patch("shutil.move", side_effect=fake_move):
+            service = ExecutionService(db, staging_root=staging)
+            import asyncio
 
-            def path_new(cls, *args, **kwargs):
-                if (
-                    args
-                    and isinstance(args[0], str)
-                    and args[0].startswith("/staging/")
-                ):
-                    return Path(staging) / args[0].replace("/staging/", "")
-                return orig_new(cls, *args, **kwargs)
-
-            exec_mod.Path.__new__ = path_new
-            try:
-                with patch("shutil.move", side_effect=fake_move):
-                    service = ExecutionService(db)
-                    import asyncio
-
-                    asyncio.run(service.execute_plan(plan))
-            finally:
-                exec_mod.Path.__new__ = orig_new
+            asyncio.run(service.execute_plan(plan))
 
     assert db.execute.await_count > 0
     assert db.commit.await_count > 0

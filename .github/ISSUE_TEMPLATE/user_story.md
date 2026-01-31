@@ -8,8 +8,8 @@ assignees: ''
 
 ## 📖 User Story
 
-**As a** [type of user]  
-**I want** [to perform some action]  
+**As a** [type of user]
+**I want** [to perform some action]
 **So that** [I can achieve some goal]
 
 ---
@@ -28,20 +28,20 @@ assignees: ''
 
 ### Scenario 1: [Name of scenario]
 
-**Given** [initial context/precondition]  
-**When** [action taken]  
+**Given** [initial context/precondition]
+**When** [action taken]
 **Then** [expected result]
 
 ### Scenario 2: [Error handling scenario]
 
-**Given** [error condition]  
-**When** [action taken]  
+**Given** [error condition]
+**When** [action taken]
 **Then** [expected error handling]
 
 ### Scenario 3: [Edge case scenario]
 
-**Given** [edge case setup]  
-**When** [action taken]  
+**Given** [edge case setup]
+**When** [action taken]
 **Then** [expected behavior]
 
 <!-- Add more scenarios as needed -->

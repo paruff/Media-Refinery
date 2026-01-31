@@ -36,7 +36,7 @@ docker-compose ps
 
 1. **Access Beets:**
    - URL: http://localhost:8337
-   
+
 2. **Configure Beets:**
    - Edit `config/beets/config.yaml`
    - Set your music directory
@@ -57,7 +57,7 @@ docker-compose ps
 
 1. **Access Tdarr:**
    - URL: http://localhost:8265
-   
+
 2. **Initial Setup:**
    - Create an account on first visit
    - Go to Libraries → Add Library
@@ -78,7 +78,7 @@ docker-compose ps
 
 1. **Access Radarr:**
    - URL: http://localhost:7878
-   
+
 2. **Initial Setup:**
    - Complete the setup wizard
    - Add root folder: `/movies`
@@ -98,7 +98,7 @@ docker-compose ps
 
 1. **Access Sonarr:**
    - URL: http://localhost:8989
-   
+
 2. **Initial Setup:**
    - Complete the setup wizard
    - Add root folder: `/tv`
@@ -118,7 +118,7 @@ docker-compose ps
 
 1. **Access Plex:**
    - URL: http://localhost:32400/web
-   
+
 2. **Initial Setup:**
    - Sign in with Plex account
    - Add libraries pointing to `/data/music` and `/data/videos`

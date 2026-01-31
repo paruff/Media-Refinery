@@ -11,14 +11,15 @@ from app.core.ffmpeg_profiles import get_ffmpeg_args
 
 
 class ExecutionService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, staging_root: str = "/staging"):
         self.db = db
+        self.staging_root = staging_root
 
     async def execute_plan(self, plan: NormalizationPlan):
         log = []
         start_time = datetime.utcnow().isoformat()
         plan_id = plan.id
-        staging_dir = Path(f"/staging/{plan_id}")
+        staging_dir = Path(self.staging_root) / plan_id
         try:
             # Stage 1: Ingest to Staging
             os.makedirs(staging_dir, exist_ok=True)

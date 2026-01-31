@@ -44,38 +44,12 @@ async def test_execution_service_integration(tmp_path):
             needs_tagging=False,
             original_hash="abc",
         )
-        # Patch os.makedirs and /staging path in ExecutionService to use tmp_path/staging
-        import app.services.execution_service as exec_mod
-
-        orig_makedirs = exec_mod.os.makedirs
-
-        def fake_makedirs(path, exist_ok=False):
-            from pathlib import Path
-
-            Path(path).mkdir(parents=True, exist_ok=True)
-
-        exec_mod.os.makedirs = fake_makedirs
-        # Patch Path in ExecutionService to use temp staging dir
-        orig_new = exec_mod.Path.__new__
-
-        def path_new(cls, *args, **kwargs):
-            if args and isinstance(args[0], str) and args[0].startswith("/staging/"):
-                return tmp_path / args[0].replace("/staging/", "")
-            return orig_new(cls, *args, **kwargs)
-
-        exec_mod.Path.__new__ = path_new
-        try:
-            executor = ExecutionService(session)
-            await executor.execute_plan(plan)
-        finally:
-            exec_mod.Path.__new__ = orig_new
-            exec_mod.os.makedirs = orig_makedirs
-            # Remove reference to orig_staging_dir, which may not be defined
+        plan.media_item = item
         session.add(plan)
         await session.commit()
-        # Run executor
-        executor = ExecutionService(session)
-        await executor.execute_plan(plan)
+        executor = ExecutionService(session, staging_root=staging_dir.parent)
+        await executor.execute_plan(plan)  # Only execute once
+        await session.commit()
         # Check output
         out_file = tmp_path / "output" / "Artist" / "Album" / "01 - Title.flac"
         assert out_file.exists()
