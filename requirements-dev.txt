@@ -1,0 +1,8 @@
+pre-commit
+black==23.7.0
+ruff
+mypy
+pytest
+pytest-mock
+testcontainers
+behave

@@ -1,8 +1,73 @@
-import subprocess
+import asyncio
+import json
+import pytest
 import pytest_asyncio
+import subprocess
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.models.media import Base
+
+# Standard ffprobe JSON for H.264/DTS MKV
+FFPROBE_MKV_H264_DTS = {
+    "streams": [
+        {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1920,
+            "height": 1080,
+            "r_frame_rate": "24/1",
+        },
+        {"index": 1, "codec_name": "dts", "codec_type": "audio", "channels": 6},
+    ],
+    "format": {
+        "filename": "test.mkv",
+        "nb_streams": 2,
+        "format_name": "matroska,webm",
+        "duration": "3600.0",
+    },
+}
+
+
+@pytest.fixture(autouse=True)
+def patch_create_subprocess_exec(mocker):
+    """
+    Globally patch asyncio.create_subprocess_exec to intercept all subprocess calls.
+    """
+
+    async def _mocked_create_subprocess_exec(*args, **kwargs):
+        class DummyProcess:
+            def __init__(self):
+                self.returncode = 0
+                self.stdout = asyncio.StreamReader()
+                self.stderr = asyncio.StreamReader()
+
+            async def communicate(self):
+                # Simulate ffprobe output if called
+                if "ffprobe" in args[0]:
+                    output = json.dumps(FFPROBE_MKV_H264_DTS).encode()
+                    self.stdout.feed_data(output)
+                    self.stdout.feed_eof()
+                    self.stderr.feed_eof()
+                    return (output, b"")
+                # Simulate ffmpeg or other binaries
+                self.stdout.feed_eof()
+                self.stderr.feed_eof()
+                return (b"", b"")
+
+        return DummyProcess()
+
+    mocker.patch(
+        "asyncio.create_subprocess_exec", side_effect=_mocked_create_subprocess_exec
+    )
+
+
+@pytest.fixture
+def mock_ffprobe():
+    """
+    Returns a standard ffprobe JSON for H.264/DTS MKV files.
+    """
+    return FFPROBE_MKV_H264_DTS
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
