@@ -1,4 +1,4 @@
-from behave import given, when, then
+from behave import given, when, then  # type: ignore[import-untyped]
 from unittest.mock import patch, MagicMock
 from app.models.media import MediaItem, FileState
 from app.core.scanner import ScannerService

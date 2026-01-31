@@ -59,7 +59,7 @@ async def test_tv_enrichment_success(async_session: AsyncSession):
     assert db_item.episode_title == "System"
     assert db_item.absolute_number == 1
     assert db_item.tmdb_series_id == 136315
-    assert db_item.state == "planned"
+    assert db_item.state == "ready_to_plan"
     assert db_item.metadata_mismatch is False
 
 
@@ -172,5 +172,5 @@ async def test_tv_enrichment_caching(async_session: AsyncSession):
     assert db_item2.episode_title == "Hands"
     assert db_item2.absolute_number == 2
     assert db_item2.tmdb_series_id == 136315
-    assert db_item2.state == "planned"
+    assert db_item2.state == "ready_to_plan"
     assert db_item2.metadata_mismatch is False

@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 from app.models.media import MediaItem
 
 # Celery/Redis for distributed execution monitoring
-from celery.result import AsyncResult
+from celery.result import AsyncResult  # type: ignore[import-untyped]
 
 # Import your services here
 # from app.services.scanner_service import ScannerService

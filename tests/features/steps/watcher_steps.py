@@ -1,5 +1,5 @@
 # Watcher-specific step definitions for BDD tests
-from behave import when
+from behave import when  # type: ignore[import-untyped]
 
 
 @when("the watcher scans for new files")

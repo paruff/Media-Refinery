@@ -1,4 +1,4 @@
-from behave import given, when, then
+from behave import given, when, then  # type: ignore[import-untyped]
 from app.services.device_profile_service import DeviceProfileService
 from app.services.planning_service import PlanningService, FileAttributes
 

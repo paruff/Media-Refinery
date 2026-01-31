@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 Base = declarative_base()
 engine = create_async_engine(settings.DATABASE_URL, echo=False, future=True)
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)  # type: ignore[call-overload]
 
 
 async def init_db():

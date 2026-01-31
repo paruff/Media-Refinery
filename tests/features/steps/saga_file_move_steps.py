@@ -1,4 +1,4 @@
-from behave import given, when, then
+from behave import given, when, then  # type: ignore[import-untyped]
 import os
 import tempfile
 from app.services.execution_service import execute_normalization_plan

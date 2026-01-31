@@ -1,4 +1,4 @@
-from behave import given, when, then
+from behave import given, when, then  # type: ignore[import-untyped]
 from app.services.execution_service import celery_app
 import time
 

@@ -43,11 +43,12 @@ async def test_tmdb_integration_enriches_movie(async_session: AsyncSession):
     assert result["canonical_title"] == "Inception"
     db_item = await async_session.get(MediaItem, "integration1")
     assert db_item is not None
-    assert db_item.canonical_title == "Inception"
-    assert db_item.release_year == 2010
-    assert db_item.tmdb_id == 27205
-    assert db_item.state == "ready_to_plan"
-    assert db_item.enrichment_failed is False
+    if db_item is not None:
+        assert db_item.canonical_title == "Inception"
+        assert db_item.release_year == 2010
+        assert db_item.tmdb_id == 27205
+        assert db_item.state == "ready_to_plan"
+        assert db_item.enrichment_failed is False
 
 
 @pytest.mark.asyncio
@@ -69,9 +70,11 @@ async def test_tmdb_integration_handles_failure(async_session: AsyncSession):
 
     client = httpx.AsyncClient(transport=MockTransport())
     service = TMDBService(api_key="dummy", client=client)
-    result = await service.fetch_movie_metadata(async_session, "integration2")
+    # fetch_movie_metadata expects int, not str
+    result = await service.fetch_movie_metadata(async_session, 2)
     assert result is None
     db_item = await async_session.get(MediaItem, "integration2")
     assert db_item is not None
-    assert db_item.enrichment_failed is True
-    assert db_item.state == "audited" or db_item.state == "audited"
+    if db_item is not None:
+        assert db_item.enrichment_failed is True
+        assert db_item.state == "audited" or db_item.state == "audited"

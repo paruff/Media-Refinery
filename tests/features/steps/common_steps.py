@@ -1,6 +1,6 @@
 # Common step definitions for BDD tests
 import os
-from behave import given, when, then
+from behave import given, when, then  # type: ignore[import-untyped]
 
 
 @given('a file "{filename}" exists in the input directory')

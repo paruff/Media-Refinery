@@ -10,8 +10,9 @@ from app.schemas.normalization_plan import NormalizationPlanSchema
 
 # Distributed execution toggle (env or CLI flag)
 USE_DISTRIBUTED = bool(int(os.getenv("MEDIA_REFINERY_DISTRIBUTED", "0")))
+
 if USE_DISTRIBUTED:
-    from celery import Celery
+    from celery import Celery  # type: ignore[import-untyped]
 
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     celery_app = Celery(

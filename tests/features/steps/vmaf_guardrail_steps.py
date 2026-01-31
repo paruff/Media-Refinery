@@ -1,4 +1,4 @@
-from behave import given, when, then
+from behave import given, when, then  # type: ignore[import-untyped]
 from app.models.media import NormalizationPlan, PlanStatus
 from app.services.vmaf_guardrail_service import VMAFGuardrailService
 from pydantic import BaseModel
