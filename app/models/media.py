@@ -107,6 +107,8 @@ class PlanStatus(enum.Enum):
 
 
 class NormalizationPlan(Base):
+    quality_metrics = Column(JSON, nullable=True)  # Dict with VMAF, PSNR, etc.
+    failed_quality_check = Column(Boolean, default=False, nullable=False)
     __tablename__ = "normalization_plans"
     __table_args__ = (
         UniqueConstraint("target_path", name="uq_normalizationplan_target_path"),
