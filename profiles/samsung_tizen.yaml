@@ -1,0 +1,15 @@
+id: samsung_tizen
+name: Samsung Tizen Smart TV
+supported_audio:
+  - aac
+  - mp3
+  - ac3
+supported_video:
+  - h264
+  - hevc
+max_resolution:
+  width: 3840
+  height: 2160
+container:
+  - mp4
+  - mkv
