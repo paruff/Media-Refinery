@@ -21,10 +21,12 @@ PYTEST?=$(VENV)/bin/pytest
 PIP?=$(VENV)/bin/pip
 BEHAVE?=$(VENV)/bin/behave
 
+
 precom:
-	@echo "[PRECOM] Run black and ruff (pre-commit hooks)"
+	@echo "[PRECOM] Run black, ruff, and mypy (pre-commit hooks)"
 	@.venv/bin/black app/ tests/ || echo "black not installed; skipping format"
 	@.venv/bin/ruff check app/ tests/ || echo "ruff not installed; skipping lint"
+	@which mypy >/dev/null 2>&1 && mypy app/ || echo "mypy not installed; skipping type check"
 
 test: unit integration features
 
@@ -83,7 +85,7 @@ container-down:
 
 help:
 	@echo "Media-Refinery Python Makefile targets:"
-	@echo "  precom         Lint, format, type-check, security scan"
+	@echo "  precom         Lint, format, type-check (all pre-commit checks)"
 	@echo "  test           Run all tests (unit, integration, features)"
 	@echo "  unit           Run unit tests only"
 	@echo "  integration    Run integration tests only"

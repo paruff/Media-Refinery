@@ -41,14 +41,24 @@ class SeriesPlanningService:
             raise ValueError("MediaItem not found or not a series")
 
         # Canonical show name and year
+        from typing import cast
+
         show = clean_title(
-            item.canonical_series_name or item.title or item.guessed_title or "Unknown"
+            cast(str, item.canonical_series_name)
+            or cast(str, item.title)
+            or cast(str, item.guessed_title)
+            or "Unknown"
         )
-        year = item.release_year or item.guessed_year or item.year or "0000"
-        ext = (item.container or "mkv").lower()
-        season = int(item.season_number or 0)
-        episode = int(item.episode_number or 0)
-        episode_title = clean_title(item.episode_title or "Episode")
+        year = (
+            cast(str, item.release_year)
+            or cast(str, item.guessed_year)
+            or cast(str, item.year)
+            or "0000"
+        )
+        ext = (cast(str, item.container) or "mkv").lower()
+        season = int(getattr(item, "season_number", 0) or 0)
+        episode = int(getattr(item, "episode_number", 0) or 0)
+        episode_title = clean_title(cast(str, item.episode_title) or "Episode")
 
         # Zero-padding
         season_str = f"{season:02d}"

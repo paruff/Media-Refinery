@@ -38,12 +38,14 @@ class IssueDetectorService:
                 }
             )
         # Non-canonical naming
+        from typing import cast
+
         if item.media_type == "movie":
             if not (
                 item.year
                 or (
                     item.enrichment_data
-                    and json.loads(item.enrichment_data).get("year")
+                    and json.loads(cast(str, item.enrichment_data)).get("year")
                 )
             ):
                 issues.append(
@@ -64,7 +66,7 @@ class IssueDetectorService:
                 )
             if not (
                 item.enrichment_data
-                and json.loads(item.enrichment_data).get("track_number")
+                and json.loads(cast(str, item.enrichment_data)).get("track_number")
             ):
                 issues.append(
                     {

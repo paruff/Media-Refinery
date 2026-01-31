@@ -46,7 +46,9 @@ class TVMetadataService:
         if not media:
             logger.error(f"MediaItem {media_id} not found")
             return None
-        tokens = self._extract_tokens(media)
+        from typing import cast
+
+        tokens = self._extract_tokens(cast(MediaItem, media))
         if not tokens:
             logger.error(f"No tokens for media {media_id}")
             return None

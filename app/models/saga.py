@@ -25,7 +25,9 @@ class SagaFileMoveLog(Base):
     src_path = Column(String, nullable=False)
     tmp_path = Column(String, nullable=False)
     dest_path = Column(String, nullable=False)
-    status = Column(Enum(SagaLogStatus), default=SagaLogStatus.prepared, nullable=False)
+    status: Column = Column(
+        Enum(SagaLogStatus), default=SagaLogStatus.prepared, nullable=False
+    )
     error = Column(Text, nullable=True)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

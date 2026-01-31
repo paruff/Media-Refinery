@@ -87,16 +87,16 @@ async def convert_audio(
     preserve_metadata: bool = True
 ) -> AudioConversionResult:
     """Convert audio file to specified format.
-    
+
     Args:
         input_path: Path to input audio file
         output_path: Path to output file
         format: Target audio format (default: flac)
         preserve_metadata: Whether to preserve ID3/Vorbis tags
-        
+
     Returns:
         AudioConversionResult containing success status and metadata
-        
+
     Raises:
         FileNotFoundError: If input file doesn't exist
         InvalidAudioFormatError: If format is unsupported
@@ -124,10 +124,10 @@ async def execute_ffmpeg(args: List[str]) -> str:
         stderr=asyncio.subprocess.PIPE
     )
     stdout, stderr = await process.communicate()
-    
+
     if process.returncode != 0:
         raise FFmpegError(f"FFmpeg failed: {stderr.decode()}")
-    
+
     return stdout.decode()
 
 # WRONG: Blocking subprocess
@@ -145,12 +145,12 @@ from pathlib import Path
 
 class AudioConfig(BaseModel):
     """Audio processing configuration."""
-    
+
     format: str = Field(default="flac", description="Target audio format")
     compression_level: int = Field(default=5, ge=0, le=8)
     preserve_metadata: bool = Field(default=True)
     sample_rate: Optional[int] = Field(default=None, description="Target sample rate (Hz)")
-    
+
     @validator('format')
     def validate_format(cls, v):
         """Ensure format is supported."""
@@ -158,7 +158,7 @@ class AudioConfig(BaseModel):
         if v not in supported:
             raise ValueError(f"Unsupported format: {v}. Must be one of {supported}")
         return v
-    
+
     class Config:
         """Pydantic config."""
         frozen = True  # Immutable config
@@ -175,13 +175,13 @@ from pathlib import Path
 def process_file(input_path: Path, output_dir: Path) -> Path:
     """Process file and return output path."""
     output_path = output_dir / f"{input_path.stem}.flac"
-    
+
     if not input_path.exists():
         raise FileNotFoundError(f"Input file not found: {input_path}")
-    
+
     if not output_dir.exists():
         output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     return output_path
 
 # WRONG: String manipulation
@@ -200,18 +200,18 @@ logger = structlog.get_logger(__name__)
 
 async def convert_file(input_path: Path) -> None:
     """Convert file with structured logging."""
-    
+
     # Bind context to all log messages in this function
     log = logger.bind(
         input_file=str(input_path),
         operation="audio_conversion"
     )
-    
+
     log.info("starting_conversion", format="flac")
-    
+
     try:
         result = await _do_conversion(input_path)
-        log.info("conversion_complete", 
+        log.info("conversion_complete",
                  duration_ms=result.duration_ms,
                  output_size_mb=result.size_mb)
     except Exception as e:
@@ -234,7 +234,7 @@ class InvalidAudioFormatError(MediaRefineryError):
 
 class FFmpegError(MediaRefineryError):
     """Raised when FFmpeg execution fails."""
-    
+
     def __init__(self, message: str, command: List[str], stderr: str):
         super().__init__(message)
         self.command = command
@@ -243,23 +243,23 @@ class FFmpegError(MediaRefineryError):
 # Use in code
 async def validate_audio_format(path: Path) -> str:
     """Validate audio file format.
-    
+
     Raises:
         InvalidAudioFormatError: If format is unsupported
         FileNotFoundError: If file doesn't exist
     """
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
-    
+
     # Detect format using FFprobe
     format_name = await detect_format(path)
-    
+
     if format_name not in SUPPORTED_FORMATS:
         raise InvalidAudioFormatError(
             f"Unsupported format '{format_name}' in file: {path}. "
             f"Supported formats: {', '.join(SUPPORTED_FORMATS)}"
         )
-    
+
     return format_name
 ```
 
@@ -277,12 +277,12 @@ from media_refinery.audio.converter import AudioConverter
 
 class TestAudioConverter:
     """Unit tests for AudioConverter."""
-    
+
     @pytest.fixture
     def converter(self):
         """Create converter instance."""
         return AudioConverter(format="flac", compression_level=5)
-    
+
     @pytest.fixture
     def temp_audio_file(self, tmp_path: Path) -> Path:
         """Create temporary audio file for testing."""
@@ -290,21 +290,21 @@ class TestAudioConverter:
         # Create dummy MP3 file
         audio_file.write_bytes(b"dummy mp3 data")
         return audio_file
-    
+
     def test_build_ffmpeg_command_basic(self, converter: AudioConverter):
         """Test FFmpeg command building with basic options."""
         input_path = Path("/input/song.mp3")
         output_path = Path("/output/song.flac")
-        
+
         command = converter.build_ffmpeg_command(input_path, output_path)
-        
+
         assert "ffmpeg" in command
         assert "-i" in command
         assert str(input_path) in command
         assert str(output_path) in command
         assert "-c:a" in command
         assert "flac" in command
-    
+
     @pytest.mark.asyncio
     async def test_convert_file_success(
         self,
@@ -315,16 +315,16 @@ class TestAudioConverter:
         """Test successful file conversion."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         result = await converter.convert_file(
             temp_audio_file,
             output_dir
         )
-        
+
         assert result.success is True
         assert result.output_path.exists()
         assert result.output_path.suffix == ".flac"
-    
+
     @pytest.mark.asyncio
     async def test_convert_file_invalid_input(
         self,
@@ -334,10 +334,10 @@ class TestAudioConverter:
         """Test conversion with non-existent file."""
         nonexistent = tmp_path / "nonexistent.mp3"
         output_dir = tmp_path / "output"
-        
+
         with pytest.raises(FileNotFoundError) as exc_info:
             await converter.convert_file(nonexistent, output_dir)
-        
+
         assert "not found" in str(exc_info.value).lower()
 ```
 
@@ -384,9 +384,9 @@ async def async_converter():
     """Create and cleanup async converter."""
     converter = AsyncAudioConverter()
     await converter.initialize()
-    
+
     yield converter
-    
+
     await converter.cleanup()
 
 @pytest.mark.asyncio
@@ -412,13 +412,13 @@ from src.media_refinery.audio.converter import AudioConverter
 
 class AudioService:
     """Service for audio processing operations."""
-    
+
     def __init__(self, db: AsyncSession, converter: AudioConverter):
         """Initialize service with dependencies."""
         self.db = db
         self.converter = converter
         self.logger = structlog.get_logger(__name__)
-    
+
     async def process_audio_file(
         self,
         job_id: int,
@@ -426,42 +426,42 @@ class AudioService:
         output_dir: Path
     ) -> Job:
         """Process audio file and update job status.
-        
+
         Args:
             job_id: Database job ID
             input_path: Path to input audio file
             output_dir: Directory for output files
-            
+
         Returns:
             Updated Job model
         """
         job = await self.db.get(Job, job_id)
-        
+
         try:
             job.status = JobStatus.PROCESSING
             await self.db.commit()
-            
+
             # Perform conversion
             result = await self.converter.convert_file(input_path, output_dir)
-            
+
             # Update job with results
             job.status = JobStatus.COMPLETED
             job.output_path = str(result.output_path)
             job.checksum = result.checksum
             await self.db.commit()
-            
+
             self.logger.info("audio_processing_complete", job_id=job_id)
-            
+
         except Exception as e:
             job.status = JobStatus.FAILED
             job.error_message = str(e)
             await self.db.commit()
-            
-            self.logger.error("audio_processing_failed", 
-                            job_id=job_id, 
+
+            self.logger.error("audio_processing_failed",
+                            job_id=job_id,
                             error=str(e))
             raise
-        
+
         return job
 ```
 
@@ -475,10 +475,10 @@ from app.models.job import Job, JobStatus
 
 class JobRepository:
     """Repository for Job database operations."""
-    
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def create(self, **kwargs) -> Job:
         """Create new job."""
         job = Job(**kwargs)
@@ -486,11 +486,11 @@ class JobRepository:
         await self.db.commit()
         await self.db.refresh(job)
         return job
-    
+
     async def get_by_id(self, job_id: int) -> Optional[Job]:
         """Get job by ID."""
         return await self.db.get(Job, job_id)
-    
+
     async def get_pending_jobs(self, limit: int = 100) -> List[Job]:
         """Get pending jobs."""
         stmt = (
@@ -500,7 +500,7 @@ class JobRepository:
         )
         result = await self.db.execute(stmt)
         return result.scalars().all()
-    
+
     async def update_status(self, job_id: int, status: JobStatus) -> Job:
         """Update job status."""
         job = await self.get_by_id(job_id)
@@ -527,14 +527,14 @@ async def convert_audio(
     audio_service: AudioService = Depends(get_audio_service)
 ) -> JobResponse:
     """Submit audio conversion job.
-    
+
     Args:
         job_data: Job creation data
         audio_service: Injected audio service
-        
+
     Returns:
         Created job information
-        
+
     Raises:
         HTTPException: If job creation fails
     """
@@ -545,7 +545,7 @@ async def convert_audio(
             format=job_data.format
         )
         return JobResponse.from_orm(job)
-        
+
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -564,13 +564,13 @@ async def get_job_status(
 ) -> JobResponse:
     """Get job status by ID."""
     job = await audio_service.get_job(job_id)
-    
+
     if not job:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Job {job_id} not found"
         )
-    
+
     return JobResponse.from_orm(job)
 ```
 
@@ -585,16 +585,16 @@ from typing import List, Callable, Any
 
 class WorkerPool:
     """Async worker pool for concurrent task execution."""
-    
+
     def __init__(self, max_workers: int = 4):
         """Initialize worker pool.
-        
+
         Args:
             max_workers: Maximum concurrent workers
         """
         self.semaphore = asyncio.Semaphore(max_workers)
         self.logger = structlog.get_logger(__name__)
-    
+
     async def execute_task(
         self,
         task: Callable,
@@ -604,7 +604,7 @@ class WorkerPool:
         """Execute single task with semaphore."""
         async with self.semaphore:
             return await task(*args, **kwargs)
-    
+
     async def execute_all(
         self,
         tasks: List[Callable],
@@ -612,10 +612,10 @@ class WorkerPool:
         **kwargs: Any
     ) -> List[Any]:
         """Execute all tasks concurrently.
-        
+
         Args:
             tasks: List of async callables
-            
+
         Returns:
             List of results in same order as tasks
         """
@@ -623,7 +623,7 @@ class WorkerPool:
             self.execute_task(task, *args, **kwargs)
             for task in tasks
         ]
-        
+
         return await asyncio.gather(*coroutines)
 
 # Usage:
@@ -647,25 +647,25 @@ def complex_function(
     optional_param: Optional[bool] = None
 ) -> Dict[str, Any]:
     """One-line summary of function.
-    
+
     More detailed description if needed. Can span multiple lines
     and include examples or usage notes.
-    
+
     Args:
         param1: Description of first parameter
         param2: Description of second parameter
         optional_param: Description of optional parameter.
             Defaults to None.
-            
+
     Returns:
         Dictionary containing:
             - key1: Description of key1
             - key2: Description of key2
-            
+
     Raises:
         ValueError: If param2 is negative
         TypeError: If param1 is not a string
-        
+
     Example:
         >>> result = complex_function("test", 42)
         >>> print(result["key1"])

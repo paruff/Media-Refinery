@@ -1,3 +1,4 @@
+from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.config import settings
@@ -6,7 +7,7 @@ from sqlalchemy import text
 
 Base = declarative_base()
 engine = create_async_engine(settings.DATABASE_URL, echo=False, future=True)
-AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def init_db():
@@ -22,7 +23,6 @@ async def init_db():
         await conn.execute(text("PRAGMA journal_mode=WAL;"))
 
 
-# Dependency for FastAPI and BDD tests
-async def get_async_session() -> AsyncSession:
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session

@@ -57,6 +57,8 @@ class ReportingService:
         # from sqlalchemy.orm import joinedload (unused)
         from app.models.media import NormalizationPlan
 
+        from typing import cast
+
         error_rows = (
             (
                 await self.db.execute(
@@ -70,7 +72,7 @@ class ReportingService:
             .scalars()
             .all()
         )
-        error_log = list(dict.fromkeys([e for e in error_rows if e]))[:10]
+        error_log = list(dict.fromkeys([cast(str, e) for e in error_rows if e]))[:10]
         # Warnings (files with missing metadata but not error)
         warning_rows = (
             (

@@ -42,6 +42,7 @@ async def test_tmdb_integration_enriches_movie(async_session: AsyncSession):
     result = await service.fetch_movie_metadata(async_session, "integration1")
     assert result["canonical_title"] == "Inception"
     db_item = await async_session.get(MediaItem, "integration1")
+    assert db_item is not None
     assert db_item.canonical_title == "Inception"
     assert db_item.release_year == 2010
     assert db_item.tmdb_id == 27205
@@ -71,5 +72,6 @@ async def test_tmdb_integration_handles_failure(async_session: AsyncSession):
     result = await service.fetch_movie_metadata(async_session, "integration2")
     assert result is None
     db_item = await async_session.get(MediaItem, "integration2")
+    assert db_item is not None
     assert db_item.enrichment_failed is True
     assert db_item.state == "audited" or db_item.state == "audited"

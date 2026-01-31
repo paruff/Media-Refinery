@@ -7,7 +7,13 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 
 
+import asyncio
+from app.core.database import init_db
+
+
 def test_saga_prepare_commit_cleanup():
+    # Ensure DB schema is present
+    asyncio.run(init_db())
     # Test Prepare-Commit-Cleanup lifecycle
     with tempfile.TemporaryDirectory() as tmpdir:
         out_path = os.path.join(tmpdir, "out_saga.mp4")
@@ -27,14 +33,14 @@ def test_saga_prepare_commit_cleanup():
                 assert log is not None
                 assert log.status == SagaLogStatus.committed
 
-        import asyncio
-
         asyncio.run(check_log())
         # Output should exist
         assert os.path.exists(out_path)
 
 
 def test_saga_rollback_on_failure(monkeypatch):
+    # Ensure DB schema is present
+    asyncio.run(init_db())
     # Simulate failure and check rollback
     with tempfile.TemporaryDirectory() as tmpdir:
         out_path = os.path.join(tmpdir, "fail_saga.mp4")
@@ -59,7 +65,5 @@ def test_saga_rollback_on_failure(monkeypatch):
                 log = result.scalars().first()
                 assert log is not None
                 assert log.status == SagaLogStatus.failed
-
-        import asyncio
 
         asyncio.run(check_log())

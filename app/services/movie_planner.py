@@ -43,9 +43,13 @@ class MoviePlanningService:
             raise ValueError("MediaItem not found or not a movie")
 
         # Extract title/year, clean for path
-        title = clean_title(item.title or item.guessed_title or "Unknown")
-        year = item.year or item.guessed_year or "0000"
-        ext = (item.container or "mkv").lower()
+        from typing import cast
+
+        title = clean_title(
+            cast(str, item.title) or cast(str, item.guessed_title) or "Unknown"
+        )
+        year = cast(str, item.year) or cast(str, item.guessed_year) or "0000"
+        ext = (cast(str, item.container) or "mkv").lower()
         target_dir = Path("/output/movies") / f"{title} ({year})"
         target_file = f"{title} ({year}).{ext}"
         target_path = target_dir / target_file

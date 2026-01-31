@@ -37,18 +37,24 @@ class MusicPlanningService:
             raise ValueError("MediaItem not found or not music")
 
         # Artist folder
-        artist = clean_title(item.album_artist or item.artist or "Unknown Artist")
+        from typing import cast
+
+        artist = clean_title(
+            cast(str, item.album_artist) or cast(str, item.artist) or "Unknown Artist"
+        )
         # Album folder
-        year = str(item.release_year or item.year or "0000")
-        album = clean_title(item.album_name or item.album or "Unknown Album")
+        year = str(cast(str, item.release_year) or cast(str, item.year) or "0000")
+        album = clean_title(
+            cast(str, item.album_name) or cast(str, item.album) or "Unknown Album"
+        )
         album_folder = f"{year} - {album}"
         # Disc logic
-        disc_number = int(item.disc_number or 1)
+        disc_number = int(cast(int, item.disc_number) or 1)
         # Track number and title
         track_number = int(getattr(item, "track_number", 0) or 0)
         track_str = f"{track_number:02d}"
         title = clean_title(getattr(item, "title", None) or "Unknown Title")
-        ext = (item.container or "flac").lower()
+        ext = (cast(str, item.container) or "flac").lower()
 
         # Path construction
         base_path = Path("/output/music") / artist / album_folder

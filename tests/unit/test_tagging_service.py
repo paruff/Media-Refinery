@@ -22,14 +22,17 @@ def make_metadata():
 def test_apply_tags_flac(monkeypatch):
     svc = TaggingService()
     fake_audio = MagicMock()
+    # Patch mutagen.File to return fake_audio
     monkeypatch.setattr("mutagen.File", lambda f, easy=False: fake_audio)
-    monkeypatch.setattr(fake_audio, "__class__", type("FLAC", (), {}))
+    # Patch mutagen.flac.FLAC to avoid header check
+    monkeypatch.setattr("mutagen.flac.FLAC", lambda *a, **kw: fake_audio)
+    # Patch type to make isinstance(audio, FLAC) True
+    fake_audio.__class__ = type("FLAC", (object,), {})
     monkeypatch.setattr(svc, "_tag_flac", lambda a, m, c: True)
     # Mock open to avoid FileNotFoundError
     from io import BytesIO
 
     monkeypatch.setattr("builtins.open", lambda *a, **kw: BytesIO(b"fakedata"))
-    monkeypatch.setattr("mutagen.File", lambda f, easy=False: fake_audio)
     assert svc.apply_tags("song.flac", make_metadata())
 
 

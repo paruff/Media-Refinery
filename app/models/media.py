@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
-Base = declarative_base()
+Base = declarative_base()  # type: ignore[misc, valid-type]
 
 
 class FileState(str, enum.Enum):
@@ -32,8 +32,8 @@ class MediaItem(Base):
     __tablename__ = "media_items"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     source_path = Column(String, unique=True, nullable=False)
-    state = Column(Enum(FileState), default=FileState.pending, nullable=False)
-    media_type = Column(Enum(MediaType), default=MediaType.unknown, nullable=False)
+    state = Column(Enum(FileState), default=FileState.pending, nullable=False)  # type: ignore[var-annotated]
+    media_type = Column(Enum(MediaType), default=MediaType.unknown, nullable=False)  # type: ignore[var-annotated]
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), onupdate=func.now(), server_default=func.now()
@@ -60,7 +60,6 @@ class MediaItem(Base):
     # MusicBrainz enrichment fields
     album_artist = Column(String, nullable=True)
     album_name = Column(String, nullable=True)
-    release_year = Column(Integer, nullable=True)
     disc_number = Column(Integer, nullable=True)
     mbid = Column(String, nullable=True)
     release_mbid = Column(String, nullable=True)
@@ -133,7 +132,9 @@ class NormalizationPlan(Base):
     original_hash = Column(String, nullable=False)
 
     # Status management
-    plan_status = Column(Enum(PlanStatus), default=PlanStatus.draft, nullable=False)
+    plan_status = Column(
+        Enum(PlanStatus), default=PlanStatus.draft, nullable=False
+    )  # type: ignore[var-annotated]
     execution_log = Column(Text, default="", nullable=False)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

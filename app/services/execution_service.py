@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # Celery setup
 
+
+from typing import Optional
 from app.schemas.normalization_plan import NormalizationPlanSchema
 
 # Distributed execution toggle (env or CLI flag)
@@ -242,7 +244,9 @@ class ExecutionService:
         self.staging_root = staging_root
         self.session_factory = session_factory
 
-    async def execute_plan(self, plan: NormalizationPlan, distributed: bool = None):
+    async def execute_plan(
+        self, plan: NormalizationPlan, distributed: Optional[bool] = None
+    ):
         use_dist = distributed if distributed is not None else USE_DISTRIBUTED
         plan_schema = NormalizationPlanSchema.from_orm(plan)
         if use_dist:

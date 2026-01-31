@@ -18,6 +18,7 @@ class VMAFGuardrailService:
         min_vmaf: float = 90.0,
     ):
         metrics = await self.vmaf_func(src_path, out_path)
+
         plan.quality_metrics = metrics.dict()
         if metrics.vmaf is not None and metrics.vmaf < min_vmaf:
             plan.failed_quality_check = True
