@@ -12,7 +12,6 @@ async def async_session():
     async_session_factory = sessionmaker(
         engine, expire_on_commit=False, class_=AsyncSession
     )
-    session = async_session_factory()
-    yield session
-    await session.close()
+    async with async_session_factory() as session:
+        yield session
     await engine.dispose()
