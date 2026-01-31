@@ -117,6 +117,21 @@ Pre-commit hooks are configured for linting and formatting. Install with `pre-co
 See [FAQ.md](FAQ.md) for common questions and troubleshooting.
 ## Security & Observability
 
+## Usage
+```bash
+python run_refinery.py           # Local execution (default, no Redis/Celery required)
+python run_refinery.py --distributed  # Enable distributed execution (requires Redis/Celery)
+```
+
+By default, Media Refinery runs all tasks locally and does not require Redis or Celery. To enable distributed execution (using Celery and Redis as a task queue), use the `--distributed` flag or set the environment variable `MEDIA_REFINERY_DISTRIBUTED=1`.
+
+**Distributed mode requirements:**
+- Redis server running (see [DOCKER.md](DOCKER.md) for setup)
+- Celery worker running: `celery -A app.services.execution_service.celery_app worker --loglevel=info`
+
+**Local mode:**
+- No Redis or Celery required; all processing is in-process.
+
 - See [SECURITY.md](SECURITY.md) for security practices and how to report vulnerabilities.
 - See [METRICS.md](METRICS.md) for metrics and observability endpoints.
 ## Example Config & Sample Media

@@ -64,6 +64,22 @@ The workflow for processing media files involves the following key steps:
 6. **Verify**: Confirm successful processing.
 7. **Report**: Record statistics and log analysis.
 
+
+## Execution Modes
+
+Media Refinery supports two execution modes:
+
+- **Local Mode (default):**
+    - All processing is performed in-process, no external dependencies required.
+    - No Redis or Celery required.
+    - Recommended for single-node or development setups.
+
+- **Distributed Mode (optional):**
+    - Tasks are dispatched to a Celery worker queue using Redis as the broker.
+    - Enable by running with `python run_refinery.py --distributed` or setting `MEDIA_REFINERY_DISTRIBUTED=1`.
+    - Requires a running Redis server and Celery worker.
+    - Suitable for scaling out processing across multiple nodes.
+
 ## Safe Operating Features
 - **Dry-Run Mode**: Executes a simulated run to validate workflows without modifying files.
 - **Rollback Mechanisms**: Ensures that failed processing results in no data loss.

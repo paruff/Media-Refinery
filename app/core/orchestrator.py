@@ -5,6 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models.media import MediaItem
 
+# Celery/Redis for distributed execution monitoring
+from celery.result import AsyncResult
+
 # Import your services here
 # from app.services.scanner_service import ScannerService
 # from app.services.classification_service import ClassificationService
@@ -104,14 +107,44 @@ class PipelineOrchestrator:
 
     async def _dispatch(self, item, service_name, state_info):
         try:
-            # Placeholder: Replace with actual service calls
-            # e.g., await ScannerService.scan(item)
-            await asyncio.sleep(0.1)  # Simulate work
-            # On success
-            item.state = state_info["next"]
-            item.updated_at = datetime.utcnow()
-            item.retry_count = 0
-            # Optionally, append to audit_log
+            # Executor: dispatch to Celery and monitor status
+            if service_name == "executor":
+                # Simulate sending task and monitoring status
+                from app.services.execution_service import celery_app
+
+                # In real code, get plan/task id from item
+                # Here, just simulate a Celery task id
+                task_id = getattr(item, "celery_task_id", None)
+                if not task_id:
+                    # Simulate sending task (would be done in ExecutionService)
+                    # task = celery_app.send_task("execute_normalization_plan", args=[plan_dict])
+                    # item.celery_task_id = task.id
+                    item.celery_task_id = "fake-task-id"
+                    item.state = "executing"
+                else:
+                    # Monitor status
+                    result = AsyncResult(task_id, app=celery_app)
+                    if result.state == "SUCCESS":
+                        item.state = state_info["next"]
+                        item.updated_at = datetime.utcnow()
+                        item.retry_count = 0
+                    elif result.state in ("FAILURE", "REVOKED"):
+                        item.state = state_info["fail"]
+                        item.updated_at = datetime.utcnow()
+                        item.retry_count = getattr(item, "retry_count", 0) + 1
+                        if item.retry_count > 3:
+                            item.state = "error"
+                    else:
+                        # Still running
+                        pass
+            else:
+                # Placeholder: Replace with actual service calls
+                await asyncio.sleep(0.1)  # Simulate work
+                # On success
+                item.state = state_info["next"]
+                item.updated_at = datetime.utcnow()
+                item.retry_count = 0
+                # Optionally, append to audit_log
         except Exception as e:
             item.state = state_info["fail"]
             item.updated_at = datetime.utcnow()

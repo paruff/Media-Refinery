@@ -7,4 +7,5 @@
 - [Maintainers Guide](MAINTAINERS_GUIDE.md)
 - [Legacy Docs](legacy/)
 
-See the main [README.md](../README.md) for project overview and quickstart.
+
+See the main [README.md](../README.md) for project overview, quickstart, and details on local vs distributed (Celery/Redis) execution modes.
