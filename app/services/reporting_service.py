@@ -93,9 +93,11 @@ class ReportingService:
                 select(func.sum(MediaItem.size)).where(MediaItem.size.is_not(None))
             )
         ).first()
-        storage_bytes = size_rows[0] or 0
+        storage_bytes = 0
+        if size_rows and size_rows[0] is not None:
+            storage_bytes = size_rows[0]
         return SystemSummary(
-            total=total,
+            total=total if total is not None else 0,
             by_state=by_state,
             by_media_type=by_media_type,
             validated_success_rate=validated_success_rate,

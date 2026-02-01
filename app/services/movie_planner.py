@@ -81,12 +81,12 @@ class MoviePlanningService:
 
             try:
                 sublist = (
-                    json.loads(subs)
-                    if subs.strip().startswith("[")
-                    else [s.strip() for s in subs.split(",")]
+                    json.loads(str(subs))
+                    if str(subs).strip().startswith("[")
+                    else [s.strip() for s in str(subs).split(",")]
                 )
             except Exception:
-                sublist = [subs]
+                sublist = [str(subs)]
             if any(s.lower() in UNSAFE_SUBS for s in sublist):
                 needs_subtitle_conversion = True
         ffmpeg_args += ["-map", "0", str(target_path)]

@@ -112,7 +112,7 @@ class TVMetadataService:
         tokens = None
         if media.enrichment_data:
             try:
-                data = json.loads(media.enrichment_data)
+                data = json.loads(str(media.enrichment_data))
                 title = data.get("series_title") or data.get("title")
                 year = data.get("year")
                 season = data.get("season_number")

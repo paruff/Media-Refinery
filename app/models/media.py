@@ -28,7 +28,7 @@ class MediaType(str, enum.Enum):
     unknown = "unknown"
 
 
-class MediaItem(Base):
+class MediaItem(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "media_items"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     source_path = Column(String, unique=True, nullable=False)
@@ -106,7 +106,7 @@ class PlanStatus(enum.Enum):
     failed = "failed"
 
 
-class NormalizationPlan(Base):
+class NormalizationPlan(Base):  # type: ignore[misc, valid-type]
     quality_metrics = Column(JSON, nullable=True)  # Dict with VMAF, PSNR, etc.
     failed_quality_check = Column(Boolean, default=False, nullable=False)
     __tablename__ = "normalization_plans"

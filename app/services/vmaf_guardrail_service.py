@@ -19,18 +19,18 @@ class VMAFGuardrailService:
     ):
         metrics = await self.vmaf_func(src_path, out_path)
 
-        plan.quality_metrics = metrics.dict()
+        plan.quality_metrics = metrics.dict()  # type: ignore[assignment]
         if metrics.vmaf is not None and metrics.vmaf < min_vmaf:
-            plan.failed_quality_check = True
+            plan.failed_quality_check = True  # type: ignore[assignment]
             # Bump bitrate for retry (simulate by updating ffmpeg_args)
             if plan.ffmpeg_args:
                 plan.ffmpeg_args["bitrate"] = str(
                     int(plan.ffmpeg_args.get("bitrate", "1000")) * 2
                 )
-            plan.plan_status = PlanStatus.failed
+            plan.plan_status = PlanStatus.failed  # type: ignore[assignment]
         else:
-            plan.failed_quality_check = False
-            plan.plan_status = PlanStatus.completed
+            plan.failed_quality_check = False  # type: ignore[assignment]
+            plan.plan_status = PlanStatus.completed  # type: ignore[assignment]
         await self.db.execute(
             update(NormalizationPlan)
             .where(NormalizationPlan.id == plan.id)

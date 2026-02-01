@@ -84,7 +84,7 @@ class ValidatorService:
 
     async def _get_db_items(self) -> List[MediaItem]:
         result = await self.db.execute(select(MediaItem))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     def _path_compliant(self, rel_path: str) -> bool:
         # Example: music/Artist/Year - Album/01 - Title.flac
