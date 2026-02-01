@@ -123,7 +123,7 @@ pyOpenSSL==25.3.0
 pytest==7.4.3
 pytest-asyncio==0.21.1
 pytest-bdd==6.1.1
-pytest-cov==4.1.0
+pytest-cov==7.0.0
 pytest-html==4.1.1
 pytest-metadata==3.1.1
 pytest-timeout==2.2.0
