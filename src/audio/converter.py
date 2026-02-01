@@ -66,10 +66,11 @@ class AudioConverter:
     }
 
     # Lossless audio formats
+    # Note: OPUS is technically a lossy codec, but included here for high-quality
+    # encoding settings as it provides near-transparent quality at high bitrates
     LOSSLESS_FORMATS = {
         "flac",
         "wav",
-        "opus",  # OPUS is lossless at high bitrates
         "alac",
         "ape",
     }
@@ -225,20 +226,6 @@ class AudioConverter:
             "-i",
             str(input_path),
         ]
-
-        # Format-specific input handling
-        # WAV: Handle potential endianness issues
-        if input_path.suffix.lower() == ".wav":
-            # FFmpeg auto-detects WAV endianness, but we can be explicit
-            # This ensures proper handling of both little-endian and big-endian WAV files
-            pass  # FFmpeg handles this automatically with -i
-
-        # M4A: Explicitly handle container format
-        if input_path.suffix.lower() == ".m4a":
-            # M4A is a container format (MPEG-4 Part 14)
-            # FFmpeg automatically detects and handles AAC/ALAC codecs within M4A
-            # No special handling needed as FFmpeg's auto-detection is robust
-            pass
 
         # Preserve metadata if requested
         if preserve_metadata:

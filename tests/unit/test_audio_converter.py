@@ -254,7 +254,7 @@ class TestAudioConverter:
             # Record which output file was used in command
             # Current implementation writes directly to final output (not .tmp)
             for i, arg in enumerate(cmd):
-                if str(output_dir) in str(arg) and not str(arg).endswith("tmp"):
+                if str(output_dir) in str(arg) and not str(arg).endswith('.tmp'):
                     output_files_created.append(arg)
             return (0, "", "")
 
@@ -586,6 +586,7 @@ class TestAudioConverter:
         [
             ("mp3", 5),    # Lossy source: default compression
             ("aac", 5),    # Lossy source: default compression
+            ("ogg", 5),    # Lossy source: default compression
             ("flac", 8),   # Lossless source: max compression
             ("wav", 8),    # Lossless source: max compression
         ],
@@ -594,10 +595,11 @@ class TestAudioConverter:
         self, input_format: str, expected_compression: int
     ):
         """Test adaptive compression level based on source format."""
+        from src.audio.converter import AudioConverter
+        
         converter = AudioConverter(compression_level=5)
         
-        # Determine optimal compression based on format
-        is_lossless = input_format in ["flac", "wav", "opus"]
+        # Determine optimal compression based on format using the converter's logic
         level = converter._determine_optimal_compression(input_format)
         
         assert level == expected_compression
