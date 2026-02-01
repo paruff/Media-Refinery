@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.models.media import Base
 
+pytest_plugins = ["pytest_mock"]
+
 # Standard ffprobe JSON for H.264/DTS MKV
 FFPROBE_MKV_H264_DTS = {
     "streams": [

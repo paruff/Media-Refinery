@@ -22,7 +22,9 @@ class TestAudioFormatDetectorIntegration:
         """Get testdata directory path."""
         return Path(__file__).parent.parent.parent / "testdata" / "audio"
 
-    def test_detect_real_mp3_file(self, detector: AudioFormatDetector, testdata_dir: Path):
+    def test_detect_real_mp3_file(
+        self, detector: AudioFormatDetector, testdata_dir: Path
+    ):
         """Test detection with real MP3 file."""
         mp3_file = testdata_dir / "sample.mp3"
 
@@ -30,7 +32,9 @@ class TestAudioFormatDetectorIntegration:
             format_result = detector.detect_from_content(mp3_file)
             assert format_result == AudioFormat.MP3
 
-    def test_detect_real_flac_file(self, detector: AudioFormatDetector, testdata_dir: Path):
+    def test_detect_real_flac_file(
+        self, detector: AudioFormatDetector, testdata_dir: Path
+    ):
         """Test detection with real FLAC file."""
         flac_file = testdata_dir / "sample.flac"
 
@@ -38,7 +42,9 @@ class TestAudioFormatDetectorIntegration:
             format_result = detector.detect_from_content(flac_file)
             assert format_result == AudioFormat.FLAC
 
-    def test_detect_real_wav_file(self, detector: AudioFormatDetector, testdata_dir: Path):
+    def test_detect_real_wav_file(
+        self, detector: AudioFormatDetector, testdata_dir: Path
+    ):
         """Test detection with real WAV file."""
         wav_file = testdata_dir / "sample.wav"
 
@@ -46,7 +52,9 @@ class TestAudioFormatDetectorIntegration:
             format_result = detector.detect_from_content(wav_file)
             assert format_result == AudioFormat.WAV
 
-    def test_detect_real_ogg_file(self, detector: AudioFormatDetector, testdata_dir: Path):
+    def test_detect_real_ogg_file(
+        self, detector: AudioFormatDetector, testdata_dir: Path
+    ):
         """Test detection with real OGG file."""
         ogg_file = testdata_dir / "sample.ogg"
 
@@ -54,7 +62,9 @@ class TestAudioFormatDetectorIntegration:
             format_result = detector.detect_from_content(ogg_file)
             assert format_result in [AudioFormat.OGG, AudioFormat.OPUS]
 
-    def test_detect_real_m4a_file(self, detector: AudioFormatDetector, testdata_dir: Path):
+    def test_detect_real_m4a_file(
+        self, detector: AudioFormatDetector, testdata_dir: Path
+    ):
         """Test detection with real M4A file."""
         m4a_file = testdata_dir / "sample.m4a"
 
@@ -62,7 +72,9 @@ class TestAudioFormatDetectorIntegration:
             format_result = detector.detect_from_content(m4a_file)
             assert format_result in [AudioFormat.M4A, AudioFormat.AAC]
 
-    def test_detect_real_aac_file(self, detector: AudioFormatDetector, testdata_dir: Path):
+    def test_detect_real_aac_file(
+        self, detector: AudioFormatDetector, testdata_dir: Path
+    ):
         """Test detection with real AAC file."""
         aac_file = testdata_dir / "sample.aac"
 
@@ -70,7 +82,9 @@ class TestAudioFormatDetectorIntegration:
             format_result = detector.detect_from_content(aac_file)
             assert format_result == AudioFormat.AAC
 
-    def test_detect_real_opus_file(self, detector: AudioFormatDetector, testdata_dir: Path):
+    def test_detect_real_opus_file(
+        self, detector: AudioFormatDetector, testdata_dir: Path
+    ):
         """Test detection with real OPUS file."""
         opus_file = testdata_dir / "sample.opus"
 

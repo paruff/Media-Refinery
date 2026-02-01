@@ -1,10 +1,11 @@
 import pytest
+import pytest_asyncio
 from app.models.media import MediaItem, FileState, MediaType
 from app.services.auditor import IssueDetectorService
 
 
 # Provide db fixture using async_session from conftest.py
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db(async_session):
     yield async_session
 

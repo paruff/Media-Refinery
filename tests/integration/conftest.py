@@ -3,6 +3,7 @@ import pytest
 try:
     from testcontainers.postgres import PostgresContainer
     from testcontainers.redis import RedisContainer
+
     TESTCONTAINERS_AVAILABLE = True
 except ImportError:
     TESTCONTAINERS_AVAILABLE = False
@@ -11,6 +12,7 @@ except ImportError:
 
 
 if TESTCONTAINERS_AVAILABLE:
+
     @pytest.fixture(scope="session")
     def postgres_container():
         """
@@ -25,7 +27,6 @@ if TESTCONTAINERS_AVAILABLE:
                 "database": postgres.DB,
                 "dsn": postgres.get_connection_url(),
             }
-
 
     @pytest.fixture(scope="session")
     def redis_container():

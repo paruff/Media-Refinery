@@ -24,7 +24,9 @@ class TestAudioFormatDetector:
         """Create temporary audio file path."""
         return tmp_path / "test_audio.mp3"
 
-    def test_detect_mp3_from_magic_number(self, detector: AudioFormatDetector, tmp_path: Path):
+    def test_detect_mp3_from_magic_number(
+        self, detector: AudioFormatDetector, tmp_path: Path
+    ):
         """Test MP3 detection from ID3v2 magic number."""
         mp3_file = tmp_path / "test.mp3"
         # ID3v2 magic number
@@ -34,7 +36,9 @@ class TestAudioFormatDetector:
 
         assert format_result == AudioFormat.MP3
 
-    def test_detect_mp3_from_mpeg_sync(self, detector: AudioFormatDetector, tmp_path: Path):
+    def test_detect_mp3_from_mpeg_sync(
+        self, detector: AudioFormatDetector, tmp_path: Path
+    ):
         """Test MP3 detection from MPEG frame sync."""
         mp3_file = tmp_path / "test.mp3"
         # MPEG frame sync (0xFF 0xFB)
@@ -44,7 +48,9 @@ class TestAudioFormatDetector:
 
         assert format_result == AudioFormat.MP3
 
-    def test_detect_flac_from_magic_number(self, detector: AudioFormatDetector, tmp_path: Path):
+    def test_detect_flac_from_magic_number(
+        self, detector: AudioFormatDetector, tmp_path: Path
+    ):
         """Test FLAC detection from magic number."""
         flac_file = tmp_path / "test.flac"
         # FLAC magic number
@@ -54,7 +60,9 @@ class TestAudioFormatDetector:
 
         assert format_result == AudioFormat.FLAC
 
-    def test_detect_ogg_from_magic_number(self, detector: AudioFormatDetector, tmp_path: Path):
+    def test_detect_ogg_from_magic_number(
+        self, detector: AudioFormatDetector, tmp_path: Path
+    ):
         """Test OGG detection from magic number."""
         ogg_file = tmp_path / "test.ogg"
         # OGG magic number
@@ -64,7 +72,9 @@ class TestAudioFormatDetector:
 
         assert format_result in [AudioFormat.OGG, AudioFormat.OPUS]
 
-    def test_detect_wav_from_magic_number(self, detector: AudioFormatDetector, tmp_path: Path):
+    def test_detect_wav_from_magic_number(
+        self, detector: AudioFormatDetector, tmp_path: Path
+    ):
         """Test WAV detection from magic number."""
         wav_file = tmp_path / "test.wav"
         # RIFF WAVE magic number
@@ -74,7 +84,9 @@ class TestAudioFormatDetector:
 
         assert format_result == AudioFormat.WAV
 
-    def test_detect_m4a_from_magic_number(self, detector: AudioFormatDetector, tmp_path: Path):
+    def test_detect_m4a_from_magic_number(
+        self, detector: AudioFormatDetector, tmp_path: Path
+    ):
         """Test M4A/AAC detection from magic number."""
         m4a_file = tmp_path / "test.m4a"
         # ftyp box with M4A
@@ -84,7 +96,9 @@ class TestAudioFormatDetector:
 
         assert format_result in [AudioFormat.M4A, AudioFormat.AAC]
 
-    def test_detect_aac_from_magic_number(self, detector: AudioFormatDetector, tmp_path: Path):
+    def test_detect_aac_from_magic_number(
+        self, detector: AudioFormatDetector, tmp_path: Path
+    ):
         """Test AAC detection from ADTS sync."""
         aac_file = tmp_path / "test.aac"
         # ADTS sync word (0xFF 0xF1)
@@ -94,7 +108,9 @@ class TestAudioFormatDetector:
 
         assert format_result == AudioFormat.AAC
 
-    def test_detect_with_wrong_extension(self, detector: AudioFormatDetector, tmp_path: Path):
+    def test_detect_with_wrong_extension(
+        self, detector: AudioFormatDetector, tmp_path: Path
+    ):
         """Test detection works with wrong file extension."""
         # File has .txt extension but MP3 content
         wrong_ext_file = tmp_path / "audio.txt"
@@ -104,7 +120,9 @@ class TestAudioFormatDetector:
 
         assert format_result == AudioFormat.MP3
 
-    def test_unsupported_format_error(self, detector: AudioFormatDetector, tmp_path: Path):
+    def test_unsupported_format_error(
+        self, detector: AudioFormatDetector, tmp_path: Path
+    ):
         """Test error raised for unsupported format."""
         unsupported_file = tmp_path / "test.xyz"
         unsupported_file.write_bytes(b"RANDOM\x00\x00\x00\x00")
@@ -238,7 +256,11 @@ class TestAudioFormatDetector:
         ],
     )
     def test_magic_number_detection_parametrized(
-        self, detector: AudioFormatDetector, tmp_path: Path, magic_bytes: bytes, expected_format: AudioFormat
+        self,
+        detector: AudioFormatDetector,
+        tmp_path: Path,
+        magic_bytes: bytes,
+        expected_format: AudioFormat,
     ):
         """Parametrized test for various magic number detections."""
         test_file = tmp_path / "test_audio"
@@ -256,4 +278,7 @@ class TestAudioFormatDetector:
         with pytest.raises(CorruptedAudioFileError) as exc_info:
             detector.detect_from_content(empty_file)
 
-        assert "empty" in str(exc_info.value).lower() or "corrupted" in str(exc_info.value).lower()
+        assert (
+            "empty" in str(exc_info.value).lower()
+            or "corrupted" in str(exc_info.value).lower()
+        )
