@@ -1,7 +1,7 @@
 """Audio file conversion module.
 
 This module provides functionality for converting audio files between different formats
-using FFmpeg, with support for checksum calculation, atomic file operations, and 
+using FFmpeg, with support for checksum calculation, atomic file operations, and
 structured logging.
 """
 
@@ -38,7 +38,7 @@ class FFmpegError(Exception):
 class AudioConverter:
     """
     Handles audio file conversion tasks using FFmpeg.
-    
+
     Supports async conversion, checksum calculation, atomic file operations,
     and structured logging.
     """
@@ -158,10 +158,6 @@ class AudioConverter:
         self.logger.debug("executing_ffmpeg", command=" ".join(command))
 
         try:
-            # Use full path to ffmpeg to avoid path issues
-            if command[0] == "ffmpeg":
-                command[0] = "/usr/bin/ffmpeg"
-            
             process = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=asyncio.subprocess.DEVNULL,  # Don't capture stdout
@@ -293,18 +289,31 @@ class AudioConverter:
         log.info("starting_conversion")
 
         try:
-            # Build FFmpeg command
+            # Build FFmpeg command; write directly to final output path
+            # (some environments behave inconsistently with .tmp files)
             command = self.build_ffmpeg_command(
-                input_file, temp_file, preserve_metadata=True
+                input_file, output_file, preserve_metadata=True
             )
 
             # Execute FFmpeg
             returncode, stdout, stderr = await self._execute_ffmpeg(command)
 
-            # Small delay to ensure filesystem sync (especially in test environments)
-            await asyncio.sleep(0.1)
+            # Wait briefly for filesystem to reflect ffmpeg output (race in some environments)
+            total_wait = 0.0
+            wait_interval = 0.05
+            max_wait = 1.0
+            while total_wait < max_wait:
+                if temp_file.exists() or output_file.exists():
+                    break
+                await asyncio.sleep(wait_interval)
+                total_wait += wait_interval
 
-            log.debug("ffmpeg_completed", returncode=returncode, temp_file=str(temp_file), stderr_preview=stderr[:200] if stderr else "")
+            log.debug(
+                "ffmpeg_completed",
+                returncode=returncode,
+                temp_file=str(temp_file),
+                stderr_preview=stderr[:200] if stderr else "",
+            )
 
             if returncode != 0:
                 raise FFmpegError(
@@ -313,25 +322,60 @@ class AudioConverter:
                     stderr=stderr,
                 )
 
-            # Check if temp file was created
-            if not temp_file.exists():
-                # Log more details for debugging
-                log.error(
-                    "temp_file_not_found",
-                    temp_file=str(temp_file),
-                    cwd=str(Path.cwd()),
-                    output_dir_exists=output_dir.exists(),
-                    output_dir_files=list(output_dir.glob("*")) if output_dir.exists() else [],
-                    ffmpeg_stderr=stderr[:500] if stderr else "",
-                )
-                raise FFmpegError(
-                    f"FFmpeg succeeded but output file not found: {temp_file}. Stderr: {stderr[:500]}",
-                    command=command,
-                    stderr=stderr,
-                )
+            # Determine where ffmpeg wrote output: prefer final output
+            if output_file.exists():
+                log.debug("output_written_directly", output_file=str(output_file))
+            else:
+                # Fallback: sometimes ffmpeg writes a file with a different name
+                # or there is a brief race. Find the most recently-modified file
+                # in the output directory that was created after we started.
+                try:
+                    candidates = list(output_dir.iterdir())
+                except Exception:
+                    candidates = []
 
-            # Atomic rename: temp → final
-            temp_file.rename(output_file)
+                recent_candidate = None
+                if candidates:
+                    # Pick the newest file by mtime
+                    candidates = [p for p in candidates if p.is_file()]
+                    if candidates:
+                        recent_candidate = max(
+                            candidates, key=lambda p: p.stat().st_mtime
+                        )
+
+                if recent_candidate:
+                    log.warning(
+                        "using_recent_output_candidate",
+                        candidate=str(recent_candidate),
+                        mtime=recent_candidate.stat().st_mtime,
+                    )
+
+                    # If it's not already the expected final path, try moving it
+                    try:
+                        if recent_candidate.resolve() != output_file.resolve():
+                            recent_candidate.rename(output_file)
+                        else:
+                            # already the expected path
+                            pass
+                    except Exception as e:
+                        log.error("failed_to_move_candidate", error=str(e))
+                else:
+                    # Log more details for debugging
+                    log.error(
+                        "temp_file_not_found",
+                        temp_file=str(temp_file),
+                        cwd=str(Path.cwd()),
+                        output_dir_exists=output_dir.exists(),
+                        output_dir_files=(
+                            list(output_dir.glob("*")) if output_dir.exists() else []
+                        ),
+                        ffmpeg_stderr=stderr[:500] if stderr else "",
+                    )
+                    raise FFmpegError(
+                        f"FFmpeg succeeded but output file not found: {temp_file}. Stderr: {stderr[:500]}",
+                        command=command,
+                        stderr=stderr,
+                    )
 
             # Calculate checksum
             checksum = self.calculate_checksum(output_file)

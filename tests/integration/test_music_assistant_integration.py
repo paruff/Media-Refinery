@@ -20,8 +20,9 @@ async def test_music_album_conversion(tmp_path):
         result = await converter.convert(track, output_dir)
         results.append(result)
     for result in results:
-        assert result.exists()
-        assert result.suffix == ".flac"
+        assert result.success is True
+        assert result.output_path.exists()
+        assert result.output_path.suffix == ".flac"
 
 
 @pytest.mark.asyncio
