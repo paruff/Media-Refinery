@@ -38,7 +38,7 @@ jobs:
       - name: Lint (ruff)
         run: ruff .
       - name: Type check (mypy)
-        run: mypy app/ tests/
+        run: mypy app/ features/
       - name: Run unit & integration tests
         run: pytest --cov=app --cov-report=xml
       - name: Run behave BDD tests
