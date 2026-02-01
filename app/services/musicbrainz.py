@@ -53,13 +53,13 @@ class MusicBrainzService:
             async with self._lock:
                 await asyncio.sleep(1.0)  # MusicBrainz rate limit
                 try:
-                    result = await asyncio.to_thread(
+                    mb_result = await asyncio.to_thread(
                         musicbrainzngs.search_releases,
                         artist=artist,
                         release=album,
                         limit=1,
                     )
-                    releases = result.get("release-list", [])
+                    releases = mb_result.get("release-list", [])
                     if not releases:
                         logger.info(f"No MusicBrainz release for {artist} - {album}")
                         await self._flag_failed(session, media)
@@ -124,7 +124,7 @@ class MusicBrainzService:
 
         if media.enrichment_data:
             try:
-                data = json.loads(media.enrichment_data)
+                data = json.loads(media.enrichment_data)  # type: ignore[arg-type]
                 artist = data.get("artist")
                 album = data.get("album")
                 track_number = data.get("track_number")

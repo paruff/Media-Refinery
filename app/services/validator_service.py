@@ -2,7 +2,7 @@ import os
 import shutil
 import logging
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Sequence
 import subprocess
 from datetime import datetime, timedelta
 from app.models.media import MediaItem
@@ -82,7 +82,7 @@ class ValidatorService:
         await self._finalize_states(db_items, found_paths)
         return report
 
-    async def _get_db_items(self) -> List[MediaItem]:
+    async def _get_db_items(self) -> Sequence[MediaItem]:
         result = await self.db.execute(select(MediaItem))
         return result.scalars().all()
 
