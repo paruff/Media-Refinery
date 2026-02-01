@@ -158,16 +158,20 @@ class AudioConverter:
         self.logger.debug("executing_ffmpeg", command=" ".join(command))
 
         try:
+            # Use full path to ffmpeg to avoid path issues
+            if command[0] == "ffmpeg":
+                command[0] = "/usr/bin/ffmpeg"
+            
             process = await asyncio.create_subprocess_exec(
                 *command,
-                stdout=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.DEVNULL,  # Don't capture stdout
                 stderr=asyncio.subprocess.PIPE,
             )
 
             stdout, stderr = await process.communicate()
 
-            stdout_str = stdout.decode("utf-8", errors="replace")
-            stderr_str = stderr.decode("utf-8", errors="replace")
+            stdout_str = ""  # Not captured
+            stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
 
             return process.returncode, stdout_str, stderr_str
 
@@ -296,6 +300,9 @@ class AudioConverter:
 
             # Execute FFmpeg
             returncode, stdout, stderr = await self._execute_ffmpeg(command)
+
+            # Small delay to ensure filesystem sync (especially in test environments)
+            await asyncio.sleep(0.1)
 
             log.debug("ffmpeg_completed", returncode=returncode, temp_file=str(temp_file), stderr_preview=stderr[:200] if stderr else "")
 
