@@ -133,6 +133,11 @@ class AudioConverter:
             elif self.bit_depth == 24:
                 command.extend(["-sample_fmt", "s24"])
 
+        # Explicitly specify output format if output path has .tmp extension
+        # This is needed for atomic file operations
+        if str(output_path).endswith(".tmp"):
+            command.extend(["-f", self.output_format])
+
         # Add output path
         command.append(str(output_path))
 
@@ -204,7 +209,7 @@ class AudioConverter:
         Returns:
             Temporary path with .tmp extension
         """
-        return output_path.parent / f"{output_path.stem}_{output_path.suffix}.tmp"
+        return output_path.parent / f"{output_path.name}.tmp"
 
     async def _get_audio_duration(self, file_path: Path) -> float:
         """Get audio duration in milliseconds using FFprobe.
@@ -292,9 +297,28 @@ class AudioConverter:
             # Execute FFmpeg
             returncode, stdout, stderr = await self._execute_ffmpeg(command)
 
+            log.debug("ffmpeg_completed", returncode=returncode, temp_file=str(temp_file), stderr_preview=stderr[:200] if stderr else "")
+
             if returncode != 0:
                 raise FFmpegError(
                     f"FFmpeg conversion failed: {stderr}",
+                    command=command,
+                    stderr=stderr,
+                )
+
+            # Check if temp file was created
+            if not temp_file.exists():
+                # Log more details for debugging
+                log.error(
+                    "temp_file_not_found",
+                    temp_file=str(temp_file),
+                    cwd=str(Path.cwd()),
+                    output_dir_exists=output_dir.exists(),
+                    output_dir_files=list(output_dir.glob("*")) if output_dir.exists() else [],
+                    ffmpeg_stderr=stderr[:500] if stderr else "",
+                )
+                raise FFmpegError(
+                    f"FFmpeg succeeded but output file not found: {temp_file}. Stderr: {stderr[:500]}",
                     command=command,
                     stderr=stderr,
                 )
