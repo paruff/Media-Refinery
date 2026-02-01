@@ -51,9 +51,9 @@ class FingerprintService:
     @staticmethod
     def fingerprint_file(media_item: MediaItem) -> Optional[str]:
         """Generate a fingerprint for a MediaItem based on its type."""
-        if media_item.type == "audio":
-            return FingerprintService.fingerprint_audio(media_item.path)
-        elif media_item.type == "video":
-            return FingerprintService.fingerprint_video(media_item.path)
+        if media_item.media_type.value == "music":
+            return FingerprintService.fingerprint_audio(str(media_item.source_path))
+        elif media_item.media_type.value in ("movie", "series"):
+            return FingerprintService.fingerprint_video(str(media_item.source_path))
         else:
             return None
