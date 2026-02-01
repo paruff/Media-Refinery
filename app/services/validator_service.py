@@ -2,7 +2,7 @@ import os
 import shutil
 import logging
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Sequence
 import subprocess
 from datetime import datetime, timedelta
 from app.models.media import MediaItem
@@ -17,7 +17,7 @@ class ValidationReport:
         self.invalid = 0
         self.issues: List[Dict[str, Any]] = []
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "total_files": self.total_files,
             "valid": self.valid,
@@ -36,7 +36,11 @@ class ValidatorService:
     async def validate(self) -> ValidationReport:
         report = ValidationReport()
         db_items = await self._get_db_items()
-        db_paths = {item.target_path: item for item in db_items}
+        db_paths = {
+            item.normalization_plan.target_path: item
+            for item in db_items
+            if item.normalization_plan
+        }
         found_paths = set()
         # 1. Scan /output recursively
         for root, _, files in os.walk(self.output_dir):
@@ -82,7 +86,7 @@ class ValidatorService:
         await self._finalize_states(db_items, found_paths)
         return report
 
-    async def _get_db_items(self) -> List[MediaItem]:
+    async def _get_db_items(self) -> Sequence[MediaItem]:
         result = await self.db.execute(select(MediaItem))
         return list(result.scalars().all())
 
@@ -164,6 +168,10 @@ class ValidatorService:
     async def _finalize_states(self, db_items, found_paths):
         # Set state to 'validated' if file exists and was executed
         for item in db_items:
-            if item.target_path in found_paths and item.state == "executed":
+            if (
+                item.normalization_plan
+                and item.normalization_plan.target_path in found_paths
+                and item.state == "executed"
+            ):
                 item.state = "validated"
         await self.db.commit()
