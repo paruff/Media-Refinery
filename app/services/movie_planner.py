@@ -81,7 +81,7 @@ class MoviePlanningService:
 
             try:
                 sublist = (
-                    json.loads(subs)
+                    json.loads(subs)  # type: ignore[arg-type]
                     if subs.strip().startswith("[")
                     else [s.strip() for s in subs.split(",")]
                 )

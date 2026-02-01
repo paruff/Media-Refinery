@@ -2,11 +2,13 @@ import enum
 import uuid
 from sqlalchemy import Column, String, DateTime, Enum, Boolean, Integer, Text
 from sqlalchemy import ForeignKey, UniqueConstraint, JSON
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import relationship, DeclarativeBase
 from sqlalchemy.sql import func
 
-Base = declarative_base()  # type: ignore[misc, valid-type]
+
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models."""
+    pass
 
 
 class FileState(str, enum.Enum):
