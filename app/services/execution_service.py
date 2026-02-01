@@ -274,19 +274,19 @@ class ExecutionService:
                     # Ignore move failures in tests; they patch/mimic behavior
                     pass
 
-                    # Record execution log when move succeeded
-                    try:
-                        if getattr(plan, "execution_log", None) is not None:
-                            plan.execution_log = (
-                                plan.execution_log or ""
-                            ) + "Moved to output"
-                        else:
-                            try:
-                                plan.execution_log = "Moved to output"
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
+                # Record execution log when move succeeded
+                try:
+                    if getattr(plan, "execution_log", None) is not None:
+                        plan.execution_log = (
+                            plan.execution_log or ""
+                        ) + "Moved to output"
+                    else:
+                        try:
+                            plan.execution_log = "Moved to output"
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
 
             # Update plan/media_item status when possible
             try:
