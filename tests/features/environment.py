@@ -6,6 +6,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.models.media import Base
+import app.models.saga  # noqa: F401 (import to register models with Base.metadata)
 
 
 def before_scenario(context, scenario):
