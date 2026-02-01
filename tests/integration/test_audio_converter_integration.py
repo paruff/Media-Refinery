@@ -6,7 +6,7 @@ to validate the complete conversion workflow.
 
 import pytest
 from pathlib import Path
-from src.audio.converter import AudioConverter, FFmpegError
+from src.audio.converter import AudioConverter
 
 
 class TestAudioConverterIntegration:
@@ -29,7 +29,7 @@ class TestAudioConverterIntegration:
         mp3_file = testdata_dir / "test_valid.mp3"
         if mp3_file.exists():
             return mp3_file
-        
+
         # Fall back to sample.mp3
         mp3_file = testdata_dir / "sample.mp3"
         if not mp3_file.exists():
@@ -218,15 +218,11 @@ class TestAudioConverterIntegration:
 
         # Convert with compression level 0 (fastest)
         converter_fast = AudioConverter(output_format="flac", compression_level=0)
-        result_fast = await converter_fast.convert(
-            sample_mp3, output_dir / "fast"
-        )
+        result_fast = await converter_fast.convert(sample_mp3, output_dir / "fast")
 
         # Convert with compression level 8 (best)
         converter_best = AudioConverter(output_format="flac", compression_level=8)
-        result_best = await converter_best.convert(
-            sample_mp3, output_dir / "best"
-        )
+        result_best = await converter_best.convert(sample_mp3, output_dir / "best")
 
         assert result_fast.success is True
         assert result_best.success is True
@@ -247,7 +243,7 @@ class TestAudioConverterIntegration:
         """Test conversion creates output directory if it doesn't exist."""
         # Use deeply nested directory that doesn't exist
         output_dir = tmp_path / "a" / "b" / "c" / "output"
-        
+
         result = await converter.convert(sample_mp3, output_dir)
 
         assert result.success is True
@@ -255,9 +251,7 @@ class TestAudioConverterIntegration:
         assert result.output_path.exists()
 
     @pytest.mark.asyncio
-    async def test_convert_to_different_formats(
-        self, sample_mp3: Path, tmp_path: Path
-    ):
+    async def test_convert_to_different_formats(self, sample_mp3: Path, tmp_path: Path):
         """Test conversion to different audio formats."""
         formats_to_test = ["flac", "wav", "ogg"]
 
@@ -274,9 +268,7 @@ class TestAudioConverterIntegration:
             assert result.size_bytes > 0
 
     @pytest.mark.asyncio
-    async def test_performance_5mb_file(
-        self, sample_mp3: Path, tmp_path: Path
-    ):
+    async def test_performance_5mb_file(self, sample_mp3: Path, tmp_path: Path):
         """Test conversion performance meets requirement (<10s for 5MB file)."""
         import time
 

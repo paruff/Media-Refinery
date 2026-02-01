@@ -5,10 +5,8 @@ of the AudioConverter before implementation.
 """
 
 import pytest
-import hashlib
 from pathlib import Path
-from typing import List, Dict, Any
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from src.audio.converter import AudioConverter
 
 
@@ -100,7 +98,7 @@ class TestAudioConverter:
     def test_calculate_checksum_valid_file(self, temp_audio_file: Path):
         """Test SHA256 checksum calculation for valid file."""
         converter = AudioConverter()
-        
+
         checksum = converter.calculate_checksum(temp_audio_file)
 
         assert isinstance(checksum, str)
@@ -111,7 +109,7 @@ class TestAudioConverter:
     def test_calculate_checksum_consistency(self, temp_audio_file: Path):
         """Test checksum is consistent for same file."""
         converter = AudioConverter()
-        
+
         checksum1 = converter.calculate_checksum(temp_audio_file)
         checksum2 = converter.calculate_checksum(temp_audio_file)
 
@@ -120,7 +118,7 @@ class TestAudioConverter:
     def test_calculate_checksum_different_files(self, tmp_path: Path):
         """Test different files produce different checksums."""
         converter = AudioConverter()
-        
+
         file1 = tmp_path / "file1.mp3"
         file2 = tmp_path / "file2.mp3"
         file1.write_bytes(b"content1")
@@ -157,7 +155,7 @@ class TestAudioConverter:
         """Test temporary path format is consistent."""
         converter = AudioConverter()
         output_path = tmp_path / "output.flac"
-        
+
         temp_path = converter.get_temp_path(output_path)
 
         assert temp_path.parent == output_path.parent
@@ -176,9 +174,11 @@ class TestAudioConverter:
         output_dir.mkdir()
 
         # Mock FFmpeg execution
-        with patch.object(converter, "_execute_ffmpeg", new_callable=AsyncMock) as mock_exec:
+        with patch.object(
+            converter, "_execute_ffmpeg", new_callable=AsyncMock
+        ) as mock_exec:
             mock_exec.return_value = (0, "", "")
-            
+
             result = await converter.convert(temp_audio_file, output_dir)
 
             assert result is not None
@@ -194,10 +194,12 @@ class TestAudioConverter:
     ):
         """Test conversion creates output directory if it doesn't exist."""
         output_dir = tmp_path / "nonexistent" / "output"
-        
-        with patch.object(converter, "_execute_ffmpeg", new_callable=AsyncMock) as mock_exec:
+
+        with patch.object(
+            converter, "_execute_ffmpeg", new_callable=AsyncMock
+        ) as mock_exec:
             mock_exec.return_value = (0, "", "")
-            
+
             await converter.convert(temp_audio_file, output_dir)
 
             assert output_dir.exists()
@@ -226,11 +228,13 @@ class TestAudioConverter:
         output_dir.mkdir()
 
         # Mock FFmpeg failure
-        with patch.object(converter, "_execute_ffmpeg", new_callable=AsyncMock) as mock_exec:
+        with patch.object(
+            converter, "_execute_ffmpeg", new_callable=AsyncMock
+        ) as mock_exec:
             mock_exec.return_value = (1, "", "FFmpeg error: invalid codec")
-            
+
             result = await converter.convert(temp_audio_file, output_dir)
-            
+
             # Should return a failed result
             assert result.success is False
             assert result.error_message is not None
@@ -243,19 +247,19 @@ class TestAudioConverter:
         """Test conversion uses atomic file operations (temp file → final)."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         temp_files_created = []
-        
+
         async def mock_execute(cmd):
             # Record which output file was used in command
             for i, arg in enumerate(cmd):
                 if ".tmp" in str(arg):
                     temp_files_created.append(arg)
             return (0, "", "")
-        
+
         with patch.object(converter, "_execute_ffmpeg", side_effect=mock_execute):
             result = await converter.convert(temp_audio_file, output_dir)
-            
+
             # Should have used temporary file
             assert len(temp_files_created) > 0
             # Final result should not be temp file
@@ -268,16 +272,16 @@ class TestAudioConverter:
         """Test conversion calculates SHA256 checksum of output."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         # Create a real output file to be checksummed
         output_file = output_dir / "test.flac"
         temp_file = converter.get_temp_path(output_file)
-        
+
         async def mock_execute(cmd):
             # Create the temp file so rename works
             temp_file.write_bytes(b"fake flac audio data")
             return (0, "", "")
-        
+
         with patch.object(converter, "_execute_ffmpeg", side_effect=mock_execute):
             result = await converter.convert(temp_audio_file, output_dir)
 
@@ -292,16 +296,16 @@ class TestAudioConverter:
         """Test conversion command preserves audio quality."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         captured_command = []
-        
+
         async def capture_command(cmd):
             captured_command.extend(cmd)
             return (0, "", "")
-        
+
         with patch.object(converter, "_execute_ffmpeg", side_effect=capture_command):
             await converter.convert(temp_audio_file, output_dir)
-            
+
             # Should use lossless codec
             assert "-c:a" in captured_command
             assert "flac" in captured_command
@@ -313,18 +317,18 @@ class TestAudioConverter:
     def test_validate_input_file_exists(self, temp_audio_file: Path):
         """Test validation passes for existing file."""
         converter = AudioConverter()
-        
+
         is_valid = converter.validate_input_file(temp_audio_file)
-        
+
         assert is_valid is True
 
     def test_validate_input_file_not_exists(self, tmp_path: Path):
         """Test validation fails for non-existent file."""
         converter = AudioConverter()
         nonexistent = tmp_path / "nonexistent.mp3"
-        
+
         is_valid = converter.validate_input_file(nonexistent)
-        
+
         assert is_valid is False
 
     def test_validate_input_file_unsupported_format(self, tmp_path: Path):
@@ -332,9 +336,9 @@ class TestAudioConverter:
         converter = AudioConverter()
         unsupported = tmp_path / "file.xyz"
         unsupported.touch()
-        
+
         is_valid = converter.validate_input_file(unsupported)
-        
+
         assert is_valid is False
 
     @pytest.mark.parametrize(
@@ -346,7 +350,7 @@ class TestAudioConverter:
         converter = AudioConverter()
         audio_file = tmp_path / f"audio{extension}"
         audio_file.touch()
-        
+
         is_valid = converter.validate_input_file(audio_file)
-        
+
         assert is_valid is True
