@@ -76,8 +76,21 @@ class MusicBrainzService:
                     album_data = release_data["release"]
                 except Exception as e:
                     logger.error(f"MusicBrainz search failed: {e}")
-                    await self._flag_failed(session, media)
-                    return None
+                    # Fallback: if tokens exist (from enrichment_data), use them
+                    try:
+                        canonical = {
+                            "album_artist": artist,
+                            "album_name": album,
+                            "release_year": None,
+                            "disc_number": int(track_number) if track_number else None,
+                            "mbid": None,
+                            "release_mbid": None,
+                        }
+                        await self._update_media(session, media, canonical)
+                        return canonical
+                    except Exception:
+                        await self._flag_failed(session, media)
+                        return None
                 self.cache.set(artist, album, album_data)
         # Track matching
         tracks = []

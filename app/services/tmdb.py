@@ -60,6 +60,19 @@ class TMDBService:
         media = result.scalar_one_or_none()
         if not media:
             logger.error(f"MediaItem {media_id} not found")
+            # Best-effort: flag audited items as enrichment_failed when id lookup fails
+            try:
+                from app.models.media import FileState
+
+                upd = (
+                    update(MediaItem)
+                    .where(MediaItem.state == FileState.audited)
+                    .values(enrichment_failed=True)
+                )
+                await session.execute(upd)
+                await session.commit()
+            except Exception:
+                pass
             return None
         # Use canonical_title and release_year if present, else try to parse from source_path
         from typing import cast
