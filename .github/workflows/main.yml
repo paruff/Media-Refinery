@@ -21,7 +21,7 @@ jobs:
     env:
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       PYTHONUNBUFFERED: 1
-      DATABASE_URL: sqlite+aiosqlite:///:memory:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
     steps:
       - uses: actions/checkout@v4
       
