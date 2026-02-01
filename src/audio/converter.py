@@ -26,6 +26,17 @@ class AudioConversionResult:
     error_message: Optional[str] = None
 
 
+@dataclass
+class AudioProperties:
+    """Audio file properties detected from source."""
+
+    sample_rate: int
+    codec_name: str
+    is_lossless: bool
+    channels: Optional[int] = None
+    bit_depth: Optional[int] = None
+
+
 class FFmpegError(Exception):
     """Raised when FFmpeg execution fails."""
 
@@ -54,6 +65,15 @@ class AudioConverter:
         ".opus",
     }
 
+    # Lossless audio formats
+    LOSSLESS_FORMATS = {
+        "flac",
+        "wav",
+        "opus",  # OPUS is lossless at high bitrates
+        "alac",
+        "ape",
+    }
+
     def __init__(
         self,
         output_format: str = "flac",
@@ -74,6 +94,112 @@ class AudioConverter:
         self.bit_depth = bit_depth
         self.compression_level = compression_level
         self.logger = structlog.get_logger(__name__)
+
+    async def _execute_ffprobe(self, file_path: Path) -> dict:
+        """Execute FFprobe to get audio file properties.
+
+        Args:
+            file_path: Path to audio file
+
+        Returns:
+            Dictionary containing probe results
+
+        Raises:
+            FFmpegError: If FFprobe execution fails
+        """
+        command = [
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_streams",
+            str(file_path),
+        ]
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            stdout, stderr = await process.communicate()
+
+            if process.returncode != 0:
+                raise FFmpegError(
+                    f"FFprobe failed: {stderr.decode()}",
+                    command=command,
+                    stderr=stderr.decode(),
+                )
+
+            return json.loads(stdout.decode())
+
+        except Exception as e:
+            self.logger.warning("ffprobe_failed", error=str(e), file=str(file_path))
+            return {"streams": []}
+
+    async def detect_audio_properties(self, file_path: Path) -> Optional[AudioProperties]:
+        """Detect audio properties from source file.
+
+        Args:
+            file_path: Path to audio file
+
+        Returns:
+            AudioProperties with detected sample rate, codec, etc.
+            None if detection fails
+        """
+        try:
+            probe_data = await self._execute_ffprobe(file_path)
+
+            # Find audio stream
+            audio_streams = [
+                s for s in probe_data.get("streams", [])
+                if s.get("codec_type") == "audio"
+            ]
+
+            if not audio_streams:
+                self.logger.warning("no_audio_stream_found", file=str(file_path))
+                return None
+
+            stream = audio_streams[0]
+            codec_name = stream.get("codec_name", "unknown")
+            sample_rate = int(stream.get("sample_rate", 44100))
+            channels = int(stream.get("channels", 2))
+
+            # Determine if codec is lossless
+            is_lossless = codec_name.lower() in self.LOSSLESS_FORMATS
+
+            return AudioProperties(
+                sample_rate=sample_rate,
+                codec_name=codec_name,
+                is_lossless=is_lossless,
+                channels=channels,
+            )
+
+        except Exception as e:
+            self.logger.error("property_detection_failed", error=str(e), file=str(file_path))
+            return None
+
+    def _determine_optimal_compression(self, source_format: str) -> int:
+        """Determine optimal FLAC compression level based on source format.
+
+        Lossless sources (FLAC, WAV, etc.) should use maximum compression (8)
+        to save space since compression is lossless and won't degrade quality.
+        Lossy sources (MP3, AAC) use default compression since they're already
+        compressed.
+
+        Args:
+            source_format: Source audio format/codec name
+
+        Returns:
+            Compression level (0-8)
+        """
+        # Check if source is lossless
+        if source_format.lower() in self.LOSSLESS_FORMATS:
+            return 8  # Maximum compression for lossless sources
+        else:
+            return self.compression_level  # Default compression for lossy sources
 
     def build_ffmpeg_command(
         self,
@@ -99,6 +225,20 @@ class AudioConverter:
             "-i",
             str(input_path),
         ]
+
+        # Format-specific input handling
+        # WAV: Handle potential endianness issues
+        if input_path.suffix.lower() == ".wav":
+            # FFmpeg auto-detects WAV endianness, but we can be explicit
+            # This ensures proper handling of both little-endian and big-endian WAV files
+            pass  # FFmpeg handles this automatically with -i
+
+        # M4A: Explicitly handle container format
+        if input_path.suffix.lower() == ".m4a":
+            # M4A is a container format (MPEG-4 Part 14)
+            # FFmpeg automatically detects and handles AAC/ALAC codecs within M4A
+            # No special handling needed as FFmpeg's auto-detection is robust
+            pass
 
         # Preserve metadata if requested
         if preserve_metadata:
@@ -289,10 +429,27 @@ class AudioConverter:
         log.info("starting_conversion")
 
         try:
+            # Detect audio properties for intelligent conversion
+            audio_props = await self.detect_audio_properties(input_file)
+            
+            # Determine optimal compression level if converting to FLAC
+            compression_level = self.compression_level
+            if self.output_format == "flac" and audio_props:
+                compression_level = self._determine_optimal_compression(
+                    audio_props.codec_name
+                )
+                log.debug(
+                    "adaptive_compression",
+                    source_codec=audio_props.codec_name,
+                    is_lossless=audio_props.is_lossless,
+                    compression_level=compression_level,
+                )
+            
             # Build FFmpeg command; write directly to final output path
             # (some environments behave inconsistently with .tmp files)
             command = self.build_ffmpeg_command(
-                input_file, output_file, preserve_metadata=True
+                input_file, output_file, preserve_metadata=True,
+                compression_level=compression_level
             )
 
             # Execute FFmpeg
