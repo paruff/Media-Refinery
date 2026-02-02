@@ -32,10 +32,15 @@ FFPROBE_MKV_H264_DTS = {
 
 
 @pytest.fixture(autouse=True)
-def patch_create_subprocess_exec(mocker):
+def patch_create_subprocess_exec(mocker, request):
     """
     Globally patch asyncio.create_subprocess_exec to intercept all subprocess calls.
+    Skip this mock for integration tests (they need real FFmpeg).
     """
+    # Skip mocking for integration tests
+    if "integration" in str(request.fspath):
+        yield
+        return
 
     async def _mocked_create_subprocess_exec(*args, **kwargs):
         class DummyProcess:
@@ -75,7 +80,10 @@ def mock_ffprobe():
 @pytest_asyncio.fixture(scope="session", autouse=True)
 def apply_alembic_migrations():
     """Ensure all Alembic migrations are applied before tests run."""
-    subprocess.run(["alembic", "upgrade", "head"], check=True)
+    import shutil
+    # Only run alembic if the command is available
+    if shutil.which("alembic") is not None:
+        subprocess.run(["alembic", "upgrade", "head"], check=True)
 
 
 @pytest_asyncio.fixture(scope="function")
