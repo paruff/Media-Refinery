@@ -13,7 +13,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.audio.converter import AudioConverter
+from src.audio.converter import AudioConverter  # noqa: E402
 
 
 async def main():
