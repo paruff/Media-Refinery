@@ -55,9 +55,56 @@ class TestAudioConverterIntegration:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        result = await converter.convert(sample_mp3, output_dir)
+        import subprocess
+        import tempfile
+        import time
 
-        # Verify success
+        # Diagnostic: snapshot before running
+        pre_listing = list(output_dir.iterdir()) if output_dir.exists() else []
+        print("[diag] output_dir pre-listing:", [p.name for p in pre_listing])
+
+        # Build the ffmpeg command we expect to run (for diagnostics)
+        expected_output = output_dir / f"{sample_mp3.stem}.flac"
+        cmd = converter.build_ffmpeg_command(sample_mp3, expected_output)
+        print("[diag] ffmpeg command:", " ".join(cmd))
+
+        # Run conversion under test
+        start_t = time.time()
+        result = await converter.convert(sample_mp3, output_dir)
+        dur = time.time() - start_t
+
+        # Snapshot after running
+        post_listing = list(output_dir.iterdir()) if output_dir.exists() else []
+        print("[diag] output_dir post-listing:", [p.name for p in post_listing])
+
+        print(
+            f"[diag] conversion result: success={result.success} output_path={result.output_path} exists={result.output_path.exists()} size={result.size_bytes} duration={dur:.3f}s error={result.error_message}"
+        )
+
+        # If converter failed or output not visible, run a direct ffmpeg to system temp to compare
+        if not result.success or not result.output_path.exists():
+            diag_target = Path(tempfile.gettempdir()) / f"diag_{sample_mp3.stem}.flac"
+            if diag_target.exists():
+                diag_target.unlink()
+
+            diag_cmd = converter.build_ffmpeg_command(sample_mp3, diag_target)
+            print("[diag] running direct ffmpeg to system temp:", " ".join(diag_cmd))
+
+            try:
+                proc = subprocess.run(
+                    diag_cmd, capture_output=True, text=True, timeout=60
+                )
+                print("[diag] direct ffmpeg rc:", proc.returncode)
+                print("[diag] direct ffmpeg stdout:", proc.stdout[:2000])
+                print("[diag] direct ffmpeg stderr:", proc.stderr[:2000])
+                print("[diag] diag_target exists:", diag_target.exists())
+                if diag_target.exists():
+                    print("[diag] diag_target size:", diag_target.stat().st_size)
+
+            except Exception as e:
+                print("[diag] direct ffmpeg error:", str(e))
+
+        # Verify success (keep original assertions)
         assert result.success is True
         assert result.output_path.exists()
         assert result.output_path.suffix == ".flac"

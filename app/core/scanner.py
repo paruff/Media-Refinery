@@ -1,5 +1,6 @@
 import asyncio
 import json
+from pathlib import Path
 from sqlalchemy.future import select
 from app.models.media import MediaItem, FileState
 import logging
@@ -86,6 +87,43 @@ class ScannerService:
                     return
                 data = json.loads(stdout.decode())
                 self._parse_and_update(item, data)
+
+                # Run pre-clean detection and record issues
+                from app.services.preclean import PrecleanDetector
+
+                detector = PrecleanDetector()
+                metadata = {
+                    "Title": item.title,
+                    "Year": item.year,
+                    "Season/Episode": (
+                        str(item.absolute_number)
+                        if getattr(item, "absolute_number", None)
+                        else None
+                    ),
+                    "Artist/Album": (
+                        f"{item.artist}/{item.album}"
+                        if (item.artist or item.album)
+                        else None
+                    ),
+                }
+
+                flags = detector.scan_metadata_dict(metadata)
+
+                # Filename checks
+                basename = os.path.basename(path)
+                if detector.contains_non_utf8(basename):
+                    flags.append("non_utf8_filename")
+                illegal = detector.illegal_filesystem_chars(basename)
+                for c in illegal:
+                    flags.append(f"illegal_char:{c}")
+
+                # Classification
+                classification = detector.classify_unplaced(Path(path))
+                if classification == "unclassified":
+                    flags.append("unclassified")
+
+                item.detected_issues = json.dumps(flags)
+
                 item.state = FileState.scanned
                 await session.commit()
             except Exception as e:

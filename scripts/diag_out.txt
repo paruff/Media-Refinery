@@ -1,0 +1,43 @@
+TMPDIR /var/folders/tr/0vnbwsg50299j21x9d8t14bw0000gn/T/pytest-diag-vaqz41h0
+CWD /Users/philruff/projects/github/paruff/Media-Refinery
+UID/GID 501 20
+DF: Filesystem      Size    Used   Avail Capacity iused ifree %iused  Mounted on
+/dev/disk1s1   233Gi   191Gi    17Gi    92%    2.5M  180M    1%   /System/Volumes/Data
+
+CMD: ffmpeg -y -i testdata/audio/test_valid.mp3 -map_metadata 0 -c:a flac -compression_level 5 /var/folders/tr/0vnbwsg50299j21x9d8t14bw0000gn/T/pytest-diag-vaqz41h0/test_valid.flac
+PID 98190
+LS while running: []
+RC 0
+STDERR (truncated):
+ffmpeg version 8.0.1 Copyright (c) 2000-2025 the FFmpeg developers
+  built with Apple clang version 16.0.0 (clang-1600.0.26.6)
+  configuration: --prefix=/usr/local/Cellar/ffmpeg/8.0.1_1 --enable-shared --enable-pthreads --enable-version3 --cc=clang --host-cflags= --host-ldflags= --enable-ffplay --enable-gpl --enable-libsvtav1 --enable-libopus --enable-libx264 --enable-libmp3lame --enable-libdav1d --enable-libvpx --enable-libx265 --enable-videotoolbox --enable-audiotoolbox
+  libavutil      60.  8.100 / 60.  8.100
+  libavcodec     62. 11.100 / 62. 11.100
+  libavformat    62.  3.100 / 62.  3.100
+  libavdevice    62.  1.100 / 62.  1.100
+  libavfilter    11.  4.100 / 11.  4.100
+  libswscale      9.  1.100 /  9.  1.100
+  libswresample   6.  1.100 /  6.  1.100
+Input #0, mp3, from 'testdata/audio/test_valid.mp3':
+  Metadata:
+    encoder         : Lavf60.16.100
+  Duration: 00:00:01.00, start: 0.025057, bitrate: 47 kb/s
+  Stream #0:0: Audio: mp3 (mp3float), 44100 Hz, mono, fltp, 45 kb/s, start 0.025057
+Stream mapping:
+  Stream #0:0 -> #0:0 (mp3 (mp3float) -> flac (native))
+Press [q] to stop, [?] for help
+[flac @ 0x7fd65720aac0] encoding as 24 bits-per-sample, more is considered experimental. Add -strict experimental if you want to encode more than 24 bits-per-sample
+Output #0, flac, to '/var/folders/tr/0vnbwsg50299j21x9d8t14bw0000gn/T/pytest-diag-vaqz41h0/test_valid.flac':
+  Metadata:
+    encoder         : Lavf62.3.100
+  Stream #0:0: Audio: flac, 44100 Hz, mono, s32 (24 bit), 128 kb/s
+    Metadata:
+      encoder         : Lavc62.11.100 flac
+[out#0/flac @ 0x7fd657209740] video:0KiB audio:44KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 18.357038%
+size=      52KiB time=00:00:01.00 bitrate= 427.4kbits/s speed= 212x elapsed=0:00:00.00
+
+LS after: ['test_valid.flac']
+Exists? True
+Size 53424 mtime 1769984094.8862376
+Converter call failed: No module named 'src'
