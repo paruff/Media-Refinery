@@ -67,6 +67,7 @@ def patch_create_subprocess_exec(mocker, request):
     mocker.patch(
         "asyncio.create_subprocess_exec", side_effect=_mocked_create_subprocess_exec
     )
+    yield
 
 
 @pytest.fixture
