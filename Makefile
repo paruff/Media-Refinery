@@ -24,9 +24,9 @@ BEHAVE?=$(VENV)/bin/behave
 
 precom:
 	@echo "[PRECOM] Run black, ruff, and mypy (pre-commit hooks)"
-	@$(VENV)/bin/black app/ tests/ || echo "black not installed; skipping format"
-	@$(VENV)/bin/ruff check app/ tests/ || echo "ruff not installed; skipping lint"
-	@which $(VENV)/bin/mypy >/dev/null 2>&1 && $(VENV)/bin/mypy app/ || echo "mypy not installed; skipping type check"
+	@./.venv/bin/black app/ tests/ || echo "black not installed; skipping format"
+	@./.venv/bin/ruff check app/ tests/ || echo "ruff not installed; skipping lint"
+	@./.venv/bin/mypy app/ || echo "mypy not installed; skipping type check"
 
 test: unit integration features
 

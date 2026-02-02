@@ -81,6 +81,7 @@ def mock_ffprobe():
 def apply_alembic_migrations():
     """Ensure all Alembic migrations are applied before tests run."""
     import shutil
+
     # Only run alembic if the command is available
     if shutil.which("alembic") is not None:
         subprocess.run(["alembic", "upgrade", "head"], check=True)

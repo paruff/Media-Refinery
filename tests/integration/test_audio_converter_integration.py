@@ -376,24 +376,26 @@ class TestAudioConverterIntegration:
         """Test converting multiple formats to FLAC (Story 1.3)."""
         # Use testdata directory with valid audio files
         testdata_dir = Path(__file__).parent.parent.parent / "testdata" / "audio"
-        
+
         # Try to find a test file for this format
         test_file = testdata_dir / f"test_valid.{input_format}"
         if not test_file.exists():
             pytest.skip(f"No test {input_format} file found at {test_file}")
-        
+
         input_file = test_file
-        
+
         # Create converter
         converter = AudioConverter(output_format="flac", compression_level=5)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         # Convert
         result = await converter.convert(input_file, output_dir)
-        
+
         # Verify conversion succeeded
-        assert result.success is True, f"Failed to convert {input_format} to FLAC: {result.error_message}"
+        assert (
+            result.success is True
+        ), f"Failed to convert {input_format} to FLAC: {result.error_message}"
         assert result.output_path.exists()
         assert result.output_path.suffix == ".flac"
         assert result.size_bytes > 0
@@ -403,7 +405,7 @@ class TestAudioConverterIntegration:
     async def test_adaptive_compression_lossless_source(self, tmp_path: Path):
         """Test that lossless sources (FLAC, WAV) use maximum compression."""
         testdata_dir = Path(__file__).parent.parent.parent / "testdata" / "audio"
-        
+
         # Try WAV first, then FLAC
         for format_name in ["wav", "flac"]:
             test_file = testdata_dir / f"test_valid.{format_name}"
@@ -412,20 +414,20 @@ class TestAudioConverterIntegration:
                 break
         else:
             pytest.skip("No lossless test file (WAV or FLAC) found")
-        
+
         # Create converter with default compression (5)
         # But it should use 8 for lossless sources
         converter = AudioConverter(output_format="flac", compression_level=5)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         # Convert
         result = await converter.convert(input_file, output_dir)
-        
+
         # Verify conversion succeeded
         assert result.success is True, f"Failed: {result.error_message}"
         assert result.output_path.exists()
-        
+
         # We can't directly verify the compression level used,
         # but we can verify the file was created successfully
         assert result.size_bytes > 0
@@ -437,20 +439,20 @@ class TestAudioConverterIntegration:
         converter = AudioConverter(output_format="flac", sample_rate=None)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        
+
         # Detect original sample rate
         original_props = await converter.detect_audio_properties(sample_mp3)
         if not original_props:
             pytest.skip("Could not detect audio properties")
-        
+
         original_sample_rate = original_props.sample_rate
-        
+
         # Convert
         result = await converter.convert(sample_mp3, output_dir)
-        
+
         assert result.success is True
         assert result.output_path.exists()
-        
+
         # Verify output has same sample rate
         output_props = await converter.detect_audio_properties(result.output_path)
         assert output_props is not None
@@ -460,10 +462,10 @@ class TestAudioConverterIntegration:
     async def test_audio_properties_detection(self, sample_mp3: Path):
         """Test detection of audio properties from real file."""
         converter = AudioConverter()
-        
+
         # Detect properties
         props = await converter.detect_audio_properties(sample_mp3)
-        
+
         # Verify properties were detected
         assert props is not None
         assert props.sample_rate > 0
