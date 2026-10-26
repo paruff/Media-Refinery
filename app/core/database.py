@@ -41,6 +41,6 @@ async def init_db():
         await conn.execute(text("PRAGMA journal_mode=WAL;"))
 
 
-async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_async_session() -> AsyncGenerator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         yield session

@@ -16,6 +16,5 @@ pydantic-settings
 pyyaml
 sqlalchemy[asyncio]
 alembic
-structlog  # legacy src/audio until G2/G3 removes it
 uvicorn
 watchdog

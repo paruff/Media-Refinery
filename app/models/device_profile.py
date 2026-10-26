@@ -15,7 +15,7 @@ class DeviceProfile(BaseModel):
     container: list[str]
 
     @classmethod
-    def from_dict(cls, data: dict) -> "DeviceProfile":
+    def from_dict(cls, data: dict) -> DeviceProfile:
         if "max_resolution" in data and not isinstance(
             data["max_resolution"], Resolution
         ):

@@ -116,7 +116,7 @@ help:
 
 .PHONY: check-venv venv
 venv: ## create .venv from the hash-locked requirements (uv)
-	uv venv --python 3.12 $(VENV)
+	uv venv --python 3.14 $(VENV)
 	uv pip install --python $(VENV)/bin/python -r requirements.txt
 	uv pip install --python $(VENV)/bin/python --no-deps --require-hashes -r requirements-dev.txt
 
@@ -132,16 +132,16 @@ compose-check: ## docker compose config -q (falls back to the official compose i
 # ---- tooling (no venv required) ----------------------------------------------
 hooks: ## one-time: install git hooks (pre-commit, commit-msg, pre-push)
 	@command -v uv >/dev/null || { echo "install uv: https://docs.astral.sh/uv/"; exit 1; }
-	uv python install 3.12
+	uv python install 3.14
 	pre-commit install --install-hooks
 
 hooks-update: ## bump every hook to the latest release, frozen to commit SHAs
 	pre-commit autoupdate --freeze
 
 deps-lock: ## re-lock all requirements*.txt (hash-verified)
-	uv pip compile requirements.in --upgrade --python-version 3.12 --generate-hashes --no-header -o requirements.txt
-	uv pip compile requirements-dev.in -c requirements.txt --python-version 3.12 --generate-hashes --no-header -o requirements-dev.txt
-	uv pip compile requirements-hooks.in --python-version 3.12 --generate-hashes --no-header -o requirements-hooks.txt
+	uv pip compile requirements.in --upgrade --python-version 3.14 --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header -o requirements.txt
+	uv pip compile requirements-dev.in -c requirements.txt --python-version 3.14 --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header -o requirements-dev.txt
+	uv pip compile requirements-hooks.in --python-version 3.14 --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header -o requirements-hooks.txt
 
 docker-test: ## run the CI test job inside the image (real ffmpeg; no local installs)
 	docker build -t media-refinery:ci .
