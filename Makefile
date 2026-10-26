@@ -134,7 +134,7 @@ hooks-update: ## bump every hook to the latest release, frozen to commit SHAs
 	pre-commit autoupdate --freeze
 
 deps-lock: ## re-lock all requirements*.txt (hash-verified)
-	uv pip compile requirements.in --python-version 3.12 --generate-hashes --no-header -o requirements.txt
+	uv pip compile requirements.in --upgrade --python-version 3.12 --generate-hashes --no-header -o requirements.txt
 	uv pip compile requirements-dev.in -c requirements.txt --python-version 3.12 --generate-hashes --no-header -o requirements-dev.txt
 	uv pip compile requirements-hooks.in --python-version 3.12 --generate-hashes --no-header -o requirements-hooks.txt
 
