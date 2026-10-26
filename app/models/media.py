@@ -21,7 +21,7 @@ class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
 
 
-class FileState(str, enum.Enum):  # noqa: UP042
+class FileState(enum.StrEnum):
     pending = "pending"
     scanning = "scanning"
     scanned = "scanned"
@@ -33,7 +33,7 @@ class FileState(str, enum.Enum):  # noqa: UP042
     error = "error"
 
 
-class MediaType(str, enum.Enum):  # noqa: UP042
+class MediaType(enum.StrEnum):
     movie = "movie"
     series = "series"
     music = "music"

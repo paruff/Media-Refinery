@@ -121,8 +121,8 @@ class TVMetadataService:
                 episode = data.get("episode_number")
                 if title and season and episode:
                     tokens = (title, year, season, episode)
-            except Exception:  # noqa: S110
-                pass
+            except Exception:
+                logger.warning("Bad enrichment_data for %s", media.id, exc_info=True)
         return tokens
 
     def _select_best_match(self, title: str, results: list) -> dict | None:

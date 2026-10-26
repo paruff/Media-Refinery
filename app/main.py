@@ -1,6 +1,9 @@
-import asyncio
 import logging
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -11,44 +14,46 @@ from app.core.database import AsyncSessionLocal, init_db
 from app.core.pipeline import PipelineCoordinator
 from app.core.watcher import InputWatcher
 
-app = FastAPI(title="Media Normalizer Daemon Edition")
-
-# Structured logging setup
 logger = logging.getLogger("uvicorn")
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-stdout_handler = logging.StreamHandler(sys.stdout)
-stdout_handler.setFormatter(formatter)
-file_handler = logging.FileHandler("rotation.log")
-file_handler.setFormatter(formatter)
-logger.addHandler(stdout_handler)
-logger.addHandler(file_handler)
-
-watcher = None
-coordinator = None
+LOG_FILE_NAME = "rotation.log"
 
 
-@app.on_event("startup")
-async def on_startup():
+def configure_logging() -> None:
+    """Structured logging to stdout and a rotating file under settings.LOG_DIR."""
+    log_dir = Path(settings.LOG_DIR)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = str((log_dir / LOG_FILE_NAME).resolve())
+    if any(getattr(h, "baseFilename", None) == log_file for h in logger.handlers):
+        return
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    file_handler = RotatingFileHandler(log_file, maxBytes=5_000_000, backupCount=3)
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    for handler in (stdout_handler, file_handler):
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    configure_logging()
     await init_db()
-    global coordinator, watcher  # noqa: PLW0603
     coordinator = PipelineCoordinator(AsyncSessionLocal, logger=logger)
     await coordinator.start()
     watcher = InputWatcher(
         settings.INPUT_DIR, AsyncSessionLocal, logger=logger, coordinator=coordinator
     )
-    loop = asyncio.get_event_loop()
-    loop.create_task(asyncio.to_thread(watcher.run))  # noqa: RUF006
-
-
-@app.on_event("shutdown")
-def on_shutdown():
-    global watcher, coordinator  # noqa: PLW0602
-    if watcher:
+    watcher.run()  # non-blocking; must run on the loop thread
+    app.state.coordinator = coordinator
+    app.state.watcher = watcher
+    try:
+        yield
+    finally:
         watcher.stop()
-    if coordinator:
-        asyncio.create_task(coordinator.stop())  # noqa: RUF006
+        await coordinator.stop()
 
+
+app = FastAPI(title="Media Normalizer Daemon Edition", lifespan=lifespan)
 
 app.include_router(health_router, prefix="/health")
 app.include_router(summary_router)

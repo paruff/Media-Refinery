@@ -1,6 +1,7 @@
 import asyncio
+import contextlib
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.future import select
 
@@ -18,13 +19,19 @@ class PipelineCoordinator:
         self.semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
         self.running = False
         self.scanner = ScannerService(db_session_factory, logger=self.logger)
+        self._worker: asyncio.Task | None = None
 
     async def start(self):
         self.running = True
-        asyncio.create_task(self.worker_loop())  # noqa: RUF006
+        self._worker = asyncio.create_task(self.worker_loop())
 
     async def stop(self):
         self.running = False
+        if self._worker:
+            self._worker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._worker
+            self._worker = None
 
     async def enqueue(self, media_id):
         await self.queue.put(media_id)
@@ -50,7 +57,7 @@ class PipelineCoordinator:
                 return
             # Transition to scanning
             item.state = FileState.scanning
-            item.updated_at = datetime.utcnow()  # noqa: DTZ003
+            item.updated_at = datetime.now(UTC)
             await session.commit()
             self.logger.info(f"MediaItem {media_id} state: PENDING -> SCANNING")
         try:
@@ -66,11 +73,3 @@ class PipelineCoordinator:
                     item.error_log = str(e)
                     await session.commit()
             self.logger.error(f"Scanner failed for {media_id}: {e}")
-
-
-# Example MediaScanner stub
-class MediaScanner:
-    async def run(self, media_id):
-        # Simulate scanning
-        await asyncio.sleep(1)
-        print(f"Scanned media {media_id}")  # noqa: T201

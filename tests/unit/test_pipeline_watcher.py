@@ -91,29 +91,33 @@ async def test_startup_scan_skips_excluded(tmp_path, async_session):
 
 
 @pytest.mark.asyncio
-async def test_insert_if_new_inserts_once_and_enqueues(async_session):
+async def test_insert_if_new_inserts_once_and_enqueues(async_session, tmp_path):
+    f = tmp_path / "a.mkv"
+    f.write_bytes(b"x")
     coordinator = SimpleNamespace(enqueue=AsyncMock())
     watcher = InputWatcher("/in", _factory(async_session), coordinator=coordinator)
-    await watcher.insert_if_new("/in/a.mkv")
-    await watcher.insert_if_new("/in/a.mkv")
+    await watcher.insert_if_new(str(f))
+    await watcher.insert_if_new(str(f))
     coordinator.enqueue.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_process_queue_inserts_stable_files_and_drops_missing(
-    tmp_path, async_session
+    tmp_path, async_session, monkeypatch
 ):
+    monkeypatch.setattr("app.core.watcher.STABILITY_WINDOW", 0)
     stable = tmp_path / "stable.mkv"
     stable.write_bytes(b"x")
     watcher = InputWatcher(str(tmp_path), _factory(async_session))
     watcher.processing_queue[str(stable)] = 0
     watcher.processing_queue[str(tmp_path / "gone.mkv")] = 0
     watcher.insert_if_new = AsyncMock()
-    sleeps = []
+    calls = 0
 
     async def fake_sleep(secs):
-        sleeps.append(secs)
-        if secs == 1:  # end of first pass
+        nonlocal calls
+        calls += 1
+        if calls == 2:  # first pass records the signature, second inserts
             raise asyncio.CancelledError
 
     with patch("asyncio.sleep", fake_sleep), pytest.raises(asyncio.CancelledError):

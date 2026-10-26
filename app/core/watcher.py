@@ -11,23 +11,52 @@ from watchdog.observers import Observer
 from app.models.media import FileState, MediaItem, MediaType
 
 EXCLUDE_PATTERNS = (".DS_Store", ".tmp", ".part")
-STABILITY_WINDOW = 5  # seconds
+STABILITY_WINDOW = 5  # seconds size+mtime must stay unchanged (R-PIPE-3)
+POLL_INTERVAL = 1  # seconds between stability passes
+HASH_CHUNK = 1024 * 1024
+
+
+def content_hash(path: str) -> str:
+    """sha256 of the file bytes, streamed (R-PIPE-2)."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(HASH_CHUNK):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _stat_signature(path: str):
+    """(size, mtime) or None if the file is gone. Blocking: call via to_thread."""
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    return st.st_size, st.st_mtime
 
 
 class DebounceHandler(FileSystemEventHandler):
+    """Runs on watchdog's observer thread; hands every write to the event loop."""
+
     def __init__(self, queue, loop):
         self.queue = queue
         self.loop = loop
 
+    def _enqueue(self, path):
+        now = time.time()
+        if self.loop is None:
+            self.queue[path] = now
+        else:
+            self.loop.call_soon_threadsafe(self.queue.__setitem__, path, now)
+
     def on_created(self, event):
         if event.is_directory or any(p in event.src_path for p in EXCLUDE_PATTERNS):
             return
-        self.queue[event.src_path] = time.time()
+        self._enqueue(event.src_path)
 
     def on_moved(self, event):
         if event.is_directory or any(p in event.dest_path for p in EXCLUDE_PATTERNS):
             return
-        self.queue[event.dest_path] = time.time()
+        self._enqueue(event.dest_path)
 
 
 class InputWatcher:
@@ -40,6 +69,7 @@ class InputWatcher:
         self.observer = Observer()
         self.handler = DebounceHandler(self.processing_queue, self.loop)
         self.coordinator = coordinator
+        self._tasks = []
 
     async def startup_scan(self):
         for root, _, files in os.walk(self.input_dir):
@@ -50,32 +80,51 @@ class InputWatcher:
                 self.processing_queue[path] = time.time()
 
     async def process_queue(self):
+        """Insert files whose (size, mtime) stayed unchanged for STABILITY_WINDOW.
+
+        Every queued file is checked each pass, so waiting is concurrent, not serial.
+        """
+        seen = {}  # path -> (signature, monotonic time it was first seen with it)
         while True:
-            to_remove = []
-            for path, last_seen in list(self.processing_queue.items()):  # noqa: B007
-                if not os.path.exists(path):  # noqa: ASYNC240
-                    to_remove.append(path)
+            for path in list(self.processing_queue):
+                signature = await asyncio.to_thread(_stat_signature, path)
+                if signature is None:
+                    self.processing_queue.pop(path, None)
+                    seen.pop(path, None)
                     continue
-                stat = os.stat(path)
-                size = stat.st_size
-                mtime = stat.st_mtime
-                await asyncio.sleep(STABILITY_WINDOW)
-                stat2 = os.stat(path)
-                if stat2.st_size == size and stat2.st_mtime == mtime:
-                    await self.insert_if_new(path)
-                    to_remove.append(path)
-            for path in to_remove:
-                self.processing_queue.pop(path, None)
-            await asyncio.sleep(1)
+                last_signature, since = seen.get(path, (None, 0.0))
+                now = time.monotonic()
+                if signature != last_signature:
+                    seen[path] = (signature, now)
+                elif now - since >= STABILITY_WINDOW:
+                    try:
+                        await self.insert_if_new(path)
+                    except Exception:
+                        self.logger.exception(f"Failed to import {path}")
+                    self.processing_queue.pop(path, None)
+                    seen.pop(path, None)
+            await asyncio.sleep(POLL_INTERVAL)
 
     async def insert_if_new(self, path):
+        file_hash = await asyncio.to_thread(content_hash, path)
         async with self.db_session_factory() as session:
-            exists = await session.execute(
-                select(MediaItem).where(MediaItem.source_path == path)
+            result = await session.execute(
+                select(MediaItem).where(MediaItem.id == file_hash)
             )
-            if exists.scalar_one_or_none():
+            existing = result.scalar_one_or_none()
+            if existing:
+                if existing.source_path == path:
+                    return
+                # Same content at a new path: a move, unless the old path is still there.
+                if await asyncio.to_thread(os.path.exists, existing.source_path):
+                    self.logger.warning(
+                        f"Duplicate content at {path} (already imported as {existing.source_path})"
+                    )
+                    return
+                existing.source_path = path
+                await session.commit()
+                self.logger.info(f"Item {file_hash} moved to {path}")
                 return
-            file_hash = hashlib.sha256(path.encode()).hexdigest()
             item = MediaItem(
                 source_path=path,
                 state=FileState.pending,
@@ -89,11 +138,16 @@ class InputWatcher:
                 await self.coordinator.enqueue(file_hash)
 
     def run(self):
+        """Start watching. Non-blocking; call from the event-loop thread."""
         self.observer.schedule(self.handler, self.input_dir, recursive=True)
         self.observer.start()
-        self.loop.create_task(self.process_queue())
-        self.loop.create_task(self.startup_scan())
+        self._tasks = [
+            self.loop.create_task(self.process_queue()),
+            self.loop.create_task(self.startup_scan()),
+        ]
 
     def stop(self):
+        for task in self._tasks:
+            task.cancel()
         self.observer.stop()
         self.observer.join()

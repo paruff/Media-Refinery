@@ -61,9 +61,7 @@ class MusicBrainzService:
                         release=album,
                         limit=1,
                     )
-                    releases = (
-                        mb_result["release-list"] if "release-list" in mb_result else []  # noqa: SIM401
-                    )
+                    releases = mb_result.get("release-list", [])
                     if not releases:
                         logger.info(f"No MusicBrainz release for {artist} - {album}")
                         await self._flag_failed(session, media)
@@ -148,8 +146,8 @@ class MusicBrainzService:
                 title = data.get("track_title") or data.get("title")
                 if artist and album and track_number and title:
                     return artist, album, track_number, title
-            except Exception:  # noqa: S110
-                pass
+            except Exception:
+                logger.warning("Bad enrichment_data for %s", media.id, exc_info=True)
         return None
 
     def _get_album_artist(self, album_data):

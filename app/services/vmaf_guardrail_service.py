@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.media import NormalizationPlan, PlanStatus
 from app.services.quality_guard_service import run_vmaf_ffmpeg
 
+logger = logging.getLogger("VMAFGuardrail")
+
 
 class VMAFGuardrailService:
     def __init__(self, db: AsyncSession, vmaf_func=None):
@@ -44,5 +46,5 @@ class VMAFGuardrailService:
             )
         )
         await self.db.commit()
-        logging.info(f"VMAF/PSNR metrics for plan {plan.id}: {plan.quality_metrics}")  # noqa: LOG015
+        logger.info("VMAF/PSNR metrics for plan %s: %s", plan.id, plan.quality_metrics)
         return plan

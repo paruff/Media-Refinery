@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import ClassVar
 
 
 class PrecleanDetector:
@@ -7,7 +8,12 @@ class PrecleanDetector:
     Provides small, well-typed helpers used by Behave steps and unit tests.
     """
 
-    REQUIRED_TAGS = ["Title", "Year", "Season/Episode", "Artist/Album"]  # noqa: RUF012
+    REQUIRED_TAGS: ClassVar[list[str]] = [
+        "Title",
+        "Year",
+        "Season/Episode",
+        "Artist/Album",
+    ]
 
     def scan_metadata(self, file_path: Path) -> list[str]:
         """Scan metadata for a file and return a list of flags.
@@ -30,7 +36,7 @@ class PrecleanDetector:
         except UnicodeEncodeError:
             return True
 
-    ILLEGAL_CHARS = set('/\\:*?"<>|')  # noqa: RUF012
+    ILLEGAL_CHARS: ClassVar[set[str]] = set('/\\:*?"<>|')
 
     def illegal_filesystem_chars(self, filename: str) -> list[str]:
         return [c for c in filename if c in self.ILLEGAL_CHARS]
@@ -69,7 +75,7 @@ class PrecleanDetector:
                 continue
             by_title.setdefault(title, []).append(m)
 
-        for title, metas in by_title.items():  # noqa: B007
+        for metas in by_title.values():
             if len(metas) < 2:
                 continue
             years = {m.get("Year") for m in metas}
