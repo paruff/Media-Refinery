@@ -19,10 +19,13 @@ def test_fingerprint_audio_failure():
 
 
 def test_fingerprint_video_success():
+    imagehash_module = MagicMock()
+    imagehash_module.phash.return_value = "phash123"
+
     with (
         patch("cv2.VideoCapture") as mock_cv2,
-        patch("imagehash.phash", return_value="phash123"),
         patch("PIL.Image.fromarray"),
+        patch.dict("sys.modules", {"imagehash": imagehash_module}),
     ):
         mock_cap = MagicMock()
         mock_cap.read.return_value = (True, "frame")

@@ -126,10 +126,10 @@ class TestAudioFormatDetectorIntegration:
     ):
         """Test complete detection pipeline with real files."""
         test_files = [
-            (testdata_dir / "sample.mp3", AudioFormat.MP3),
-            (testdata_dir / "sample.flac", AudioFormat.FLAC),
-            (testdata_dir / "sample.wav", AudioFormat.WAV),
-            (testdata_dir / "sample.ogg", AudioFormat.OGG),
+            (testdata_dir / "test_valid.mp3", AudioFormat.MP3),
+            (testdata_dir / "test_valid.flac", AudioFormat.FLAC),
+            (testdata_dir / "test_valid.wav", AudioFormat.WAV),
+            (testdata_dir / "test_valid.ogg", AudioFormat.OGG),
         ]
 
         for file_path, expected_format in test_files:
