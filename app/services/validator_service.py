@@ -1,13 +1,17 @@
+import logging
 import os
 import shutil
-import logging
-from pathlib import Path
-from typing import List, Dict, Any, Sequence
 import subprocess
+from collections.abc import Sequence
 from datetime import datetime, timedelta
-from app.models.media import MediaItem
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+
+from app.models.media import MediaItem
 
 
 class ValidationReport:
@@ -15,9 +19,9 @@ class ValidationReport:
         self.total_files = 0
         self.valid = 0
         self.invalid = 0
-        self.issues: List[Dict[str, Any]] = []
+        self.issues: list[dict[str, Any]] = []
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "total_files": self.total_files,
             "valid": self.valid,
@@ -100,7 +104,7 @@ class ValidatorService:
             return True
         if parts[0] == "movies" and len(parts) >= 2:
             return True
-        if parts[0] == "tv" and len(parts) >= 4:
+        if parts[0] == "tv" and len(parts) >= 4:  # noqa: SIM103
             return True
         return False
 
@@ -159,9 +163,13 @@ class ValidatorService:
 
     async def _prune_old_errors(self):
         # Remove error logs older than 30 days from media_items
-        cutoff = datetime.utcnow() - timedelta(days=30)
+        cutoff = datetime.utcnow() - timedelta(days=30)  # noqa: DTZ003
         await self.db.execute(
-            f"DELETE FROM media_items WHERE error_log IS NOT NULL AND updated_at < '{cutoff.isoformat()}'"
+            text(
+                "DELETE FROM media_items "
+                "WHERE error_log IS NOT NULL AND updated_at < :cutoff"
+            ),
+            {"cutoff": cutoff.isoformat()},
         )
         await self.db.commit()
 

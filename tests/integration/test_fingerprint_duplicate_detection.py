@@ -1,7 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from app.core.scanner import ScannerService
-from app.models.media import MediaItem, FileState
+from app.models.media import FileState, MediaItem
 
 
 class DummySession:
@@ -27,7 +29,7 @@ class DummySession:
                             i.error_log = (
                                 "Duplicate audio fingerprint detected. Skipping."
                             )
-                    return MagicMock(scalar_one_or_none=lambda: item)
+                    return MagicMock(scalar_one_or_none=lambda: item)  # noqa: B023
         return MagicMock(scalar_one_or_none=lambda: None)
 
     async def commit(self):

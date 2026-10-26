@@ -1,6 +1,7 @@
 # Common step definitions for BDD tests
 import os
-from behave import given, when, then  # type: ignore[import-untyped]
+
+from behave import given, then, when  # type: ignore[import-untyped]
 
 
 @given('a file "{filename}" exists in the input directory')
@@ -13,9 +14,11 @@ def step_given_file_in_input(context, filename):
 
 @then('the database should show the file "{filename}" in "{state}" state')
 def step_then_db_file_state(context, filename, state):
-    from sqlalchemy.future import select
-    from app.models.media import MediaItem
     import asyncio
+
+    from sqlalchemy.future import select
+
+    from app.models.media import MediaItem
 
     async def check():
         async with context.db() as session:
@@ -63,7 +66,7 @@ def step_given_filename(context):
     context.filename = "test_file_ä.txt"
 
 
-@then("flag it if it contains non–UTF8 characters")
+@then("flag it if it contains non–UTF8 characters")  # noqa: RUF001
 def step_then_flag_non_utf8(context):
     # Simulate UTF-8 check (no-op for now)
     pass

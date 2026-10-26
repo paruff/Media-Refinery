@@ -46,7 +46,7 @@ def dummy_media_file(tmp_path):
     Creates a minimal valid MKV or FLAC file for scanner tests.
     Returns the file path.
     """
-    mkv_header = b"\x1A\x45\xDF\xA3"  # EBML header for MKV
+    mkv_header = b"\x1a\x45\xdf\xa3"  # EBML header for MKV
     flac_header = b"fLaC"  # FLAC header
     mkv_path = tmp_path / "dummy.mkv"
     flac_path = tmp_path / "dummy.flac"

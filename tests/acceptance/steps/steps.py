@@ -1,5 +1,6 @@
-from behave import given, when, then
 import os
+
+from behave import given, then, when
 
 
 @given('an audio file "{file_name}"')

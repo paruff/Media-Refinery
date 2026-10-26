@@ -1,9 +1,11 @@
 import re
 from pathlib import Path
-from app.models.media import MediaItem, MediaType, NormalizationPlan
+
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
+
+from app.models.media import MediaItem, MediaType, NormalizationPlan
 
 # Supported codecs for Samsung Series 65
 SUPPORTED_VIDEO_CODECS = {"h264", "hevc"}

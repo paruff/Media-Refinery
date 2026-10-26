@@ -1,7 +1,6 @@
 import logging
 import subprocess
 from pathlib import Path
-from typing import List, Optional
 
 
 class SubtitleService:
@@ -15,7 +14,7 @@ class SubtitleService:
         self.tesseract_path = tesseract_path
         self.logger = logging.getLogger("SubtitleService")
 
-    def detect_subtitle_streams(self, input_file: Path) -> List[dict]:
+    def detect_subtitle_streams(self, input_file: Path) -> list[dict]:
         """
         Use ffprobe to detect subtitle streams and their types.
         Returns a list of dicts with keys: index, codec, lang.
@@ -104,7 +103,7 @@ class SubtitleService:
         )
         return False
 
-    def find_existing_srt(self, input_file: Path, lang: str = "en") -> Optional[Path]:
+    def find_existing_srt(self, input_file: Path, lang: str = "en") -> Path | None:
         """
         Search for an existing .srt sidecar file in the input directory.
         """

@@ -1,5 +1,6 @@
 import asyncio
-from typing import Callable, Any, List
+from collections.abc import Callable
+from typing import Any
 
 
 class WorkerPool:
@@ -20,7 +21,7 @@ class WorkerPool:
             try:
                 await task(*args, **kwargs)
             except Exception as e:
-                print(f"Task failed with error: {e}")
+                print(f"Task failed with error: {e}")  # noqa: T201
             finally:
                 self.queue.task_done()
 
@@ -35,7 +36,7 @@ class WorkerPool:
         """
         await self.queue.put((task, args, kwargs))
 
-    async def run(self, tasks: List[Callable[..., Any]]):
+    async def run(self, tasks: list[Callable[..., Any]]):
         """
         Runs the worker pool and processes the given tasks.
 

@@ -1,10 +1,11 @@
 import logging
-from typing import Dict, Any
+import os
+from typing import Any
+
 from mutagen import File
 from mutagen.flac import FLAC
-from mutagen.id3 import ID3, TPE1, TALB, TDRC, TIT2, TPE2, TRCK, TPOS, TXXX
+from mutagen.id3 import ID3, TALB, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX
 from mutagen.mp4 import MP4
-import os
 
 
 class TaggingService:
@@ -16,7 +17,7 @@ class TaggingService:
         self.logger = logging.getLogger("TaggingService")
 
     def apply_tags(
-        self, file_path: str, metadata: Dict[str, Any], clean_tags: bool = True
+        self, file_path: str, metadata: dict[str, Any], clean_tags: bool = True
     ) -> bool:
         """
         Detect file type and apply tags from metadata dict. Returns True if successful.
@@ -29,8 +30,8 @@ class TaggingService:
         try:
             if ext == ".flac" or isinstance(audio, FLAC):
                 return self._tag_flac(audio, metadata, clean_tags)
-            elif (
-                ext == ".mp3" or hasattr(audio, "tags") and isinstance(audio.tags, ID3)
+            elif ext == ".mp3" or (
+                hasattr(audio, "tags") and isinstance(audio.tags, ID3)
             ):
                 return self._tag_mp3(audio, metadata, clean_tags)
             elif ext in (".m4a", ".mp4") or isinstance(audio, MP4):
@@ -42,7 +43,7 @@ class TaggingService:
             self.logger.error(f"Failed to tag {file_path}: {e}")
             return False
 
-    def _tag_flac(self, audio: FLAC, meta: Dict[str, Any], clean: bool) -> bool:
+    def _tag_flac(self, audio: FLAC, meta: dict[str, Any], clean: bool) -> bool:
         if clean:
             audio.delete()
         # Vorbis comments are case-insensitive but usually uppercase
@@ -66,7 +67,7 @@ class TaggingService:
         audio.save()
         return True
 
-    def _tag_mp3(self, audio: ID3, meta: Dict[str, Any], clean: bool) -> bool:
+    def _tag_mp3(self, audio: ID3, meta: dict[str, Any], clean: bool) -> bool:
         if clean:
             audio.delete()
         # Standard ID3v2.4 frames
@@ -110,7 +111,7 @@ class TaggingService:
         audio.save()
         return True
 
-    def _tag_mp4(self, audio: MP4, meta: Dict[str, Any], clean: bool) -> bool:
+    def _tag_mp4(self, audio: MP4, meta: dict[str, Any], clean: bool) -> bool:
         if clean:
             audio.delete()
         tag_map = {

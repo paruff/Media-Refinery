@@ -1,6 +1,7 @@
-from behave import given, when, then
+from behave import given, then, when
+
 from app.services.device_profile_service import DeviceProfileService
-from app.services.planning_service import PlanningService, FileAttributes
+from app.services.planning_service import FileAttributes, PlanningService
 
 
 @given(

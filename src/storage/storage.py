@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Union
 
 
 class Storage:
@@ -7,7 +6,7 @@ class Storage:
     Handles file storage operations such as saving and deleting files.
     """
 
-    def save_file(self, file_path: Path, content: Union[str, bytes]) -> bool:
+    def save_file(self, file_path: Path, content: str | bytes) -> bool:
         """
         Saves content to a file.
 
@@ -23,7 +22,7 @@ class Storage:
                 f.write(content)
             return True
         except Exception as e:
-            print(f"Failed to save file {file_path}: {e}")
+            print(f"Failed to save file {file_path}: {e}")  # noqa: T201
             return False
 
     def delete_file(self, file_path: Path) -> bool:
@@ -41,8 +40,8 @@ class Storage:
                 file_path.unlink()
                 return True
             else:
-                print(f"File does not exist: {file_path}")
+                print(f"File does not exist: {file_path}")  # noqa: T201
                 return False
         except Exception as e:
-            print(f"Failed to delete file {file_path}: {e}")
+            print(f"Failed to delete file {file_path}: {e}")  # noqa: T201
             return False

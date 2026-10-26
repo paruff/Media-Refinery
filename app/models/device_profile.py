@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from typing import List
 
 
 class Resolution(BaseModel):
@@ -10,10 +9,10 @@ class Resolution(BaseModel):
 class DeviceProfile(BaseModel):
     id: str
     name: str
-    supported_audio: List[str]
-    supported_video: List[str]
+    supported_audio: list[str]
+    supported_video: list[str]
     max_resolution: Resolution
-    container: List[str]
+    container: list[str]
 
     @classmethod
     def from_dict(cls, data: dict) -> "DeviceProfile":

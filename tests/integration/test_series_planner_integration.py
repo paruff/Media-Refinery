@@ -1,9 +1,11 @@
+import uuid
+
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+
 from app.models.media import Base, MediaItem, MediaType
 from app.services.series_planner import SeriesPlanningService
-import uuid
 
 
 @pytest.mark.asyncio

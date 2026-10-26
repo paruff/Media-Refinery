@@ -1,12 +1,13 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from app.models.media import MediaItem
+from datetime import UTC, datetime
 
 # Celery/Redis for distributed execution monitoring
 from celery.result import AsyncResult  # type: ignore[import-untyped]
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
+from app.models.media import MediaItem
 
 # Import your services here
 # from app.services.scanner_service import ScannerService
@@ -77,7 +78,7 @@ class PipelineOrchestrator:
         stuck = result.scalars().all()
         for item in stuck:
             item.state = "planned"
-            item.updated_at = datetime.now(timezone.utc)
+            item.updated_at = datetime.now(UTC)
         await self.db.commit()
 
     async def _process_actionable_items(self):
@@ -126,11 +127,11 @@ class PipelineOrchestrator:
                     result = AsyncResult(task_id, app=celery_app)
                     if result.state == "SUCCESS":
                         item.state = state_info["next"]
-                        item.updated_at = datetime.now(timezone.utc)
+                        item.updated_at = datetime.now(UTC)
                         item.retry_count = 0
                     elif result.state in ("FAILURE", "REVOKED"):
                         item.state = state_info["fail"]
-                        item.updated_at = datetime.utcnow()
+                        item.updated_at = datetime.utcnow()  # noqa: DTZ003
                         item.retry_count = getattr(item, "retry_count", 0) + 1
                         if item.retry_count > 3:
                             item.state = "error"
@@ -142,12 +143,12 @@ class PipelineOrchestrator:
                 await asyncio.sleep(0.1)  # Simulate work
                 # On success
                 item.state = state_info["next"]
-                item.updated_at = datetime.utcnow()
+                item.updated_at = datetime.utcnow()  # noqa: DTZ003
                 item.retry_count = 0
                 # Optionally, append to audit_log
         except Exception as e:
             item.state = state_info["fail"]
-            item.updated_at = datetime.utcnow()
+            item.updated_at = datetime.utcnow()  # noqa: DTZ003
             item.retry_count = getattr(item, "retry_count", 0) + 1
             if item.retry_count > 3:
                 item.state = "error"

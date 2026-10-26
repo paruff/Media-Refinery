@@ -9,10 +9,9 @@ import asyncio
 import json
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 
-class AudioFormat(str, Enum):
+class AudioFormat(str, Enum):  # noqa: UP042
     """Supported audio formats."""
 
     MP3 = "MP3"
@@ -27,20 +26,16 @@ class AudioFormat(str, Enum):
 class UnsupportedAudioFormatError(Exception):
     """Raised when audio format is unsupported."""
 
-    pass
-
 
 class CorruptedAudioFileError(Exception):
     """Raised when audio file is corrupted or invalid."""
-
-    pass
 
 
 class AudioFormatDetector:
     """Detects audio file formats from content using magic numbers and FFprobe."""
 
     # Magic number signatures for audio formats
-    MAGIC_NUMBERS = {
+    MAGIC_NUMBERS = {  # noqa: RUF012
         # MP3 - ID3v2 tag or MPEG frame sync
         AudioFormat.MP3: [
             b"ID3",  # ID3v2 tag
@@ -75,7 +70,6 @@ class AudioFormatDetector:
 
     def __init__(self):
         """Initialize AudioFormatDetector."""
-        pass
 
     def detect_from_content(self, file_path: Path) -> AudioFormat:
         """Detect audio format from file content using magic numbers.
@@ -99,7 +93,7 @@ class AudioFormatDetector:
             with open(file_path, "rb") as f:
                 header = f.read(self.MIN_READ_SIZE)
         except Exception as e:
-            raise CorruptedAudioFileError(f"Failed to read file {file_path}: {e}")
+            raise CorruptedAudioFileError(f"Failed to read file {file_path}: {e}")  # noqa: B904
 
         if len(header) == 0:
             raise CorruptedAudioFileError(f"File is empty: {file_path}")
@@ -119,7 +113,7 @@ class AudioFormatDetector:
 
         return detected_format
 
-    def _match_magic_number(self, header: bytes) -> Optional[AudioFormat]:
+    def _match_magic_number(self, header: bytes) -> AudioFormat | None:
         """Match header bytes against known magic numbers.
 
         Args:
@@ -188,7 +182,7 @@ class AudioFormatDetector:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await process.communicate()  # noqa: RUF059
 
             if process.returncode != 0:
                 return False
@@ -200,7 +194,9 @@ class AudioFormatDetector:
                 # Check if there's at least one audio stream
                 if "streams" in probe_data:
                     audio_streams = [
-                        s for s in probe_data["streams"] if s.get("codec_type") == "audio"
+                        s
+                        for s in probe_data["streams"]
+                        if s.get("codec_type") == "audio"
                     ]
                     return len(audio_streams) > 0
 
@@ -211,7 +207,7 @@ class AudioFormatDetector:
 
         except FileNotFoundError:
             # ffprobe not installed
-            raise FileNotFoundError("ffprobe is not installed or not in PATH")
+            raise FileNotFoundError("ffprobe is not installed or not in PATH")  # noqa: B904
 
     async def detect_format(self, file_path: Path) -> AudioFormat:
         """Detect audio format using both magic numbers and FFprobe validation.

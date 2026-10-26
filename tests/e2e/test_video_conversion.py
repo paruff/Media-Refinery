@@ -1,5 +1,6 @@
 import pytest
-from src.video.converter import VideoConverter, Config
+
+from src.video.converter import Config, VideoConverter
 
 
 @pytest.fixture

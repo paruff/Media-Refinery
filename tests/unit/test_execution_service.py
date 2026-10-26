@@ -1,9 +1,11 @@
-import pytest
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.models.media import MediaItem, NormalizationPlan
 from app.services.execution_service import ExecutionService
-from app.models.media import NormalizationPlan, MediaItem
 
 
 @pytest.mark.asyncio

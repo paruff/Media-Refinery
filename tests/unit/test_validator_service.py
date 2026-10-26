@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock
-from app.services.validator_service import ValidatorService, ValidationReport
+
+from app.services.validator_service import ValidationReport, ValidatorService
 
 
 def test_validator_path_compliance(tmp_path):

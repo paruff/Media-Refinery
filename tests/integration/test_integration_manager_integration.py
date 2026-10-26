@@ -1,4 +1,5 @@
 import pytest
+
 from src.integrations.integration_manager import IntegrationManager
 
 

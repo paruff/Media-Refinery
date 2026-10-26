@@ -1,10 +1,12 @@
 import asyncio
 import json
+import subprocess
+
 import pytest
 import pytest_asyncio
-import subprocess
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+
 from app.models.media import Base
 
 pytest_plugins = ["pytest_mock"]

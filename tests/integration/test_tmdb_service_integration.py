@@ -1,8 +1,9 @@
-import pytest
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.tmdb import TMDBService
+
 from app.models.media import MediaItem
+from app.services.tmdb import TMDBService
 
 
 @pytest.mark.asyncio

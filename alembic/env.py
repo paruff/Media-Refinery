@@ -1,9 +1,10 @@
 # All imports at the very top, sys.path modification after imports (fixes ruff E402)
-import sys
 import os
+import sys
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+
+from sqlalchemy import engine_from_config, pool
+
 from alembic import context
 from app.models.media import Base
 

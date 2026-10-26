@@ -1,13 +1,13 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
+
 from pydantic import BaseModel
 
 
 class QualityMetrics(BaseModel):
-    vmaf: Optional[float] = None
-    psnr: Optional[float] = None
+    vmaf: float | None = None
+    psnr: float | None = None
 
 
 async def run_vmaf_ffmpeg(src: str, dst: str) -> QualityMetrics:
@@ -21,7 +21,7 @@ async def run_vmaf_ffmpeg(src: str, dst: str) -> QualityMetrics:
         "-i",
         dst,
         "-filter_complex",
-        "[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[dist];[ref][dist]libvmaf=log_path=%s:psnr=1"
+        "[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[dist];[ref][dist]libvmaf=log_path=%s:psnr=1"  # noqa: UP031
         % vmaf_log,
         "-t",
         "10",
@@ -35,17 +35,17 @@ async def run_vmaf_ffmpeg(src: str, dst: str) -> QualityMetrics:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        out, err = await proc.communicate()
+        out, err = await proc.communicate()  # noqa: RUF059
         if proc.returncode != 0:
             raise RuntimeError(f"ffmpeg vmaf failed: {err.decode()}")
         # Parse VMAF/PSNR from log
         import json
 
-        with open(vmaf_log, "r") as f:
+        with open(vmaf_log) as f:  # noqa: ASYNC230
             data = json.load(f)
         vmaf = data["pooled_metrics"]["vmaf"]["mean"]
         psnr = data["pooled_metrics"]["psnr"]["mean"]
         return QualityMetrics(vmaf=vmaf, psnr=psnr)
     except Exception as e:
-        logging.error(f"VMAF/PSNR check failed: {e}")
+        logging.error(f"VMAF/PSNR check failed: {e}")  # noqa: LOG015
         return QualityMetrics()

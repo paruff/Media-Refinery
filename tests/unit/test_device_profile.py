@@ -1,4 +1,5 @@
 import pytest
+
 from app.services.device_profile_service import DeviceProfileService
 
 

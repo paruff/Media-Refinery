@@ -1,4 +1,5 @@
-from typing import Any, Callable, List
+from collections.abc import Callable
+from typing import Any
 
 
 class Processor:
@@ -7,7 +8,7 @@ class Processor:
     """
 
     def __init__(self):
-        self.functions: List[Callable[[Any], Any]] = []
+        self.functions: list[Callable[[Any], Any]] = []
 
     def add_function(self, func: Callable[[Any], Any]) -> None:
         """
@@ -32,6 +33,6 @@ class Processor:
             try:
                 data = func(data)
             except Exception as e:
-                print(f"Processing function failed with error: {e}")
+                print(f"Processing function failed with error: {e}")  # noqa: T201
                 break
         return data

@@ -1,7 +1,8 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.musicbrainz import MusicBrainzService
+
 from app.models.media import MediaItem
+from app.services.musicbrainz import MusicBrainzService
 
 
 class MockMusicBrainz:

@@ -1,16 +1,19 @@
 import json
+
 import pytest
-from app.models.media import MediaItem, FileState, MediaType
+
+from app.models.media import FileState, MediaItem, MediaType
 from app.services.classification import ClassificationService
 
 
 @pytest.mark.asyncio
 async def test_classification_state_transition(async_session):
-    import mutagen.flac
     import tempfile
 
+    import mutagen.flac
+
     # Use a real FLAC file if available, else skip test
-    flac_path = tempfile.NamedTemporaryFile(suffix=".flac", delete=False).name
+    flac_path = tempfile.NamedTemporaryFile(suffix=".flac", delete=False).name  # noqa: SIM115
     try:
         # Write a minimal valid FLAC header to avoid mutagen errors
         with open(flac_path, "wb") as f:
@@ -39,7 +42,7 @@ async def test_classification_state_transition(async_session):
     async_session.add(item)
     await async_session.commit()
     classifier = ClassificationService(async_session)
-    media_type, enrichment = await classifier.classify_file("int1")
+    media_type, enrichment = await classifier.classify_file("int1")  # noqa: RUF059
     refreshed = await async_session.get(MediaItem, "int1")
     assert refreshed.state == FileState.enriched
     assert refreshed.media_type == MediaType.music
@@ -56,7 +59,7 @@ async def test_classification_logs_warning_for_unknown(async_session, caplog):
     await async_session.commit()
     classifier = ClassificationService(async_session)
     with caplog.at_level("WARNING"):
-        media_type, enrichment = await classifier.classify_file("int2")
+        media_type, enrichment = await classifier.classify_file("int2")  # noqa: RUF059
         assert "Could not classify file" in caplog.text
     refreshed = await async_session.get(MediaItem, "int2")
     assert refreshed.media_type == MediaType.unknown
@@ -74,7 +77,7 @@ async def test_classification_overwrites_existing_enrichment(async_session):
     async_session.add(item)
     await async_session.commit()
     classifier = ClassificationService(async_session)
-    media_type, enrichment = await classifier.classify_file("int3")
+    media_type, enrichment = await classifier.classify_file("int3")  # noqa: RUF059
     refreshed = await async_session.get(MediaItem, "int3")
     data = json.loads(refreshed.enrichment_data)
     assert data["title"].lower() == "inception"

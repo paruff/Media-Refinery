@@ -1,7 +1,9 @@
-import pytest
 import json
+
+import pytest
+
+from app.models.media import FileState, MediaItem, MediaType
 from app.services.auditor import IssueDetectorService
-from app.models.media import MediaItem, FileState, MediaType
 
 
 @pytest.mark.asyncio
@@ -58,7 +60,7 @@ async def test_integration_auditor_commits_detected_issues(async_session):
     async_session.add(item)
     await async_session.commit()
     auditor = IssueDetectorService(async_session)
-    issues, _ = await auditor.audit("int5")
+    issues, _ = await auditor.audit("int5")  # noqa: RUF059
     refreshed = await async_session.get(MediaItem, "int5")
     assert refreshed.state == FileState.audited
     decoded = json.loads(refreshed.detected_issues)

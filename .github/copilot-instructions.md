@@ -79,12 +79,13 @@ All functions must have complete type hints:
 from typing import Optional, List, Dict
 from pathlib import Path
 
+
 # CORRECT:
 async def convert_audio(
     input_path: Path,
     output_path: Path,
     format: str = "flac",
-    preserve_metadata: bool = True
+    preserve_metadata: bool = True,
 ) -> AudioConversionResult:
     """Convert audio file to specified format.
 
@@ -103,6 +104,7 @@ async def convert_audio(
     """
     pass
 
+
 # WRONG: No type hints
 def convert_audio(input_path, output_path, format="flac"):
     pass
@@ -115,13 +117,12 @@ Use `asyncio` for all I/O operations (file operations, subprocess calls, HTTP re
 import asyncio
 from pathlib import Path
 
+
 # CORRECT: Async subprocess execution
 async def execute_ffmpeg(args: List[str]) -> str:
     """Execute FFmpeg command asynchronously."""
     process = await asyncio.create_subprocess_exec(
-        "ffmpeg", *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+        "ffmpeg", *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
     stdout, stderr = await process.communicate()
 
@@ -129,6 +130,7 @@ async def execute_ffmpeg(args: List[str]) -> str:
         raise FFmpegError(f"FFmpeg failed: {stderr.decode()}")
 
     return stdout.decode()
+
 
 # WRONG: Blocking subprocess
 def execute_ffmpeg(args):
@@ -143,15 +145,18 @@ All configuration must use Pydantic models:
 from pydantic import BaseModel, Field, validator
 from pathlib import Path
 
+
 class AudioConfig(BaseModel):
     """Audio processing configuration."""
 
     format: str = Field(default="flac", description="Target audio format")
     compression_level: int = Field(default=5, ge=0, le=8)
     preserve_metadata: bool = Field(default=True)
-    sample_rate: Optional[int] = Field(default=None, description="Target sample rate (Hz)")
+    sample_rate: Optional[int] = Field(
+        default=None, description="Target sample rate (Hz)"
+    )
 
-    @validator('format')
+    @validator("format")
     def validate_format(cls, v):
         """Ensure format is supported."""
         supported = {"flac", "mp3", "aac", "ogg", "opus", "wav"}
@@ -161,6 +166,7 @@ class AudioConfig(BaseModel):
 
     class Config:
         """Pydantic config."""
+
         frozen = True  # Immutable config
         extra = "forbid"  # Raise error on unknown fields
 ```
@@ -170,6 +176,7 @@ Always use `pathlib.Path` for file operations:
 
 ```python
 from pathlib import Path
+
 
 # CORRECT:
 def process_file(input_path: Path, output_dir: Path) -> Path:
@@ -184,9 +191,12 @@ def process_file(input_path: Path, output_dir: Path) -> Path:
 
     return output_path
 
+
 # WRONG: String manipulation
 def process_file(input_path, output_dir):
-    output_path = os.path.join(output_dir, input_path.split("/")[-1].replace(".mp3", ".flac"))
+    output_path = os.path.join(
+        output_dir, input_path.split("/")[-1].replace(".mp3", ".flac")
+    )
     return output_path
 ```
 
@@ -198,22 +208,22 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
+
 async def convert_file(input_path: Path) -> None:
     """Convert file with structured logging."""
 
     # Bind context to all log messages in this function
-    log = logger.bind(
-        input_file=str(input_path),
-        operation="audio_conversion"
-    )
+    log = logger.bind(input_file=str(input_path), operation="audio_conversion")
 
     log.info("starting_conversion", format="flac")
 
     try:
         result = await _do_conversion(input_path)
-        log.info("conversion_complete",
-                 duration_ms=result.duration_ms,
-                 output_size_mb=result.size_mb)
+        log.info(
+            "conversion_complete",
+            duration_ms=result.duration_ms,
+            output_size_mb=result.size_mb,
+        )
     except Exception as e:
         log.error("conversion_failed", error=str(e), exc_info=True)
         raise
@@ -226,11 +236,15 @@ Specific exception types with clear messages:
 # Define custom exceptions
 class MediaRefineryError(Exception):
     """Base exception for Media-Refinery."""
+
     pass
+
 
 class InvalidAudioFormatError(MediaRefineryError):
     """Raised when audio format is invalid or unsupported."""
+
     pass
+
 
 class FFmpegError(MediaRefineryError):
     """Raised when FFmpeg execution fails."""
@@ -239,6 +253,7 @@ class FFmpegError(MediaRefineryError):
         super().__init__(message)
         self.command = command
         self.stderr = stderr
+
 
 # Use in code
 async def validate_audio_format(path: Path) -> str:
@@ -275,6 +290,7 @@ import pytest
 from pathlib import Path
 from media_refinery.audio.converter import AudioConverter
 
+
 class TestAudioConverter:
     """Unit tests for AudioConverter."""
 
@@ -307,19 +323,13 @@ class TestAudioConverter:
 
     @pytest.mark.asyncio
     async def test_convert_file_success(
-        self,
-        converter: AudioConverter,
-        temp_audio_file: Path,
-        tmp_path: Path
+        self, converter: AudioConverter, temp_audio_file: Path, tmp_path: Path
     ):
         """Test successful file conversion."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        result = await converter.convert_file(
-            temp_audio_file,
-            output_dir
-        )
+        result = await converter.convert_file(temp_audio_file, output_dir)
 
         assert result.success is True
         assert result.output_path.exists()
@@ -327,9 +337,7 @@ class TestAudioConverter:
 
     @pytest.mark.asyncio
     async def test_convert_file_invalid_input(
-        self,
-        converter: AudioConverter,
-        tmp_path: Path
+        self, converter: AudioConverter, tmp_path: Path
     ):
         """Test conversion with non-existent file."""
         nonexistent = tmp_path / "nonexistent.mp3"
@@ -345,13 +353,16 @@ class TestAudioConverter:
 ```python
 # Pattern: test_<function_name>_<scenario>_<expected_result>
 
+
 def test_convert_audio_valid_mp3_succeeds():
     """Test audio conversion succeeds for valid MP3."""
     pass
 
+
 def test_convert_audio_corrupted_file_raises_error():
     """Test audio conversion raises error for corrupted file."""
     pass
+
 
 def test_build_ffmpeg_command_with_metadata_includes_map_flag():
     """Test FFmpeg command includes metadata mapping flag."""
@@ -360,14 +371,17 @@ def test_build_ffmpeg_command_with_metadata_includes_map_flag():
 
 ### Parametrized Tests
 ```python
-@pytest.mark.parametrize("input_format,expected_codec", [
-    ("mp3", "libmp3lame"),
-    ("aac", "aac"),
-    ("flac", "flac"),
-    ("ogg", "libvorbis"),
-    ("opus", "libopus"),
-    ("wav", "pcm_s16le"),
-])
+@pytest.mark.parametrize(
+    "input_format,expected_codec",
+    [
+        ("mp3", "libmp3lame"),
+        ("aac", "aac"),
+        ("flac", "flac"),
+        ("ogg", "libvorbis"),
+        ("opus", "libopus"),
+        ("wav", "pcm_s16le"),
+    ],
+)
 def test_format_to_codec_mapping(input_format: str, expected_codec: str):
     """Test format to FFmpeg codec mapping."""
     codec = get_codec_for_format(input_format)
@@ -379,6 +393,7 @@ def test_format_to_codec_mapping(input_format: str, expected_codec: str):
 import pytest
 import asyncio
 
+
 @pytest.fixture
 async def async_converter():
     """Create and cleanup async converter."""
@@ -388,6 +403,7 @@ async def async_converter():
     yield converter
 
     await converter.cleanup()
+
 
 @pytest.mark.asyncio
 async def test_async_conversion(async_converter):
@@ -410,6 +426,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.job import Job, JobStatus
 from src.media_refinery.audio.converter import AudioConverter
 
+
 class AudioService:
     """Service for audio processing operations."""
 
@@ -420,10 +437,7 @@ class AudioService:
         self.logger = structlog.get_logger(__name__)
 
     async def process_audio_file(
-        self,
-        job_id: int,
-        input_path: Path,
-        output_dir: Path
+        self, job_id: int, input_path: Path, output_dir: Path
     ) -> Job:
         """Process audio file and update job status.
 
@@ -457,9 +471,7 @@ class AudioService:
             job.error_message = str(e)
             await self.db.commit()
 
-            self.logger.error("audio_processing_failed",
-                            job_id=job_id,
-                            error=str(e))
+            self.logger.error("audio_processing_failed", job_id=job_id, error=str(e))
             raise
 
         return job
@@ -472,6 +484,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.job import Job, JobStatus
+
 
 class JobRepository:
     """Repository for Job database operations."""
@@ -493,11 +506,7 @@ class JobRepository:
 
     async def get_pending_jobs(self, limit: int = 100) -> List[Job]:
         """Get pending jobs."""
-        stmt = (
-            select(Job)
-            .where(Job.status == JobStatus.PENDING)
-            .limit(limit)
-        )
+        stmt = select(Job).where(Job.status == JobStatus.PENDING).limit(limit)
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
@@ -521,10 +530,12 @@ from app.dependencies import get_db, get_audio_service
 
 router = APIRouter(prefix="/audio", tags=["audio"])
 
-@router.post("/convert", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/convert", response_model=JobResponse, status_code=status.HTTP_201_CREATED
+)
 async def convert_audio(
-    job_data: JobCreate,
-    audio_service: AudioService = Depends(get_audio_service)
+    job_data: JobCreate, audio_service: AudioService = Depends(get_audio_service)
 ) -> JobResponse:
     """Submit audio conversion job.
 
@@ -542,33 +553,29 @@ async def convert_audio(
         job = await audio_service.create_conversion_job(
             input_path=job_data.input_path,
             output_dir=job_data.output_dir,
-            format=job_data.format
+            format=job_data.format,
         )
         return JobResponse.from_orm(job)
 
     except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Job creation failed: {str(e)}"
+            detail=f"Job creation failed: {str(e)}",
         )
+
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
 async def get_job_status(
-    job_id: int,
-    audio_service: AudioService = Depends(get_audio_service)
+    job_id: int, audio_service: AudioService = Depends(get_audio_service)
 ) -> JobResponse:
     """Get job status by ID."""
     job = await audio_service.get_job(job_id)
 
     if not job:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job {job_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Job {job_id} not found"
         )
 
     return JobResponse.from_orm(job)
@@ -583,6 +590,7 @@ async def get_job_status(
 import asyncio
 from typing import List, Callable, Any
 
+
 class WorkerPool:
     """Async worker pool for concurrent task execution."""
 
@@ -595,21 +603,13 @@ class WorkerPool:
         self.semaphore = asyncio.Semaphore(max_workers)
         self.logger = structlog.get_logger(__name__)
 
-    async def execute_task(
-        self,
-        task: Callable,
-        *args: Any,
-        **kwargs: Any
-    ) -> Any:
+    async def execute_task(self, task: Callable, *args: Any, **kwargs: Any) -> Any:
         """Execute single task with semaphore."""
         async with self.semaphore:
             return await task(*args, **kwargs)
 
     async def execute_all(
-        self,
-        tasks: List[Callable],
-        *args: Any,
-        **kwargs: Any
+        self, tasks: List[Callable], *args: Any, **kwargs: Any
     ) -> List[Any]:
         """Execute all tasks concurrently.
 
@@ -619,20 +619,20 @@ class WorkerPool:
         Returns:
             List of results in same order as tasks
         """
-        coroutines = [
-            self.execute_task(task, *args, **kwargs)
-            for task in tasks
-        ]
+        coroutines = [self.execute_task(task, *args, **kwargs) for task in tasks]
 
         return await asyncio.gather(*coroutines)
 
+
 # Usage:
 pool = WorkerPool(max_workers=4)
-results = await pool.execute_all([
-    convert_file1,
-    convert_file2,
-    convert_file3,
-])
+results = await pool.execute_all(
+    [
+        convert_file1,
+        convert_file2,
+        convert_file3,
+    ]
+)
 ```
 
 ---
@@ -642,9 +642,7 @@ results = await pool.execute_all([
 ### Docstring Format (Google Style)
 ```python
 def complex_function(
-    param1: str,
-    param2: int,
-    optional_param: Optional[bool] = None
+    param1: str, param2: int, optional_param: Optional[bool] = None
 ) -> Dict[str, Any]:
     """One-line summary of function.
 
@@ -685,6 +683,7 @@ def convert_audio(path):
     # Implementation first
     pass
 
+
 def test_convert_audio():
     # Test second
     pass
@@ -697,6 +696,7 @@ def test_convert_audio():
     # Test first (fails)
     result = convert_audio("input.mp3")
     assert result.success
+
 
 def convert_audio(path):
     # Implementation second (to pass test)
@@ -716,6 +716,7 @@ async def bad_function():
 ```python
 # CORRECT:
 import aiofiles
+
 
 async def good_function():
     async with aiofiles.open("file.txt") as f:

@@ -5,10 +5,11 @@ from behave import when  # type: ignore[import-untyped]
 @when("the watcher scans for new files")
 def step_when_watcher_scans(context):
     # Simulate watcher logic: move file from input to staging and update DB
+    import asyncio
     import os
     import shutil
-    from app.models.media import MediaItem, FileState, MediaType
-    import asyncio
+
+    from app.models.media import FileState, MediaItem, MediaType
 
     async def watcher():
         async with context.db() as session:

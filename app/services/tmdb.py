@@ -1,11 +1,12 @@
 import asyncio
 import difflib
 import logging
-from typing import Optional, Dict, Any
+from typing import Any
 
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.media import MediaItem
 
 TMDB_API_URL = "https://api.themoviedb.org/3/search/movie"
@@ -43,8 +44,8 @@ class TMDBService:
     def __init__(
         self,
         api_key: str = TMDB_API_KEY,
-        cache: Optional[LRUCache] = None,
-        client: Optional[httpx.AsyncClient] = None,
+        cache: LRUCache | None = None,
+        client: httpx.AsyncClient | None = None,
     ):
         self.api_key = api_key
         self.cache = cache or LRUCache()
@@ -53,7 +54,7 @@ class TMDBService:
 
     async def fetch_movie_metadata(
         self, session: AsyncSession, media_id: str, max_retries: int = 3
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         # Fetch canonical_title/year from DB (fallback to parsing from source_path if needed)
         stmt = select(MediaItem).where(MediaItem.id == media_id)
         result = await session.execute(stmt)
@@ -71,14 +72,14 @@ class TMDBService:
                 )
                 await session.execute(upd)
                 await session.commit()
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
             return None
         # Use canonical_title and release_year if present, else try to parse from source_path
         from typing import cast
 
-        title: Optional[str] = cast(Optional[str], media.canonical_title)
-        year: Optional[int] = cast(Optional[int], media.release_year)
+        title: str | None = cast(str | None, media.canonical_title)
+        year: int | None = cast(int | None, media.release_year)
         if not title:
             # Fallback: parse from source_path (very basic)
             import re
@@ -187,7 +188,7 @@ class TMDBService:
         await self._flag_failed(session, media)
         return None
 
-    def _select_best_match(self, title: str, results: list) -> Optional[dict]:
+    def _select_best_match(self, title: str, results: list) -> dict | None:
         # Use difflib for title similarity
         for result in results:
             sim = (

@@ -4,10 +4,12 @@ These tests use actual FFmpeg/FFprobe tools and real audio files
 to validate the complete conversion workflow.
 """
 
-import pytest
-from pathlib import Path
-from src.audio.converter import AudioConverter
 import subprocess
+from pathlib import Path
+
+import pytest
+
+from src.audio.converter import AudioConverter
 
 
 def _has_encoder(encoder_name: str) -> bool:
@@ -393,9 +395,9 @@ class TestAudioConverterIntegration:
         result = await converter.convert(input_file, output_dir)
 
         # Verify conversion succeeded
-        assert (
-            result.success is True
-        ), f"Failed to convert {input_format} to FLAC: {result.error_message}"
+        assert result.success is True, (
+            f"Failed to convert {input_format} to FLAC: {result.error_message}"
+        )
         assert result.output_path.exists()
         assert result.output_path.suffix == ".flac"
         assert result.size_bytes > 0

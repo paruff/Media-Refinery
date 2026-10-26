@@ -1,6 +1,8 @@
-from behave import given, when, then  # type: ignore[import-untyped]
-from app.services.execution_service import celery_app
 import time
+
+from behave import given, then, when  # type: ignore[import-untyped]
+
+from app.services.execution_service import celery_app
 
 
 @given("a NormalizationPlan exists")

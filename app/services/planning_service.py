@@ -1,7 +1,9 @@
-from typing import Dict, Any
-from app.services.device_profile_service import DeviceProfileService
-from pydantic import BaseModel
 import logging
+from typing import Any
+
+from pydantic import BaseModel
+
+from app.services.device_profile_service import DeviceProfileService
 
 
 class FileAttributes(BaseModel):
@@ -16,12 +18,12 @@ class PlanningService:
     def __init__(self, profile_service: DeviceProfileService):
         self.profile_service = profile_service
 
-    async def plan(self, file_attrs: FileAttributes, device_id: str) -> Dict[str, Any]:
+    async def plan(self, file_attrs: FileAttributes, device_id: str) -> dict[str, Any]:
         """Constraint solver: returns plan actions for given file and device."""
         try:
             profile = self.profile_service.get_profile(device_id)
         except Exception as e:
-            logging.error(f"Device profile error: {e}")
+            logging.error(f"Device profile error: {e}")  # noqa: LOG015
             return {"error": str(e)}
 
         plan = {

@@ -8,10 +8,10 @@ structured logging.
 import asyncio
 import hashlib
 import json
-import structlog
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+
+import structlog
 
 
 @dataclass
@@ -23,7 +23,7 @@ class AudioConversionResult:
     checksum: str
     duration_ms: float
     size_bytes: int
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 @dataclass
@@ -33,14 +33,14 @@ class AudioProperties:
     sample_rate: int
     codec_name: str
     is_lossless: bool
-    channels: Optional[int] = None
-    bit_depth: Optional[int] = None
+    channels: int | None = None
+    bit_depth: int | None = None
 
 
 class FFmpegError(Exception):
     """Raised when FFmpeg execution fails."""
 
-    def __init__(self, message: str, command: List[str], stderr: str):
+    def __init__(self, message: str, command: list[str], stderr: str):
         super().__init__(message)
         self.command = command
         self.stderr = stderr
@@ -55,7 +55,7 @@ class AudioConverter:
     """
 
     # Supported audio formats
-    SUPPORTED_FORMATS = {
+    SUPPORTED_FORMATS = {  # noqa: RUF012
         ".mp3",
         ".flac",
         ".aac",
@@ -68,7 +68,7 @@ class AudioConverter:
     # Lossless audio formats
     # Note: OPUS is technically a lossy codec, but included here for high-quality
     # encoding settings as it provides near-transparent quality at high bitrates
-    LOSSLESS_FORMATS = {
+    LOSSLESS_FORMATS = {  # noqa: RUF012
         "flac",
         "wav",
         "alac",
@@ -78,8 +78,8 @@ class AudioConverter:
     def __init__(
         self,
         output_format: str = "flac",
-        sample_rate: Optional[int] = None,
-        bit_depth: Optional[int] = None,
+        sample_rate: int | None = None,
+        bit_depth: int | None = None,
         compression_level: int = 5,
     ):
         """Initialize AudioConverter.
@@ -140,7 +140,7 @@ class AudioConverter:
             self.logger.warning("ffprobe_failed", error=str(e), file=str(file_path))
             return {"streams": []}
 
-    async def detect_audio_properties(self, file_path: Path) -> Optional[AudioProperties]:
+    async def detect_audio_properties(self, file_path: Path) -> AudioProperties | None:
         """Detect audio properties from source file.
 
         Args:
@@ -155,7 +155,8 @@ class AudioConverter:
 
             # Find audio stream
             audio_streams = [
-                s for s in probe_data.get("streams", [])
+                s
+                for s in probe_data.get("streams", [])
                 if s.get("codec_type") == "audio"
             ]
 
@@ -179,7 +180,9 @@ class AudioConverter:
             )
 
         except Exception as e:
-            self.logger.error("property_detection_failed", error=str(e), file=str(file_path))
+            self.logger.error(
+                "property_detection_failed", error=str(e), file=str(file_path)
+            )
             return None
 
     def _determine_optimal_compression(self, source_format: str) -> int:
@@ -207,8 +210,8 @@ class AudioConverter:
         input_path: Path,
         output_path: Path,
         preserve_metadata: bool = True,
-        compression_level: Optional[int] = None,
-    ) -> List[str]:
+        compression_level: int | None = None,
+    ) -> list[str]:
         """Build FFmpeg command for audio conversion.
 
         Args:
@@ -270,7 +273,7 @@ class AudioConverter:
 
         return command
 
-    async def _execute_ffmpeg(self, command: List[str]) -> Tuple[int, str, str]:
+    async def _execute_ffmpeg(self, command: list[str]) -> tuple[int, str, str]:
         """Execute FFmpeg command asynchronously.
 
         Args:
@@ -291,7 +294,7 @@ class AudioConverter:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await process.communicate()  # noqa: RUF059
 
             stdout_str = ""  # Not captured
             stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
@@ -299,7 +302,7 @@ class AudioConverter:
             return process.returncode, stdout_str, stderr_str
 
         except Exception as e:
-            raise FFmpegError(
+            raise FFmpegError(  # noqa: B904
                 f"Failed to execute FFmpeg: {e}", command=command, stderr=str(e)
             )
 
@@ -397,11 +400,11 @@ class AudioConverter:
             FFmpegError: If conversion fails
         """
         # Validate input file
-        if not input_file.exists():
+        if not input_file.exists():  # noqa: ASYNC240
             raise FileNotFoundError(f"Input file not found: {input_file}")
 
         # Create output directory if it doesn't exist
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240
 
         # Determine output path
         output_file = output_dir / f"{input_file.stem}.{self.output_format}"
@@ -418,7 +421,7 @@ class AudioConverter:
         try:
             # Detect audio properties for intelligent conversion
             audio_props = await self.detect_audio_properties(input_file)
-            
+
             # Determine optimal compression level if converting to FLAC
             compression_level = self.compression_level
             if self.output_format == "flac" and audio_props:
@@ -431,16 +434,18 @@ class AudioConverter:
                     is_lossless=audio_props.is_lossless,
                     compression_level=compression_level,
                 )
-            
+
             # Build FFmpeg command; write directly to final output path
             # (some environments behave inconsistently with .tmp files)
             command = self.build_ffmpeg_command(
-                input_file, output_file, preserve_metadata=True,
-                compression_level=compression_level
+                input_file,
+                output_file,
+                preserve_metadata=True,
+                compression_level=compression_level,
             )
 
             # Execute FFmpeg
-            returncode, stdout, stderr = await self._execute_ffmpeg(command)
+            returncode, stdout, stderr = await self._execute_ffmpeg(command)  # noqa: RUF059
 
             # Wait briefly for filesystem to reflect ffmpeg output (race in some environments)
             total_wait = 0.0
@@ -474,7 +479,7 @@ class AudioConverter:
                 # or there is a brief race. Find the most recently-modified file
                 # in the output directory that was created after we started.
                 try:
-                    candidates = list(output_dir.iterdir())
+                    candidates = list(output_dir.iterdir())  # noqa: ASYNC240
                 except Exception:
                     candidates = []
 
@@ -509,9 +514,9 @@ class AudioConverter:
                         "temp_file_not_found",
                         temp_file=str(temp_file),
                         cwd=str(Path.cwd()),
-                        output_dir_exists=output_dir.exists(),
+                        output_dir_exists=output_dir.exists(),  # noqa: ASYNC240
                         output_dir_files=(
-                            list(output_dir.glob("*")) if output_dir.exists() else []
+                            list(output_dir.glob("*")) if output_dir.exists() else []  # noqa: ASYNC240
                         ),
                         ffmpeg_stderr=stderr[:500] if stderr else "",
                     )

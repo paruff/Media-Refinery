@@ -1,10 +1,12 @@
 import asyncio
 import difflib
 import logging
-from typing import Optional, Dict, Any
+from typing import Any
+
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.media import MediaItem
 
 TMDB_API_URL = "https://api.themoviedb.org/3"
@@ -29,8 +31,8 @@ class TVMetadataService:
     def __init__(
         self,
         api_key: str = TMDB_API_KEY,
-        cache: Optional[TVSeriesCache] = None,
-        client: Optional[httpx.AsyncClient] = None,
+        cache: TVSeriesCache | None = None,
+        client: httpx.AsyncClient | None = None,
     ):
         self.api_key = api_key
         self.cache = cache or TVSeriesCache()
@@ -39,7 +41,7 @@ class TVMetadataService:
 
     async def fetch_series_metadata(
         self, session: AsyncSession, media_id: int
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         stmt = select(MediaItem).where(MediaItem.id == media_id)
         result = await session.execute(stmt)
         media = result.scalar_one_or_none()
@@ -119,11 +121,11 @@ class TVMetadataService:
                 episode = data.get("episode_number")
                 if title and season and episode:
                     tokens = (title, year, season, episode)
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
         return tokens
 
-    def _select_best_match(self, title: str, results: list) -> Optional[dict]:
+    def _select_best_match(self, title: str, results: list) -> dict | None:
         for result in results:
             sim = (
                 difflib.SequenceMatcher(

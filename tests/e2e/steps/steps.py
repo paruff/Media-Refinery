@@ -1,21 +1,22 @@
 import os
-from behave import given, when, then
+
+from behave import given, then, when
 
 
 @given('an audio file "sample_audio.mp3"')
 def step_audio_sample(context):
     context.audio_file = "sample_audio.mp3"
-    assert os.path.exists(
-        context.audio_file
-    ), f"Audio file {context.audio_file} does not exist."
+    assert os.path.exists(context.audio_file), (
+        f"Audio file {context.audio_file} does not exist."
+    )
 
 
 @given('an audio file "<audio_file>"')
 def step_audio_param(context, audio_file=None):
     context.audio_file = audio_file
-    assert os.path.exists(
-        os.path.join("input/audio", context.audio_file)
-    ), f"Audio file {context.audio_file} does not exist."
+    assert os.path.exists(os.path.join("input/audio", context.audio_file)), (
+        f"Audio file {context.audio_file} does not exist."
+    )
 
 
 @when("the audio file is processed")
@@ -45,9 +46,9 @@ def step_audio_samplerate(context):
 @given('a TV show file "Show.Name.S01E01.mkv"')
 def step_tv_file(context):
     context.tv_file = "Show.Name.S01E01.mkv"
-    assert os.path.exists(
-        context.tv_file
-    ), f"TV show file {context.tv_file} does not exist."
+    assert os.path.exists(context.tv_file), (
+        f"TV show file {context.tv_file} does not exist."
+    )
 
 
 @when("the file is processed")
@@ -64,9 +65,9 @@ def step_tv_metadata(context):
 @given('a video file "<video_file>"')
 def step_video_param(context, video_file):
     context.video_file = video_file
-    assert os.path.exists(
-        context.video_file
-    ), f"Video file {context.video_file} does not exist."
+    assert os.path.exists(context.video_file), (
+        f"Video file {context.video_file} does not exist."
+    )
 
 
 @given('a video file "sample_video.mp4"')

@@ -1,5 +1,6 @@
-from celery import Celery
 import os
+
+from celery import Celery
 
 # Load broker URL from environment or default
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")

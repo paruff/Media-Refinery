@@ -1,10 +1,12 @@
 import asyncio
 import json
-from pathlib import Path
-from sqlalchemy.future import select
-from app.models.media import MediaItem, FileState
 import logging
 import os
+from pathlib import Path
+
+from sqlalchemy.future import select
+
+from app.models.media import FileState, MediaItem
 
 
 class ScannerService:
@@ -25,7 +27,7 @@ class ScannerService:
                 item.state = FileState.scanning
                 await session.commit()
             path = item.source_path
-            if not os.path.exists(path):
+            if not os.path.exists(path):  # noqa: ASYNC240
                 item.state = FileState.error
                 item.error_log = "File not found."
                 await session.commit()

@@ -1,10 +1,12 @@
 import asyncio
 import difflib
 import logging
-from typing import Optional, Dict, Any
+from typing import Any
+
 import musicbrainzngs
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.media import MediaItem
 
 logger = logging.getLogger("musicbrainz")
@@ -27,13 +29,13 @@ class AlbumCache:
 
 
 class MusicBrainzService:
-    def __init__(self, cache: Optional[AlbumCache] = None):
+    def __init__(self, cache: AlbumCache | None = None):
         self.cache = cache or AlbumCache()
         self._lock = asyncio.Lock()
 
     async def enrich_music(
         self, session: AsyncSession, media_id: int
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         stmt = select(MediaItem).where(MediaItem.id == media_id)
         result = await session.execute(stmt)
         media = result.scalar_one_or_none()
@@ -60,7 +62,7 @@ class MusicBrainzService:
                         limit=1,
                     )
                     releases = (
-                        mb_result["release-list"] if "release-list" in mb_result else []
+                        mb_result["release-list"] if "release-list" in mb_result else []  # noqa: SIM401
                     )
                     if not releases:
                         logger.info(f"No MusicBrainz release for {artist} - {album}")
@@ -146,7 +148,7 @@ class MusicBrainzService:
                 title = data.get("track_title") or data.get("title")
                 if artist and album and track_number and title:
                     return artist, album, track_number, title
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
         return None
 

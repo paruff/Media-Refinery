@@ -1,8 +1,9 @@
-import pytest
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.tv_metadata import TVMetadataService
+
 from app.models.media import MediaItem
+from app.services.tv_metadata import TVMetadataService
 
 
 @pytest.mark.asyncio

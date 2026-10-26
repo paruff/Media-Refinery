@@ -1,12 +1,14 @@
+import asyncio
 import shutil
 import sqlite3
-from pathlib import Path
 import tempfile
-import asyncio
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from pathlib import Path
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from app.models.media import Base
+
 import app.models.saga  # noqa: F401 (import to register models with Base.metadata)
+from app.models.media import Base
 
 
 def before_scenario(context, scenario):
@@ -64,15 +66,15 @@ def after_scenario(context, scenario):
     # Dispose DB engine if the test created one
     engine = getattr(context, "engine", None)
     if engine is not None:
-        try:
+        try:  # noqa: SIM105
             asyncio.run(engine.dispose())
-        except Exception:
+        except Exception:  # noqa: S110
             # Best-effort dispose; don't fail cleanup
             pass
 
     # Cleanup temp dirs
     for tempdir in getattr(context, "tempdirs", {}).values():
-        try:
+        try:  # noqa: SIM105
             tempdir.cleanup()
-        except Exception:
+        except Exception:  # noqa: S110
             pass

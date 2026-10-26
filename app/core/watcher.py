@@ -1,12 +1,14 @@
 import asyncio
-import os
-import time
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-from sqlalchemy.future import select
-from app.models.media import MediaItem, FileState, MediaType
 import hashlib
 import logging
+import os
+import time
+
+from sqlalchemy.future import select
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+
+from app.models.media import FileState, MediaItem, MediaType
 
 EXCLUDE_PATTERNS = (".DS_Store", ".tmp", ".part")
 STABILITY_WINDOW = 5  # seconds
@@ -50,8 +52,8 @@ class InputWatcher:
     async def process_queue(self):
         while True:
             to_remove = []
-            for path, last_seen in list(self.processing_queue.items()):
-                if not os.path.exists(path):
+            for path, last_seen in list(self.processing_queue.items()):  # noqa: B007
+                if not os.path.exists(path):  # noqa: ASYNC240
                     to_remove.append(path)
                     continue
                 stat = os.stat(path)

@@ -1,10 +1,11 @@
 import asyncio
 import logging
 import os
+import shutil
 import signal
 import sys
-import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from app.core.orchestrator import PipelineOrchestrator
 from app.services.reporting_service import ReportingService
 
@@ -27,7 +28,7 @@ class DaemonSupervisor:
         self._backoff = 1
         self._max_backoff = 300
         self._heartbeat_interval = 3600  # 60 minutes
-        self._last_heartbeat = datetime.now(timezone.utc)
+        self._last_heartbeat = datetime.now(UTC)
 
     async def run(self):
         loop = asyncio.get_running_loop()
@@ -47,8 +48,8 @@ class DaemonSupervisor:
                 self._backoff = 1
             except Exception as e:
                 self.logger.error(f"Top-level exception: {e}", exc_info=True)
-                with open("crash.log", "a") as f:
-                    f.write(f"{datetime.utcnow().isoformat()}\n{e}\n")
+                with open("crash.log", "a") as f:  # noqa: ASYNC230
+                    f.write(f"{datetime.utcnow().isoformat()}\n{e}\n")  # noqa: DTZ003
                 await self._backoff_wait()
             await self._maybe_heartbeat()
         self.logger.info("DaemonSupervisor exiting cleanly.")
@@ -69,11 +70,11 @@ class DaemonSupervisor:
 
     async def _health_checks(self):
         for path in [self.staging_dir, self.output_dir]:
-            if not os.path.exists(path):
+            if not os.path.exists(path):  # noqa: ASYNC240
                 self.logger.critical(f"Critical: Path unreachable: {path}")
                 await self._backoff_wait()
                 return
-            total, used, free = shutil.disk_usage(path)
+            total, used, free = shutil.disk_usage(path)  # noqa: RUF059
             percent_free = free / total * 100
             if percent_free < 5:
                 self.logger.critical(
@@ -85,7 +86,7 @@ class DaemonSupervisor:
         self.orchestrator.running = True
 
     async def _maybe_heartbeat(self):
-        now = datetime.utcnow()
+        now = datetime.utcnow()  # noqa: DTZ003
         if (now - self._last_heartbeat).total_seconds() > self._heartbeat_interval:
             summary = await self.reporting_service.get_summary()
             self.logger.info(f"Daemon Heartbeat: {summary.json(indent=2)}")

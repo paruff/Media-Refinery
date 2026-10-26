@@ -1,9 +1,11 @@
 import asyncio
+
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from app.models.media import Base, MediaItem, FileState
+
+from app.models.media import Base, FileState, MediaItem
 from app.services.classification import ClassificationService
 
 

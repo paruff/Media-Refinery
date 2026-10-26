@@ -1,7 +1,8 @@
-import os
 import json
+import os
+
 import yaml
-from typing import List
+
 from app.models.device_profile import DeviceProfile
 
 PROFILE_DIR = os.path.join(os.path.dirname(__file__), "../../profiles")
@@ -12,22 +13,22 @@ class DeviceProfileService:
         self.profile_dir = os.path.abspath(profile_dir)
         self.profiles = self.load_profiles()
 
-    def load_profiles(self) -> List[DeviceProfile]:
+    def load_profiles(self) -> list[DeviceProfile]:
         profiles = []
         for fname in os.listdir(self.profile_dir):
             fpath = os.path.join(self.profile_dir, fname)
             if not os.path.isfile(fpath):
                 continue
             try:
-                with open(fpath, "r") as f:
-                    if fname.endswith(".yaml") or fname.endswith(".yml"):
+                with open(fpath) as f:
+                    if fname.endswith(".yaml") or fname.endswith(".yml"):  # noqa: PIE810
                         data = yaml.safe_load(f)
                     elif fname.endswith(".json"):
                         data = json.load(f)
                     else:
                         continue
                 profiles.append(DeviceProfile.from_dict(data))
-            except Exception:
+            except Exception:  # noqa: S112
                 # Log error, skip invalid profile
                 continue
         return profiles

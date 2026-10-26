@@ -1,10 +1,12 @@
 """Integration tests for audio format detection with real files."""
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from src.audio.format_detector import (
-    AudioFormatDetector,
     AudioFormat,
+    AudioFormatDetector,
     UnsupportedAudioFormatError,
 )
 

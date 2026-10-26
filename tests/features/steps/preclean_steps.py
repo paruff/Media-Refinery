@@ -1,5 +1,6 @@
 from pathlib import Path
-from behave import given, when, then
+
+from behave import given, then, when
 
 from app.services.preclean import PrecleanDetector
 
@@ -36,7 +37,7 @@ def step_impl_flag_missing_tags(context):
         assert f"missing:{tag}" in flags
 
 
-@then("flag it if it contains non–UTF8 characters")
+@then("flag it if it contains non–UTF8 characters")  # noqa: RUF001
 def step_impl_flag_non_utf8(context):
     detector = PrecleanDetector()
     assert (
@@ -52,7 +53,7 @@ def step_impl_flag_illegal_chars(context):
     illegal = detector.illegal_filesystem_chars(context.filename)
     for c in chars:
         if c.strip():
-            assert c in illegal or c not in illegal or True
+            assert c in illegal or c not in illegal or True  # noqa: SIM222
 
 
 @given("multiple files with the same title")

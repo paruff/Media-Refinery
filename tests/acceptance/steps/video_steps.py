@@ -1,4 +1,4 @@
-from behave import given, when, then
+from behave import given, then, when
 
 
 @given('a video file "{file_name}"')

@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.services.series_planner import SeriesPlanningService
+
+import pytest
+
 from app.models.media import MediaItem, MediaType, PlanStatus
+from app.services.series_planner import SeriesPlanningService
 
 
 @pytest.mark.asyncio
@@ -62,7 +64,7 @@ async def test_series_plan_specials():
     # Allow 'Special' in filename, but not in the directory path
     import os
 
-    dir_path, file_name = os.path.split(plan.target_path)
+    dir_path, file_name = os.path.split(plan.target_path)  # noqa: RUF059
     assert "Special" not in dir_path  # Should be Season 00
     assert "libx264" in plan.ffmpeg_args
     assert "aac" in plan.ffmpeg_args

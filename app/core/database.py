@@ -1,16 +1,19 @@
-from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-from app.core.config import settings
 import os
-from sqlalchemy import text
+from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.core.config import settings
 from app.models.media import Base as ModelsBase
 
 # Use the project's model Base so metadata.create_all() creates model tables
 Base = ModelsBase
 engine = create_async_engine(settings.DATABASE_URL, echo=False, future=True)
-AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)  # type: ignore[call-overload]
+AsyncSessionLocal = sessionmaker(
+    bind=engine, class_=AsyncSession, expire_on_commit=False
+)  # type: ignore[call-overload]
 
 
 async def init_db():
