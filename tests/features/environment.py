@@ -8,15 +8,17 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+# Must run before any step module imports app.core.database (settings read at import).
+os.environ["DATABASE_URL"] = (
+    f"sqlite+aiosqlite:///{tempfile.mkdtemp(prefix='mr-bdd-')}/bdd.sqlite"
+)
+
 import app.models.saga  # noqa: F401 (import to register models with Base.metadata)
 from app.models.media import Base
 
 
 def before_all(context):
-    """Point the app at a temp-file DB and create its schema once."""
-    os.environ["DATABASE_URL"] = (
-        f"sqlite+aiosqlite:///{tempfile.mkdtemp(prefix='mr-bdd-')}/bdd.sqlite"
-    )
+    """Create the app schema in the temp-file DB once."""
     from app.core.database import init_db
 
     asyncio.run(init_db())
@@ -24,6 +26,13 @@ def before_all(context):
 
 def before_scenario(context, scenario):
     """Prepare isolated test dirs and DB before each scenario."""
+    if (
+        "needs_ffmpeg" in scenario.effective_tags
+        and not shutil.which("ffmpeg")
+        and not os.environ.get("REQUIRE_FFMPEG")
+    ):
+        scenario.skip("ffmpeg not installed (see `make docker-test`)")
+        return
     # Setup temp dirs for input/staging/output
     context.tempdirs = {}
     for d in ["input", "staging", "output"]:

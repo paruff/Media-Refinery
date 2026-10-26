@@ -3,6 +3,7 @@ Feature: Transactional Saga Pattern for File Moves
   I want to ensure zero data loss during cross-volume moves
   So that unfinished .tmp files are always cleaned or resumed
 
+  @needs_ffmpeg
   Scenario: Prepare-Commit-Cleanup lifecycle
     Given a NormalizationPlan with a valid source and target
     When the plan is executed
