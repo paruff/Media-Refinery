@@ -43,7 +43,7 @@ def available_encoders() -> frozenset[str]:
 
 def _command(
     path: Path, target: Path, bitrate_kbps: int, encoder: str,
-    pre: list[str], post: list[str], software: bool,
+    pre: list[str], post: list[str], software: bool, audio: list[str] | None,
 ) -> list[str | Path]:  # fmt: skip
     video = ["-c:v", encoder, "-b:v", f"{bitrate_kbps}k"]
     if software:
@@ -53,10 +53,13 @@ def _command(
             "-pix_fmt",
             "yuv420p",
         ]  # R-VIDEO-1 High profile
-    return [
-        "ffmpeg", "-y", "-nostdin", *pre, "-i", path, *post, *video,
-        "-c:a", "aac", "-b:a", "192k", target,
-    ]  # fmt: skip
+    # movies2vlib track rule: explicit maps, AAC + E-AC3 (+ copied Atmos), subtitles kept
+    tracks = (
+        ["-map", "0:v", "-map", "0:s?", *video, *audio, "-c:s", "copy"]
+        if audio
+        else [*video, "-c:a", "aac", "-b:a", "192k"]
+    )
+    return ["ffmpeg", "-y", "-nostdin", *pre, "-i", path, *post, *tracks, target]
 
 
 def encode(
@@ -65,6 +68,7 @@ def encode(
     bitrate_kbps: int,
     dry_run: bool = False,
     codec: str = "h264",
+    audio_args: list[str] | None = None,
 ) -> None:
     """Encode to `codec` (h264|hevc) + AAC. Hardware encoder when one works, else libx264/libx265.
 
@@ -84,11 +88,16 @@ def encode(
         if encoder not in listed:
             continue
         logger.info("Encoding %s with %s at %skbps", path.name, encoder, bitrate_kbps)
-        result = run(_command(path, target, bitrate_kbps, encoder, pre, post, False))
+        result = run(
+            _command(path, target, bitrate_kbps, encoder, pre, post, False, audio_args)
+        )
         if result is not None and result.returncode == 0:
             return
         logger.warning("%s failed, trying next encoder", encoder)
 
     software = SOFTWARE_ENCODERS[codec]
     logger.info("Encoding %s with %s at %skbps", path.name, software, bitrate_kbps)
-    run(_command(path, target, bitrate_kbps, software, [], [], True), check=True)
+    run(
+        _command(path, target, bitrate_kbps, software, [], [], True, audio_args),
+        check=True,
+    )

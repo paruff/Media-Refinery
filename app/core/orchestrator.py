@@ -17,9 +17,12 @@ from app.core.paths import ensure_inside
 from app.core.planning import VIDEO_COPY_CODECS, build_plan, is_audio_only
 from app.core.publish import archive_original, publish_file, quarantine_file
 from app.core.scanner import ScannerService
+from app.core.throttle import AdaptiveLimiter
 from app.core.tools import probe_duration, run_tool
+from app.core.trace import Status, TraceWriter
 from app.core.verify import sha256_file, verify_output
 from app.media.video.convert import convert_video
+from app.media.video.health import health_check, repair_remux
 from app.models.media import (
     FileState,
     MediaItem,
@@ -56,6 +59,8 @@ class PipelineConfig:
     ffmpeg_timeout: float = 6 * 3600
     max_concurrent_execute: int = 2  # CPU-heavy stage bounded separately (R-PIPE-5)
     max_concurrent_io: int = 5
+    throttle_after_failures: int = 2  # consecutive EXECUTE failures that halve workers
+    trace_path: Path | None = None  # JSONL trace (NF-4); default work/trace.jsonl
 
     @classmethod
     def from_settings(cls) -> PipelineConfig:
@@ -67,6 +72,7 @@ class PipelineConfig:
             music_root=Path(settings.MUSIC_ROOT),
             movies_root=Path(settings.MOVIES_ROOT),
             tv_root=Path(settings.TV_ROOT),
+            trace_path=Path(settings.LOG_DIR) / "trace.jsonl",
             dry_run=settings.DRY_RUN,
             auto_approve_types=frozenset(settings.AUTO_APPROVE_TYPES),
         )
@@ -116,7 +122,13 @@ class PipelineOrchestrator:
         )
         self.running = False
         self._io = asyncio.Semaphore(config.max_concurrent_io)
-        self._exec = asyncio.Semaphore(config.max_concurrent_execute)
+        self._exec = AdaptiveLimiter(
+            config.max_concurrent_execute, config.throttle_after_failures
+        )
+        trace_path = config.trace_path or config.work_dir / "trace.jsonl"
+        if config.dry_run:  # R-SAFE-4: dry-run writes only under work/dry-run/
+            trace_path = config.work_dir / "dry-run" / "trace.jsonl"
+        self.trace = TraceWriter(trace_path, self.run_id)
         self._scanner = ScannerService(session_factory, logger=self.logger)
 
     # ---- loop -----------------------------------------------------------
@@ -194,6 +206,8 @@ class PipelineOrchestrator:
                 return await self._advance(item_id, state)
             except Exception as e:
                 self.logger.exception(f"Pipeline failed for {item_id}")
+                if state == FileState.approved:
+                    self._record_execute(False)
                 await self._mark(item_id, FileState.error, str(e))
                 return True
 
@@ -209,6 +223,15 @@ class PipelineOrchestrator:
             FileState.published: self._archive,
         }
         return await handlers[state](item_id)
+
+    def _record_execute(self, ok: bool) -> None:
+        """Feed the adaptive throttle; trace when it halves the EXECUTE workers."""
+        if (limit := self._exec.record(ok)) is not None:
+            self.logger.warning(f"EXECUTE failures: reducing workers to {limit}")
+            self.trace.emit("workers.throttle", "", "degraded", f"new_workers={limit}")
+
+    def _emit(self, event: str, item_id, status: Status, detail: str = "") -> None:
+        self.trace.emit(event, str(item_id), status, detail)
 
     async def _mark(self, item_id, state, error=None):
         async with self.session_factory() as session:
@@ -240,6 +263,7 @@ class PipelineOrchestrator:
         shutil.rmtree(self.cfg.work_dir / str(item.id), ignore_errors=True)
         await session.commit()
         self.logger.warning(f"Quarantined {item.id} ({reason}): {detail}")
+        self._emit("quarantine", item.id, "success", reason)
 
     def _work(self, item_id, ext="") -> Path:
         return self.cfg.work_dir / str(item_id) / f"out{ext}"
@@ -340,6 +364,7 @@ class PipelineOrchestrator:
             report_path.write_text(json.dumps(report, indent=2))
 
         await asyncio.to_thread(write)
+        self._emit("plan", item_id, "dry_run", report["target"])
         return True
 
     async def _run_ffmpeg(self, source: str, args: list[str], out: Path):
@@ -353,10 +378,13 @@ class PipelineOrchestrator:
         """Legacy-codec video (MPEG-1/2, WMV, XviD...) goes through the converter engine."""
         return not is_audio_only(item) and item.video_codec not in VIDEO_COPY_CODECS
 
-    async def _convert_video(self, item, out: Path) -> tuple[int, str]:
+    async def _convert_video(self, item, source: Path, out: Path) -> tuple[int, str]:
+        def on_event(event: str, status: Status, detail: str) -> None:
+            self._emit(event, item.id, status, detail)
+
         try:
             await asyncio.to_thread(
-                convert_video, Path(str(item.source_path)), out, out.parent / "repair"
+                convert_video, source, out, out.parent / "repair", on_event=on_event
             )
         except Exception as e:
             return 1, str(e)
@@ -377,11 +405,35 @@ class PipelineOrchestrator:
             tmp = work.with_name(
                 f"out.tmp{ext}"
             )  # ffmpeg infers the container from the suffix
+            source = Path(str(item.source_path))
+            if not is_audio_only(item):
+                healthy, detail = await asyncio.to_thread(health_check, source)
+                self._emit(
+                    "healthcheck", item_id, "passed" if healthy else "failed", detail
+                )
+                if not healthy:  # remux-repair fallback, else quarantine the original
+                    repaired = await asyncio.to_thread(
+                        repair_remux, source, work.parent / "repair"
+                    )
+                    self._emit(
+                        "repair",
+                        item_id,
+                        "success" if repaired else "failed",
+                        "remux_to_mkv",
+                    )
+                    if repaired is None:
+                        await self._quarantine(
+                            session, item, "healthcheck_failed", detail, source
+                        )
+                        self._record_execute(False)
+                        return True
+                    source = repaired
+            self._emit("execute", item_id, "started")
             if plan.needs_transcode and self._is_video_reencode(item):
-                rc, err = await self._convert_video(item, tmp)  # repair + smart bitrate
+                rc, err = await self._convert_video(item, source, tmp)  # smart bitrate
             else:
                 rc, _, err = await self._run_ffmpeg(
-                    str(item.source_path), list(plan.ffmpeg_args or []), tmp
+                    str(source), list(plan.ffmpeg_args or []), tmp
                 )
             plan.execution_log = f"{plan.execution_log}\nffmpeg rc={rc}\n{err}".strip()
             if rc != 0:
@@ -389,10 +441,13 @@ class PipelineOrchestrator:
                 await self._quarantine(
                     session, item, "convert_failed", err.strip()[:500]
                 )
+                self._record_execute(False)
                 return True
             tmp.replace(work)
             item.state = FileState.executed
             await session.commit()
+            self._emit("execute", item_id, "success")
+            self._record_execute(True)
         return True
 
     async def _verify(self, item_id) -> bool:
@@ -414,6 +469,9 @@ class PipelineOrchestrator:
                     checks=checks,
                     output_sha256=digest,
                 )
+            )
+            self._emit(
+                "verify", item_id, "failed" if reason else "passed", reason or ""
             )
             if reason:
                 detail = "; ".join(
@@ -461,6 +519,7 @@ class PipelineOrchestrator:
                 await publish_file(session, str(plan.id), work, dest, sha)
             item.state = FileState.published
             await session.commit()
+            self._emit("publish", item_id, "success", str(dest))
         return True
 
     async def _archive(self, item_id) -> bool:
@@ -485,4 +544,5 @@ class PipelineOrchestrator:
             item.state = FileState.validated
             item.updated_at = _now()
             await session.commit()
+            self._emit("archive", item_id, "success", str(archived or ""))
         return True
