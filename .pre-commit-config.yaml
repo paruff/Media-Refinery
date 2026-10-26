@@ -5,10 +5,10 @@
 # human-readable tag). Never edit revs by hand; run `make hooks-update`, which
 # is `pre-commit autoupdate --freeze` and is also done weekly by Dependabot.
 #
-# One-time setup:  uv python install 3.12 && pre-commit install   (see Makefile: make hooks)
+# One-time setup:  uv python install 3.14 && pre-commit install   (see Makefile: make hooks)
 minimum_pre_commit_version: "4.0.0"
 default_language_version:
-  python: python3.12
+  python: python3.14
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit]
 fail_fast: false
@@ -133,7 +133,7 @@ repos:
     hooks:
       - id: pytest-unit
         name: pytest (unit)
-        entry: bash -c 'uv run --python 3.12 --no-project --with-requirements requirements.txt --with pytest-mock python -m pytest tests/unit -q -p no:cacheprovider'
+        entry: bash -c 'uv run --python 3.14 --no-project --with-requirements requirements.txt --with pytest-mock python -m pytest tests/unit -q -p no:cacheprovider'
         language: system
         pass_filenames: false
         always_run: true

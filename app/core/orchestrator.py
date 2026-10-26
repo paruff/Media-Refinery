@@ -57,7 +57,7 @@ class PipelineConfig:
     max_concurrent_io: int = 5
 
     @classmethod
-    def from_settings(cls) -> "PipelineConfig":
+    def from_settings(cls) -> PipelineConfig:
         return cls(
             input_dir=Path(settings.INPUT_DIR),
             work_dir=Path(settings.WORK_DIR),
