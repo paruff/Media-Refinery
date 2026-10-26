@@ -41,20 +41,30 @@ def _enrichment(item: MediaItem) -> dict:
 
 def _music(item: MediaItem, root: str) -> PlanSpec:
     meta = _enrichment(item)
+    tags = meta.get("music", {}).get("tags", {})  # identified tags win (R-MUSIC-5)
     codec = (item.audio_codec or "").lower()
     ext = LOSSY_EXT.get(codec, "flac")
-    args = (
-        ["-map", "0", "-c", "copy"]
-        if codec in LOSSY_EXT or codec == "flac"
-        else ["-map", "0", "-c:v", "copy", "-c:a", "flac"]
+    # audio only: the cover is re-embedded from the best source at EXECUTE (R-MUSIC-3)
+    keep = codec in LOSSY_EXT or codec == "flac"
+    args = ["-map", "0:a", "-c", "copy" if keep else "flac"]
+    artist = (
+        tags.get("album_artist") or item.album_artist or item.artist or "Unknown Artist"
     )
-    artist = item.album_artist or item.artist or "Unknown Artist"
-    album = item.album_name or item.album or "Unknown Album"
-    year = _year(item.release_year or item.year)
+    album = tags.get("album") or item.album_name or item.album or "Unknown Album"
+    year = _year(tags.get("year") or item.release_year or item.year)
     album_dir = f"{album} ({year})" if year else album
-    title = item.title or meta.get("track_title") or Path(str(item.source_path)).stem
-    track = meta.get("track_number")
+    title = (
+        tags.get("title")
+        or item.title
+        or meta.get("track_title")
+        or Path(str(item.source_path)).stem
+    )
+    track = tags.get("track_number") or meta.get("track_number")
     prefix = f"{int(track):02d} - " if str(track or "").isdigit() else ""
+    if (
+        int(tags.get("disc_total") or 1) > 1
+    ):  # R-MUSIC-4: disc prefix only for multi-disc
+        prefix = f"{tags.get('disc_number') or 1}-{prefix}"
     path = confine(root, artist, album_dir, f"{prefix}{title}.{ext}")
     return PlanSpec(str(path), args, needs_transcode=args[-1] == "flac")
 

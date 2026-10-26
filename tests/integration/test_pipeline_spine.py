@@ -152,9 +152,9 @@ async def test_crash_mid_execute_then_restart_completes(env):
     assert (cfg.music_root / "X" / "Y" / "Z.mp3").stat().st_size > len(b"partial")
 
 
-async def test_corrupt_output_is_quarantined_and_original_untouched(env):
+async def _corrupt_output_case(env, src_name, make, garbage_root):
     cfg, factory = env
-    src = make_mp3(cfg.input_dir / "a.mp3", artist="X", album="Y", title="Z")
+    src = make(cfg.input_dir / src_name)
     before = src.read_bytes()
     await import_input(cfg, factory)
     orch = PipelineOrchestrator(factory, cfg)
@@ -168,12 +168,30 @@ async def test_corrupt_output_is_quarantined_and_original_untouched(env):
     orch._run_ffmpeg = garbage  # type: ignore[method-assign]
     await orch.run_until_idle()
     (item,) = await _items(factory)
+    assert src.read_bytes() == before and not list(garbage_root(cfg).rglob("*.*"))
+    assert not cfg.archive_dir.exists()
+    return cfg, item
+
+
+async def test_corrupt_output_is_quarantined_and_original_untouched(env):
+    cfg, item = await _corrupt_output_case(
+        env, "Test Movie (2020).mkv", make_mkv, lambda c: c.movies_root
+    )
     assert item.state == FileState.quarantined and item.error_log.startswith(
         "decode_failed"
     )
     assert len(list((cfg.quarantine_dir / "decode_failed").iterdir())) == 1
-    assert src.read_bytes() == before and not list(cfg.music_root.rglob("*.mp3"))
-    assert not cfg.archive_dir.exists()
+
+
+async def test_untaggable_music_output_is_quarantined(env):
+    """Music output that cannot even be tagged never reaches VERIFY or the library."""
+    _, item = await _corrupt_output_case(
+        env, "a.mp3", lambda p: make_mp3(p, artist="X", album="Y", title="Z"),
+        lambda c: c.music_root,
+    )  # fmt: skip
+    assert item.state == FileState.quarantined and item.error_log.startswith(
+        "convert_failed"
+    )
 
 
 async def test_failed_conversion_is_quarantined(env):

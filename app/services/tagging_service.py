@@ -2,10 +2,35 @@ import logging
 import os
 from typing import Any
 
-from mutagen import File
-from mutagen.flac import FLAC
-from mutagen.id3 import ID3, TALB, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX
-from mutagen.mp4 import MP4
+from mutagen import File, MutagenError
+from mutagen.flac import FLAC, Picture
+from mutagen.id3 import (
+    APIC,
+    ID3,
+    TALB,
+    TCON,
+    TDRC,
+    TIT2,
+    TPE1,
+    TPE2,
+    TPOS,
+    TRCK,
+    TXXX,
+    ID3NoHeaderError,
+)
+from mutagen.mp4 import MP4, MP4Cover
+
+# R-MUSIC-2 keys without a native frame/atom: Vorbis names, ID3 TXXX, MP4 freeform
+EXTRA_KEYS = (
+    "musicbrainz_trackid",
+    "musicbrainz_albumid",
+    "musicbrainz_artistid",
+    "musicbrainz_albumartistid",
+    "replaygain_track_gain",
+    "replaygain_track_peak",
+    "replaygain_album_gain",
+    "replaygain_album_peak",
+)
 
 
 class TaggingService:
@@ -22,7 +47,11 @@ class TaggingService:
         """
         Detect file type and apply tags from metadata dict. Returns True if successful.
         """
-        audio = File(file_path, easy=False)
+        try:
+            audio = File(file_path, easy=False)
+        except MutagenError as e:
+            self.logger.error(f"Unreadable file {file_path}: {e}")
+            return False
         if audio is None:
             self.logger.error(f"Unsupported or unreadable file: {file_path}")
             return False
@@ -33,7 +62,12 @@ class TaggingService:
             elif ext == ".mp3" or (
                 hasattr(audio, "tags") and isinstance(audio.tags, ID3)
             ):
-                return self._tag_mp3(audio, metadata, clean_tags)
+                try:
+                    tags = ID3(file_path)
+                except ID3NoHeaderError:
+                    tags = ID3()
+                    tags.filename = file_path  # a fresh ID3 needs to know where to save
+                return self._tag_mp3(tags, metadata, clean_tags)
             elif ext in (".m4a", ".mp4") or isinstance(audio, MP4):
                 return self._tag_mp4(audio, metadata, clean_tags)
             else:
@@ -58,14 +92,23 @@ class TaggingService:
             "disc_total": "DISCTOTAL",
             "year": "DATE",
             "release_date": "DATE",
-            "musicbrainz_trackid": "MUSICBRAINZ_TRACKID",
-            "musicbrainz_albumid": "MUSICBRAINZ_ALBUMID",
+            "genre": "GENRE",
+            **{k: k.upper() for k in EXTRA_KEYS},
         }
         for k, v in tag_map.items():
             if k in meta and meta[k] is not None:
                 audio[v] = [str(meta[k])]
+        if meta.get("cover"):
+            audio.clear_pictures()
+            audio.add_picture(self._flac_picture(meta["cover"]))
         audio.save()
         return True
+
+    @staticmethod
+    def _flac_picture(jpeg: bytes) -> Picture:
+        pic = Picture()
+        pic.type, pic.mime, pic.data = 3, "image/jpeg", jpeg  # 3 = front cover
+        return pic
 
     def _tag_mp3(self, audio: ID3, meta: dict[str, Any], clean: bool) -> bool:
         if clean:
@@ -91,22 +134,15 @@ class TaggingService:
             if "disc_total" in meta:
                 disc += f"/{meta['disc_total']}"
             audio.add(TPOS(encoding=3, text=disc))
-        # MusicBrainz IDs
-        if "musicbrainz_trackid" in meta:
+        if "genre" in meta:
+            audio.add(TCON(encoding=3, text=meta["genre"]))
+        for key in EXTRA_KEYS:
+            if key in meta:
+                audio.add(TXXX(encoding=3, desc=key.upper(), text=str(meta[key])))
+        if meta.get("cover"):
+            audio.delall("APIC")
             audio.add(
-                TXXX(
-                    encoding=3,
-                    desc="MUSICBRAINZ_TRACKID",
-                    text=meta["musicbrainz_trackid"],
-                )
-            )
-        if "musicbrainz_albumid" in meta:
-            audio.add(
-                TXXX(
-                    encoding=3,
-                    desc="MUSICBRAINZ_ALBUMID",
-                    text=meta["musicbrainz_albumid"],
-                )
+                APIC(encoding=3, mime="image/jpeg", type=3, desc="", data=meta["cover"])
             )
         audio.save()
         return True
@@ -122,13 +158,13 @@ class TaggingService:
             "year": "\xa9day",
             "track_number": "trkn",
             "disc_number": "disk",
-            "musicbrainz_trackid": "----:com.apple.iTunes:MUSICBRAINZ_TRACKID",
-            "musicbrainz_albumid": "----:com.apple.iTunes:MUSICBRAINZ_ALBUMID",
+            "genre": "\xa9gen",
+            **{k: f"----:com.apple.iTunes:{k.upper()}" for k in EXTRA_KEYS},
         }
         for k, v in tag_map.items():
             if k in meta and meta[k] is not None:
                 if v.startswith("----"):
-                    audio[v] = [meta[k].encode("utf-8")]
+                    audio[v] = [str(meta[k]).encode("utf-8")]
                 elif v in ("trkn", "disk"):
                     # MP4 expects tuples for track/disc
                     if k == "track_number":
@@ -139,5 +175,7 @@ class TaggingService:
                         audio[v] = [(int(meta[k]), int(total))]
                 else:
                     audio[v] = [str(meta[k])]
+        if meta.get("cover"):
+            audio["covr"] = [MP4Cover(meta["cover"], imageformat=MP4Cover.FORMAT_JPEG)]
         audio.save()
         return True

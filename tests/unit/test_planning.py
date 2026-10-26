@@ -82,3 +82,35 @@ def test_series_layout():
 def test_unknown_type_rejected():
     with pytest.raises(ValueError):
         build_plan(_item(media_type=MediaType.unknown), ROOTS)
+
+
+def test_music_layout_disc_prefix_only_for_multi_disc(tmp_path):
+    from app.core.planning import build_plan
+
+    def plan(disc_total):
+        item = MediaItem(
+            id="m",
+            source_path="/in/a.flac",
+            media_type=MediaType.music,
+            audio_codec="flac",
+            enrichment_data=json.dumps(
+                {
+                    "music": {
+                        "tags": {
+                            "album_artist": "Artist",
+                            "album": "Album",
+                            "title": "Song",
+                            "year": "2021",
+                            "track_number": 3,
+                            "disc_number": 2,
+                            "disc_total": disc_total,
+                        }
+                    }
+                }
+            ),
+        )
+        return build_plan(item, {"music": str(tmp_path)}, [])
+
+    assert plan(1).target_path.endswith("Artist/Album (2021)/03 - Song.flac")
+    assert plan(2).target_path.endswith("Artist/Album (2021)/2-03 - Song.flac")
+    assert plan(1).ffmpeg_args == ["-map", "0:a", "-c", "copy"]

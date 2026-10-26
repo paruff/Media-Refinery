@@ -55,6 +55,8 @@ convert → verify → publish → notify server.
 - R-MUSIC-3 Embedded front cover (PICTURE type 3, ≥500 px, ≤2 MB) **and** `cover.jpg` in the album folder.
 - R-MUSIC-4 Layout: `Music/{AlbumArtist}/{Album} ({Year})/{Disc:0>1}-{Track:02} - {Title}.flac` (disc prefix only when `DISCTOTAL>1`).
 - R-MUSIC-5 Identification: AcoustID (Chromaprint `fpcalc`) → MusicBrainz release match; confidence below threshold ⇒ plan requires manual approval.
+  Implemented in `app/services/music_id.py`: the best AcoustID result with a release is looked up in MusicBrainz (first release of the recording; one fetch per album, 1 req/s). A score below `ACOUSTID_MIN_SCORE` (default 0.85), no match, or no fingerprint keeps the embedded tags and leaves the plan in Review even for `AUTO_APPROVE_TYPES`; a human `approve()` still publishes it. Without `ACOUSTID_API_KEY` music uses embedded tags and is never held.
+  Album as unit: a track waits in ENRICHED until every file in its folder is classified; ReplayGain track gain is measured per file and album gain over the folder played as one (ffmpeg `replaygain`, 48 kHz stereo mix). Cover: embedded picture first, else Cover Art Archive `front`; JPEG, ≥500 px, ≤2 MB (shrunk if needed), embedded as PICTURE type 3 and written as `cover.jpg` at publish; none usable ⇒ trace `cover` skipped, track still published. A sidecar `cover.jpg` in the input folder is not read. VERIFY adds `flac -t` for FLAC outputs. Disc/track totals come from MusicBrainz medium counts.
 
 ### R-BOOK — Audiobooks → Audiobookshelf
 
