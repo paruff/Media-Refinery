@@ -1,3 +1,5 @@
+import shutil
+
 import pytest
 
 from src.audio.converter import AudioConverter
@@ -6,6 +8,9 @@ from src.audio.converter import AudioConverter
 @pytest.mark.asyncio
 async def test_music_album_conversion(tmp_path, make_audio):
     # Simulate a music album directory with multiple tracks
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg is required for this integration test")
+
     album_dir = tmp_path / "Asia - Asia (1982)"
     album_dir.mkdir()
     tracks = []

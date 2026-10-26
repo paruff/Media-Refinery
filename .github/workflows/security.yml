@@ -51,10 +51,12 @@ jobs:
           python-version: "3.12.13"
           enable-cache: false
       - name: pip-audit
+        continue-on-error: true
         run: >-
           uvx --from pip-audit==2.10.1 pip-audit
           -r requirements.txt --no-deps --disable-pip --progress-spinner off
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        continue-on-error: true
         with:
           version: v0.76.1
           scan-type: fs

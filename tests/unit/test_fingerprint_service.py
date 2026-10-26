@@ -22,11 +22,14 @@ def test_fingerprint_audio_failure():
 
 
 def test_fingerprint_video_success():
+    imagehash_module = MagicMock()
+    imagehash_module.phash.return_value = "ph"
+
     with (
         patch("cv2.VideoCapture") as mock_cv2,
         patch("cv2.cvtColor"),
-        patch("imagehash.phash", return_value="ph"),
         patch("PIL.Image.fromarray"),
+        patch.dict("sys.modules", {"imagehash": imagehash_module}),
     ):
         mock_cap = MagicMock()
         mock_cap.get.side_effect = lambda prop: 100 if prop == 7 else 10.0

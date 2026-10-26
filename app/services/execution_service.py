@@ -118,7 +118,7 @@ def _execute_normalization_plan(plan_dict):
     from filelock import FileLock
     from sqlalchemy import update
 
-    from app.core.database import AsyncSessionLocal
+    from app.core.database import AsyncSessionLocal, init_db
     from app.models.media import NormalizationPlan as DBPlan
     from app.models.media import PlanStatus
     from app.models.saga import SagaFileMoveLog, SagaLogStatus
@@ -145,6 +145,7 @@ def _execute_normalization_plan(plan_dict):
         await asyncio.to_thread(tmp_output_file.unlink, missing_ok=True)
 
     async def do_work():
+        await init_db()
         async with AsyncSessionLocal() as session:
             await session.execute(
                 update(DBPlan)

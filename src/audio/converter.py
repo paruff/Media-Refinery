@@ -435,11 +435,10 @@ class AudioConverter:
                     compression_level=compression_level,
                 )
 
-            # Build FFmpeg command; write directly to final output path
-            # (some environments behave inconsistently with .tmp files)
+            # Build FFmpeg command to write to temporary file first
             command = self.build_ffmpeg_command(
                 input_file,
-                output_file,
+                temp_file,
                 preserve_metadata=True,
                 compression_level=compression_level,
             )
@@ -471,8 +470,11 @@ class AudioConverter:
                     stderr=stderr,
                 )
 
-            # Determine where ffmpeg wrote output: prefer final output
-            if output_file.exists():
+            # Determine where ffmpeg wrote output: expected temporary path
+            if temp_file.exists():
+                temp_file.rename(output_file)
+                log.debug("output_promoted_from_temp", temp_file=str(temp_file))
+            elif output_file.exists():
                 log.debug("output_written_directly", output_file=str(output_file))
             else:
                 # Fallback: sometimes ffmpeg writes a file with a different name
