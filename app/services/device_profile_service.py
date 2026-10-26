@@ -1,10 +1,12 @@
 import json
+import logging
 import os
 
 import yaml
 
 from app.models.device_profile import DeviceProfile
 
+logger = logging.getLogger("DeviceProfileService")
 PROFILE_DIR = os.path.join(os.path.dirname(__file__), "../../profiles")
 
 
@@ -21,15 +23,15 @@ class DeviceProfileService:
                 continue
             try:
                 with open(fpath) as f:
-                    if fname.endswith(".yaml") or fname.endswith(".yml"):  # noqa: PIE810
+                    if fname.endswith((".yaml", ".yml")):
                         data = yaml.safe_load(f)
                     elif fname.endswith(".json"):
                         data = json.load(f)
                     else:
                         continue
                 profiles.append(DeviceProfile.from_dict(data))
-            except Exception:  # noqa: S112
-                # Log error, skip invalid profile
+            except Exception:
+                logger.exception("Skipping invalid device profile %s", fpath)
                 continue
         return profiles
 

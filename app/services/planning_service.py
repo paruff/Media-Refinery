@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 from app.services.device_profile_service import DeviceProfileService
 
+logger = logging.getLogger("PlanningService")
+
 
 class FileAttributes(BaseModel):
     audio: str
@@ -23,7 +25,7 @@ class PlanningService:
         try:
             profile = self.profile_service.get_profile(device_id)
         except Exception as e:
-            logging.error(f"Device profile error: {e}")  # noqa: LOG015
+            logger.exception("Device profile error")
             return {"error": str(e)}
 
         plan = {

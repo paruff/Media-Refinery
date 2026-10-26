@@ -1,3 +1,4 @@
+import logging
 import os
 
 # Celery setup
@@ -95,9 +96,11 @@ else:
                         await session.commit()
 
                 asyncio.run(_mark_failed())
-            except Exception:  # noqa: S110
-                # Best-effort: don't obscure the original exception
-                pass
+            except Exception:
+                # Best-effort: log, but don't obscure the original exception
+                logging.getLogger("CeleryWorker").exception(
+                    "Failed to record failed saga for plan %s", plan_dict.get("id")
+                )
 
             raise
 
@@ -109,10 +112,7 @@ def _execute_normalization_plan(plan_dict):
     synchronous callers can invoke the same logic.
     """
     import asyncio
-    import logging
-    import os
     import shutil
-    import traceback
     from pathlib import Path
 
     from filelock import FileLock
@@ -125,40 +125,35 @@ def _execute_normalization_plan(plan_dict):
 
     logger = logging.getLogger("CeleryWorker")
 
-    try:
-        plan = NormalizationPlanSchema(**plan_dict)
-    except Exception as e:
-        logger.error(f"Invalid NormalizationPlan: {e}\nInput: {plan_dict}")
-        # Fallback: create a minimal plan-like object for simple integrations/tests
-        from types import SimpleNamespace
+    plan = NormalizationPlanSchema(**plan_dict)
+    if not plan.source_path:
+        raise ValueError(f"Plan {plan.id} has no source_path")
 
-        plan = SimpleNamespace(
-            id=plan_dict.get("id"), target_path=plan_dict.get("target_path")
-        )
-
-    src = Path(plan.target_path)
+    src = Path(plan.source_path)
     output_file = Path(plan.target_path)
-    tmp_output_file = output_file.with_suffix(output_file.suffix + ".tmp")
+    # Keep the extension so ffmpeg can infer the container from the temp name.
+    tmp_output_file = output_file.with_name(
+        f"{output_file.stem}.tmp{output_file.suffix}"
+    )
     lock = FileLock(str(output_file.with_suffix(output_file.suffix + ".lock")))
+
+    async def fail(session, saga_log, error):
+        logger.error(error)
+        saga_log.status = SagaLogStatus.failed
+        saga_log.error = error
+        await session.commit()
+        await asyncio.to_thread(tmp_output_file.unlink, missing_ok=True)
 
     async def do_work():
         async with AsyncSessionLocal() as session:
-            # mark executing
-            try:
-                await session.execute(
-                    update(DBPlan)
-                    .where(DBPlan.id == plan.id)
-                    .values(plan_status=PlanStatus.executing)
-                )
-                await session.commit()
-            except Exception as e:
-                logger.error(f"Failed to update plan status to executing: {e}")
-                await session.rollback()
-                return
+            await session.execute(
+                update(DBPlan)
+                .where(DBPlan.id == plan.id)
+                .values(plan_status=PlanStatus.executing)
+            )
+            await session.commit()
 
-            # Acquire lock and perform saga steps
             with lock.acquire(timeout=10):
-                # write prepared WAL
                 saga_log = SagaFileMoveLog(
                     plan_id=plan.id,
                     src_path=str(src),
@@ -171,46 +166,28 @@ def _execute_normalization_plan(plan_dict):
 
                 try:
                     os.makedirs(output_file.parent, exist_ok=True)
-                    shutil.copy2(src, tmp_output_file)
-                except Exception as e:
-                    logger.error(f"Failed to copy to .tmp: {e}")
-                    saga_log.status = SagaLogStatus.failed
-                    saga_log.error = str(e)
-                    await session.commit()
-                    if tmp_output_file.exists():
-                        os.remove(tmp_output_file)
-                    raise
-
-                # simulate transcode via subprocess
-                proc = await asyncio.create_subprocess_exec(
-                    "ffmpeg",
-                    "-version",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                out, err = await proc.communicate()  # noqa: RUF059
-                if proc.returncode != 0:
-                    saga_log.status = SagaLogStatus.failed
-                    saga_log.error = err.decode()
-                    await session.commit()
-                    if tmp_output_file.exists():
-                        os.remove(tmp_output_file)
-                    raise RuntimeError(f"ffmpeg failed: {err.decode()}")
-
-                try:
+                    if plan.needs_transcode:
+                        # ponytail: fixed H.264/AAC, G3 brings smart bitrate + profiles
+                        proc = await asyncio.create_subprocess_exec(
+                            "ffmpeg", "-y", "-nostdin", "-v", "error",
+                            "-i", str(src),
+                            "-c:v", "libx264", "-c:a", "aac",
+                            str(tmp_output_file),
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.PIPE,
+                        )  # fmt: skip
+                        _, err = await proc.communicate()
+                        if proc.returncode != 0:
+                            raise RuntimeError(f"ffmpeg failed: {err.decode()}")
+                    else:
+                        shutil.copy2(src, tmp_output_file)
                     os.rename(tmp_output_file, output_file)
                 except Exception as e:
-                    logger.error(f"Atomic rename failed: {e}")
-                    saga_log.status = SagaLogStatus.failed
-                    saga_log.error = str(e)
-                    await session.commit()
-                    if tmp_output_file.exists():
-                        os.remove(tmp_output_file)
+                    await fail(session, saga_log, str(e))
                     raise
 
                 saga_log.status = SagaLogStatus.committed
                 await session.commit()
-
                 await session.execute(
                     update(DBPlan)
                     .where(DBPlan.id == plan.id)
@@ -218,11 +195,10 @@ def _execute_normalization_plan(plan_dict):
                 )
                 await session.commit()
 
-    try:
-        asyncio.run(do_work())
-    except Exception as e:
-        logger.error(f"execute_normalization_plan failed: {e}")
-        traceback.print_exc()
+    if output_file.exists():
+        logger.info(f"{output_file} already exists; skipping {plan.id}")
+        return
+    asyncio.run(do_work())
 
 
 class ExecutionService:
@@ -242,73 +218,28 @@ class ExecutionService:
         self.session_factory = session_factory
 
     async def execute_plan(self, plan) -> None:
-        import asyncio
-        import shutil
-        from pathlib import Path
+        """Copy (never move) the original to its target; failures are recorded and raised.
+
+        R-SAFE-1: the original stays where it is; archiving happens after VERIFY.
+        """
+        from sqlalchemy import text
+
+        from app.models.media import FileState, PlanStatus
 
         async def _use_session(session):
-            # mark test execution so tests can assert calls
-            from sqlalchemy import text
-
             await session.execute(text("SELECT 1"))
-
-            if getattr(plan, "needs_transcode", False):
-                proc = await asyncio.create_subprocess_exec(
-                    "ffmpeg",
-                    "-version",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                await proc.communicate()
-
-            # simulate moving final file into place
-            src = Path(
-                getattr(plan, "media_item", {}).source_path
-                if getattr(plan, "media_item", None)
-                else ""
-            )
-            dst = Path(getattr(plan, "target_path", ""))
-            if src and dst:
-                try:
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.move(str(src), str(dst))
-                except Exception:  # noqa: S110
-                    # Ignore move failures in tests; they patch/mimic behavior
-                    pass
-
-                # Record execution log when move succeeded
-                try:
-                    if getattr(plan, "execution_log", None) is not None:
-                        plan.execution_log = (
-                            plan.execution_log or ""
-                        ) + "Moved to output"
-                    else:
-                        try:  # noqa: SIM105
-                            plan.execution_log = "Moved to output"
-                        except Exception:  # noqa: S110
-                            pass
-                except Exception:  # noqa: S110
-                    pass
-
-            # Update plan/media_item status when possible
             try:
-                from app.models.media import FileState, PlanStatus
-
-                if getattr(plan, "media_item", None) is not None:
-                    try:
-                        # Store string value to match tests that compare to .value
-                        plan.plan_status = PlanStatus.completed.value
-                        plan.media_item.state = (
-                            FileState.executed.value
-                            if hasattr(FileState, "executed")
-                            else "executed"
-                        )
-                    except Exception:  # noqa: S110
-                        # If plan is not ORM-managed or attributes can't be set, ignore
-                        pass
-            except Exception:  # noqa: S110
-                pass
-
+                await self._produce_output(plan)
+            except Exception as e:
+                plan.execution_log = f"{plan.execution_log or ''}Execution failed: {e}"
+                plan.plan_status = PlanStatus.failed.value
+                await session.commit()
+                raise
+            plan.execution_log = f"{plan.execution_log or ''}Copied to output"
+            # Store string values to match tests that compare to .value
+            plan.plan_status = PlanStatus.completed.value
+            if getattr(plan, "media_item", None) is not None:
+                plan.media_item.state = FileState.executed.value
             await session.commit()
 
         if self.session_factory is not None:
@@ -320,3 +251,36 @@ class ExecutionService:
             raise RuntimeError(
                 "No session or session_factory provided to ExecutionService"
             )
+
+    @staticmethod
+    async def _produce_output(plan) -> None:
+        import asyncio
+        import os
+        import shutil
+        from pathlib import Path
+
+        if getattr(plan, "needs_transcode", False):
+            args = getattr(plan, "ffmpeg_args", None)
+            if not args:
+                raise ValueError(
+                    f"Plan {plan.id} needs transcode but has no ffmpeg_args"
+                )
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-y", "-nostdin", *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )  # fmt: skip
+            _, err = await proc.communicate()
+            if proc.returncode != 0:
+                raise RuntimeError(f"ffmpeg failed: {err.decode()}")
+            return
+
+        media_item = getattr(plan, "media_item", None)
+        target = getattr(plan, "target_path", None)
+        if media_item is None or not target:
+            raise ValueError(f"Plan {plan.id} has no source or target path")
+        src, dst = Path(media_item.source_path), Path(target)
+        tmp = dst.with_name(f"{dst.stem}.tmp{dst.suffix}")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(shutil.copy2, src, tmp)
+        os.replace(tmp, dst)

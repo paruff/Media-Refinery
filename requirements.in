@@ -10,6 +10,7 @@ imagehash
 musicbrainzngs
 mutagen
 opencv-python-headless
+pillow
 pydantic
 pydantic-settings
 pyyaml

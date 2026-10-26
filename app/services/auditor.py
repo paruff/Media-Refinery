@@ -42,21 +42,20 @@ class IssueDetectorService:
         # Non-canonical naming
         from typing import cast
 
-        if item.media_type == "movie":  # noqa: SIM102
-            if not (
-                item.year
-                or (
-                    item.enrichment_data
-                    and json.loads(cast(str, item.enrichment_data)).get("year")
-                )
-            ):
-                issues.append(
-                    {
-                        "code": "MISSING_YEAR",
-                        "level": "warning",
-                        "message": "Movie is missing year in metadata.",
-                    }
-                )
+        if item.media_type == "movie" and not (
+            item.year
+            or (
+                item.enrichment_data
+                and json.loads(cast(str, item.enrichment_data)).get("year")
+            )
+        ):
+            issues.append(
+                {
+                    "code": "MISSING_YEAR",
+                    "level": "warning",
+                    "message": "Movie is missing year in metadata.",
+                }
+            )
         if item.media_type == "music":
             if not (item.title and item.artist and item.album):
                 issues.append(

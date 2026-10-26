@@ -3,7 +3,7 @@ import os
 import shutil
 import subprocess
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -104,9 +104,7 @@ class ValidatorService:
             return True
         if parts[0] == "movies" and len(parts) >= 2:
             return True
-        if parts[0] == "tv" and len(parts) >= 4:  # noqa: SIM103
-            return True
-        return False
+        return parts[0] == "tv" and len(parts) >= 4
 
     def _ffprobe_check(self, fpath: Path) -> str:
         # Check for forbidden codecs (e.g., DTS)
@@ -162,14 +160,14 @@ class ValidatorService:
                 shutil.rmtree(sub)
 
     async def _prune_old_errors(self):
-        # Remove error logs older than 30 days from media_items
-        cutoff = datetime.utcnow() - timedelta(days=30)  # noqa: DTZ003
+        # Clear error logs older than 30 days. Rows are never deleted (R-SAFE-1).
+        cutoff = datetime.now(UTC) - timedelta(days=30)
         await self.db.execute(
             text(
-                "DELETE FROM media_items "
+                "UPDATE media_items SET error_log = NULL "
                 "WHERE error_log IS NOT NULL AND updated_at < :cutoff"
             ),
-            {"cutoff": cutoff.isoformat()},
+            {"cutoff": cutoff.strftime("%Y-%m-%d %H:%M:%S")},
         )
         await self.db.commit()
 

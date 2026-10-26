@@ -33,8 +33,9 @@ def test_saga_prepare_commit_cleanup():
                 await session.commit()
 
         asyncio.run(clear_plans())
+        src_path = os.path.join(tmpdir, "in_saga.mp4")
         out_path = os.path.join(tmpdir, "out_saga.mp4")
-        with open(out_path, "wb") as f:
+        with open(src_path, "wb") as f:
             f.write(b"dummy")
         plan_id = "sagaid"
         media_item_id = str(uuid.uuid4())
@@ -52,7 +53,12 @@ def test_saga_prepare_commit_cleanup():
                 await session.commit()
 
         asyncio.run(insert_plan())
-        plan = {"id": plan_id, "target_path": out_path, "media_item_id": media_item_id}
+        plan = {
+            "id": plan_id,
+            "source_path": src_path,
+            "target_path": out_path,
+            "media_item_id": media_item_id,
+        }
         from app.services.execution_service import execute_normalization_plan
 
         execute_normalization_plan(plan)

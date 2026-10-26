@@ -15,10 +15,11 @@ def test_saga_file_move_integration():
     asyncio.run(init_db())
     # Simulate a real cross-volume move scenario
     with tempfile.TemporaryDirectory() as tmpdir:
-        out_path = os.path.join(tmpdir, "out_integ_saga.mp4")
-        with open(out_path, "wb") as f:
+        src_path = os.path.join(tmpdir, "in_integ_saga.mp4")
+        with open(src_path, "wb") as f:
             f.write(b"dummy")
-        plan = {"id": "sagainteg", "target_path": out_path}
+        out_path = os.path.join(tmpdir, "out_integ_saga.mp4")
+        plan = {"id": "sagainteg", "source_path": src_path, "target_path": out_path}
         execute_normalization_plan(plan)
 
         # Wait for WAL commit

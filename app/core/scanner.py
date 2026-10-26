@@ -9,6 +9,18 @@ from sqlalchemy.future import select
 from app.models.media import FileState, MediaItem
 
 
+def _is_audio_only(data):
+    """True when ffprobe found audio and no real video (cover art doesn't count)."""
+    streams = data.get("streams", [])
+    has_audio = any(s.get("codec_type") == "audio" for s in streams)
+    has_video = any(
+        s.get("codec_type") == "video"
+        and not s.get("disposition", {}).get("attached_pic")
+        for s in streams
+    )
+    return has_audio and not has_video
+
+
 class ScannerService:
     def __init__(self, db_session_factory, logger=None):
         self.db_session_factory = db_session_factory
@@ -27,47 +39,11 @@ class ScannerService:
                 item.state = FileState.scanning
                 await session.commit()
             path = item.source_path
-            if not os.path.exists(path):  # noqa: ASYNC240
+            if not await asyncio.to_thread(os.path.exists, path):
                 item.state = FileState.error
                 item.error_log = "File not found."
                 await session.commit()
                 return
-            # --- FINGERPRINTING & DUPLICATE DETECTION ---
-            from app.services.fingerprint_service import FingerprintService
-
-            # Determine type (audio/video)
-            media_type = "audio" if (item.audio_codec or item.artist) else "video"
-            audio_fp = None
-            video_fp = None
-            if media_type == "audio":
-                audio_fp = FingerprintService.fingerprint_audio(path)
-                item.audio_fingerprint = audio_fp
-            else:
-                video_fp = FingerprintService.fingerprint_video(path)
-                item.video_fingerprint = video_fp
-            # Check for duplicate in output library
-            if audio_fp:
-                dup = await session.execute(
-                    select(MediaItem).where(
-                        MediaItem.audio_fingerprint == audio_fp, MediaItem.id != item.id
-                    )
-                )
-                if dup.scalar_one_or_none():
-                    item.state = FileState.error
-                    item.error_log = "Duplicate audio fingerprint detected. Skipping."
-                    await session.commit()
-                    return
-            if video_fp:
-                dup = await session.execute(
-                    select(MediaItem).where(
-                        MediaItem.video_fingerprint == video_fp, MediaItem.id != item.id
-                    )
-                )
-                if dup.scalar_one_or_none():
-                    item.state = FileState.error
-                    item.error_log = "Duplicate video fingerprint detected. Skipping."
-                    await session.commit()
-                    return
             try:
                 proc = await asyncio.create_subprocess_exec(
                     "ffprobe",
@@ -89,6 +65,18 @@ class ScannerService:
                     return
                 data = json.loads(stdout.decode())
                 self._parse_and_update(item, data)
+
+                # --- FINGERPRINTING & DUPLICATE DETECTION (type known only after probe) ---
+                duplicate = await self._fingerprint_is_duplicate(
+                    session, item, path, _is_audio_only(data)
+                )
+                if duplicate:
+                    item.state = FileState.error
+                    item.error_log = (
+                        f"Duplicate {duplicate} fingerprint detected. Skipping."
+                    )
+                    await session.commit()
+                    return
 
                 # Run pre-clean detection and record issues
                 from app.services.preclean import PrecleanDetector
@@ -129,9 +117,30 @@ class ScannerService:
                 item.state = FileState.scanned
                 await session.commit()
             except Exception as e:
+                self.logger.exception(f"Scan failed for {item.id}")
                 item.state = FileState.error
                 item.error_log = str(e)
                 await session.commit()
+
+    async def _fingerprint_is_duplicate(self, session, item, path, audio_only):
+        """Fingerprint `item` and return "audio"/"video" if another item matches."""
+        from app.services.fingerprint_service import FingerprintService
+
+        if audio_only:
+            kind, column = "audio", MediaItem.audio_fingerprint
+            fp = await asyncio.to_thread(FingerprintService.fingerprint_audio, path)
+            item.audio_fingerprint = fp
+        else:
+            kind, column = "video", MediaItem.video_fingerprint
+            fp = await asyncio.to_thread(FingerprintService.fingerprint_video, path)
+            item.video_fingerprint = fp
+        if not fp:
+            return None
+        # limit(1): any number of existing matches is just "a duplicate"
+        dup = await session.execute(
+            select(MediaItem.id).where(column == fp, MediaItem.id != item.id).limit(1)
+        )
+        return kind if dup.first() else None
 
     def _parse_and_update(self, item, data):
         # Container

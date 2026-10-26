@@ -72,8 +72,8 @@ class TMDBService:
                 )
                 await session.execute(upd)
                 await session.commit()
-            except Exception:  # noqa: S110
-                pass
+            except Exception:
+                logger.exception("Failed to flag enrichment failure")
             return None
         # Use canonical_title and release_year if present, else try to parse from source_path
         from typing import cast

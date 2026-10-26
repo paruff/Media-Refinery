@@ -48,12 +48,16 @@ class DaemonSupervisor:
                 self._backoff = 1
             except Exception as e:
                 self.logger.error(f"Top-level exception: {e}", exc_info=True)
-                with open("crash.log", "a") as f:  # noqa: ASYNC230
-                    f.write(f"{datetime.utcnow().isoformat()}\n{e}\n")  # noqa: DTZ003
+                await asyncio.to_thread(self._write_crash_log, e)
                 await self._backoff_wait()
             await self._maybe_heartbeat()
         self.logger.info("DaemonSupervisor exiting cleanly.")
         sys.exit(0)
+
+    @staticmethod
+    def _write_crash_log(error: Exception) -> None:
+        with open("crash.log", "a") as f:
+            f.write(f"{datetime.now(UTC).isoformat()}\n{error}\n")
 
     async def shutdown(self):
         self.logger.info("Shutdown signal received. Initiating graceful shutdown.")
@@ -70,11 +74,11 @@ class DaemonSupervisor:
 
     async def _health_checks(self):
         for path in [self.staging_dir, self.output_dir]:
-            if not os.path.exists(path):  # noqa: ASYNC240
+            if not await asyncio.to_thread(os.path.exists, path):
                 self.logger.critical(f"Critical: Path unreachable: {path}")
                 await self._backoff_wait()
                 return
-            total, used, free = shutil.disk_usage(path)  # noqa: RUF059
+            total, _, free = await asyncio.to_thread(shutil.disk_usage, path)
             percent_free = free / total * 100
             if percent_free < 5:
                 self.logger.critical(
