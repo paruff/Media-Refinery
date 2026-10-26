@@ -16,6 +16,7 @@ from app.core.database import AsyncSessionLocal, init_db
 from app.core.orchestrator import PipelineConfig, PipelineOrchestrator
 from app.core.watcher import InputWatcher
 from app.services.enrich import VideoEnricher
+from app.services.music_id import MusicIdentifier
 
 logger = logging.getLogger("uvicorn")
 LOG_FILE_NAME = "rotation.log"
@@ -46,11 +47,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.TMDB_API_KEY and settings.TVDB_API_KEY
         else None
     )
+    identifier = (
+        MusicIdentifier(
+            settings.ACOUSTID_API_KEY, threshold=settings.ACOUSTID_MIN_SCORE
+        )
+        if settings.ACOUSTID_API_KEY
+        else None
+    )
     orchestrator = PipelineOrchestrator(
         AsyncSessionLocal,
         PipelineConfig.from_settings(),
         logger=logger,
         enricher=enricher,
+        identifier=identifier,
     )
     worker = asyncio.create_task(orchestrator.run_forever())
     watcher = InputWatcher(settings.INPUT_DIR, AsyncSessionLocal, logger=logger)

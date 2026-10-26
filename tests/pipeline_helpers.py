@@ -16,17 +16,25 @@ def _ffmpeg(*args: str) -> None:
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", *args], check=True)
 
 
-def make_mp3(path: Path, seconds: int = 2, **tags: str) -> Path:
+def make_mp3(path: Path, seconds: int = 2, freq: int = 440, **tags: str) -> Path:
     meta = [a for k, v in tags.items() for a in ("-metadata", f"{k}={v}")]
     _ffmpeg(
         "-f",
         "lavfi",
         "-i",
-        f"sine=frequency=440:duration={seconds}",
+        f"sine=frequency={freq}:duration={seconds}",
         *meta,
         "-c:a",
         "libmp3lame",
         str(path),
+    )
+    return path
+
+
+def make_flac(path: Path, seconds: int = 2, freq: int = 440) -> Path:
+    _ffmpeg(
+        *("-f", "lavfi", "-i", f"sine=frequency={freq}:duration={seconds}"),
+        *("-c:a", "flac", str(path)),
     )
     return path
 

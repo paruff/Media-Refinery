@@ -1,0 +1,153 @@
+import io
+
+import httpx
+import pytest
+from PIL import Image
+
+from app.services.music_id import MusicIdentifier, jpeg_cover
+
+RELEASE = {
+    "id": "rel-1",
+    "title": "Test Album",
+    "date": "2021-05-01",
+    "artist-credit": [{"name": "Test Artist", "artist": {"id": "art-1"}}],
+    "genres": [{"name": "rock", "count": 1}, {"name": "indie", "count": 5}],
+    "media": [
+        {
+            "position": 1,
+            "track-count": 2,
+            "tracks": [
+                {
+                    "position": 1,
+                    "title": "One",
+                    "recording": {"id": "rec-1"},
+                    "artist-credit": [
+                        {"name": "Feat", "joinphrase": " & ", "artist": {"id": "a-9"}},
+                        {"name": "Guest", "artist": {"id": "a-8"}},
+                    ],
+                },
+                {"position": 2, "title": "Two", "recording": {"id": "rec-2"}},
+            ],
+        },
+        {"position": 2, "track-count": 1, "tracks": []},
+    ],
+}
+
+
+def png(size: int) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (size, size), "red").save(buf, "PNG")
+    return buf.getvalue()
+
+
+def identifier(score=0.97, calls=None, releases=True):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if calls is not None:
+            calls.append(request.url.host)
+        if request.url.host == "api.acoustid.org":
+            rec = {"id": "rec-1", "releases": [{"id": "rel-1"}] if releases else []}
+            return httpx.Response(
+                200, json={"results": [{"score": score, "recordings": [rec]}]}
+            )
+        if request.url.path.endswith("/release/rel-1"):
+            return httpx.Response(200, json=RELEASE)
+        if request.url.host == "coverartarchive.org":
+            return httpx.Response(200, content=png(600))
+        return httpx.Response(404)
+
+    return MusicIdentifier(
+        "key",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        fingerprint=lambda path: (120, "fp"),
+        mb_interval=0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_identify_maps_release_to_r_music_2_tags():
+    score, tags = await identifier().identify("a.flac")
+    assert score == 0.97
+    assert tags == {
+        "artist": "Feat & Guest",
+        "album_artist": "Test Artist",
+        "album": "Test Album",
+        "title": "One",
+        "track_number": 1,
+        "track_total": 2,
+        "disc_number": 1,
+        "disc_total": 2,
+        "year": "2021",
+        "genre": "indie",
+        "musicbrainz_trackid": "rec-1",
+        "musicbrainz_albumid": "rel-1",
+        "musicbrainz_artistid": "a-9",
+        "musicbrainz_albumartistid": "art-1",
+    }
+
+
+@pytest.mark.asyncio
+async def test_release_is_fetched_once_per_album():
+    calls: list[str] = []
+    ident = identifier(calls=calls)
+    await ident.identify("a.flac")
+    await ident.identify("b.flac")
+    assert calls.count("musicbrainz.org") == 1
+
+
+@pytest.mark.parametrize("releases", [False])
+@pytest.mark.asyncio
+async def test_no_release_is_no_match(releases):
+    assert await identifier(releases=releases).identify("a.flac") is None
+
+
+@pytest.mark.asyncio
+async def test_no_fingerprint_is_no_match():
+    ident = identifier()
+    ident._fingerprint = lambda path: None
+    assert await ident.identify("a.flac") is None
+
+
+@pytest.mark.asyncio
+async def test_cover_art_archive_fallback_is_jpeg_at_least_500px():
+    data = await identifier().cover("missing.flac", "rel-1")
+    img = Image.open(io.BytesIO(data))
+    assert img.format == "JPEG" and min(img.size) >= 500
+
+
+def test_jpeg_cover_rejects_small_images():
+    assert jpeg_cover(png(499)) is None
+    assert jpeg_cover(b"not an image") is None
+
+
+def test_jpeg_cover_shrinks_to_2mb():
+    noise = Image.frombytes(
+        "RGB", (2400, 2400), __import__("os").urandom(2400 * 2400 * 3)
+    )
+    buf = io.BytesIO()
+    noise.save(buf, "PNG")
+    out = jpeg_cover(buf.getvalue())
+    assert out is not None and len(out) <= 2 * 1024 * 1024
+
+
+@pytest.mark.asyncio
+async def test_flac_test_failure_fails_verify(monkeypatch, tmp_path):
+    from app.core import verify
+
+    calls = []
+
+    async def fake(args, limit=0):
+        calls.append(args[0])
+        return (
+            (1, "", "FLAC__STREAM_DECODER_ERROR") if args[0] == "flac" else (0, "", "")
+        )
+
+    async def dur(path, limit=120):
+        return 2.0
+
+    monkeypatch.setattr(verify, "run_tool", fake)
+    monkeypatch.setattr(verify, "probe_duration", dur)
+    monkeypatch.setattr(verify.shutil, "which", lambda name: "/usr/bin/flac")
+    out = tmp_path / "x.flac"
+    out.write_bytes(b"x")
+    _, _, reason = await verify.verify_output(str(out), str(out), True)
+    assert reason == "flac_test_failed" and "flac" in calls

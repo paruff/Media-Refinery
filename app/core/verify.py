@@ -2,13 +2,18 @@
 
 import asyncio
 import hashlib
+import shutil
 from dataclasses import asdict, dataclass
 
 from app.core.tools import probe_duration, run_tool
 
 AUDIO_TOLERANCE = 0.5  # seconds
 VIDEO_TOLERANCE = 1.0
-REASONS = {"decode": "decode_failed", "duration": "duration_mismatch"}
+REASONS = {
+    "decode": "decode_failed",
+    "duration": "duration_mismatch",
+    "flac": "flac_test_failed",
+}
 
 
 @dataclass(frozen=True)
@@ -24,6 +29,13 @@ def sha256_file(path: str) -> str:
         while chunk := f.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+async def _flac_test(output: str) -> Check:
+    if shutil.which("flac") is None:  # recorded, not failed (like VMAF without libvmaf)
+        return Check("flac", True, "unavailable")
+    rc, _, err = await run_tool(["flac", "-t", "-s", output], 3600)
+    return Check("flac", rc == 0, err.strip()[:500])
 
 
 async def verify_output(source: str, output: str, is_audio: bool):
@@ -45,6 +57,8 @@ async def verify_output(source: str, output: str, is_audio: bool):
                 f"source {src_dur:.2f}s output {out_dur:.2f}s",
             )
         )
+    if output.endswith(".flac"):  # R-MUSIC: native integrity test on top of the decode
+        checks.append(await _flac_test(output))
     digest = await asyncio.to_thread(sha256_file, output)
     checks.append(Check("sha256", True, digest))
     failed = next((c for c in checks if not c.passed), None)

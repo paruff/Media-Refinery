@@ -32,7 +32,10 @@ from app.models.media import (
     VerificationRecord,
 )
 from app.models.saga import SagaFileMoveLog, SagaLogStatus
+from app.services.music_id import local_cover, write_album_cover
 from app.services.quality_guard_service import run_vmaf_ffmpeg
+from app.services.replaygain import measure
+from app.services.tagging_service import TaggingService
 
 MIN_VMAF = 90.0
 ACTIONABLE = (
@@ -119,11 +122,15 @@ class PipelineOrchestrator:
         logger=None,
         poll_interval=2,
         enricher=None,
+        identifier=None,
     ):
         self.session_factory = session_factory
         self.cfg = config
         self.enricher = (
             enricher  # VideoEnricher (TMDB/TVDB) or None = guessit names only
+        )
+        self.identifier = (
+            identifier  # MusicIdentifier (AcoustID/MB) or None = tags only
         )
         self.logger = logger or logging.getLogger("PipelineOrchestrator")
         self.poll_interval = poll_interval
@@ -140,6 +147,8 @@ class PipelineOrchestrator:
             trace_path = config.work_dir / "dry-run" / "trace.jsonl"
         self.trace = TraceWriter(trace_path, self.run_id)
         self._scanner = ScannerService(session_factory, logger=self.logger)
+        self._album_lock = asyncio.Lock()
+        self._album_gain: dict[Path, tuple[str, str] | None] = {}
 
     # ---- loop -----------------------------------------------------------
     async def run_forever(self):
@@ -298,6 +307,8 @@ class PipelineOrchestrator:
                 )
             if self.enricher and item.media_type in (MediaType.movie, MediaType.series):
                 await self._enrich(item)
+            if item.media_type == MediaType.music:
+                await self._identify(item)
             item.state = FileState.enriched
             await session.commit()
         return True
@@ -330,6 +341,88 @@ class PipelineOrchestrator:
             "no_match" if not match else "",
         )
 
+    async def _identify(self, item) -> None:
+        """R-MUSIC-5: AcoustID -> MusicBrainz tags. Below the threshold (or no match) the
+        embedded tags stay and the plan needs a human."""
+        meta = json.loads(str(item.enrichment_data or "{}"))
+        tags = {
+            "artist": item.artist,
+            "album": item.album,
+            "title": item.title or meta.get("track_title"),
+            "year": item.year,
+            "track_number": meta.get("track_number"),
+        }
+        tags = {k: v for k, v in tags.items() if v}
+        found = (
+            await self.identifier.identify(str(item.source_path))
+            if self.identifier
+            else None
+        )
+        review = self.identifier is not None and (
+            found is None or found[0] < self.identifier.threshold
+        )
+        if found and not review:
+            tags.update(found[1])
+            item.album_artist, item.album_name = tags["album_artist"], tags["album"]
+            item.release_year = int(tags["year"]) if tags.get("year") else None
+            item.disc_number = tags["disc_number"]
+            item.mbid, item.release_mbid = (
+                tags["musicbrainz_trackid"],
+                tags["musicbrainz_albumid"],
+            )
+        meta["music"] = {
+            "tags": tags,
+            "score": found[0] if found else None,
+            "needs_review": review,
+        }
+        item.enrichment_data = json.dumps(meta)
+        if self.identifier:
+            self._emit(
+                "identify",
+                item.id,
+                "degraded" if review else "success",
+                "low_confidence" if found and review else "no_match" if review else "",
+            )
+
+    async def _album_pending(self, session, item) -> bool:
+        """Album-as-unit: hold until every sibling in the same folder has been classified."""
+        folder = Path(str(item.source_path)).parent
+        rows = await session.execute(
+            select(MediaItem.source_path).where(
+                MediaItem.state.in_(
+                    (FileState.pending, FileState.scanning, FileState.scanned)
+                )
+            )
+        )
+        return any(Path(p).parent == folder for (p,) in rows)
+
+    async def _replaygain(self, session, item, meta) -> None:
+        """R-MUSIC-2: track gain from the item, album gain from the folder played as one."""
+        tags = meta["music"]["tags"]
+        track = await measure([Path(str(item.source_path))])
+        folder = Path(str(item.source_path)).parent
+        async with self._album_lock:
+            if folder not in self._album_gain:
+                rows = await session.execute(
+                    select(MediaItem.source_path).where(
+                        MediaItem.media_type == MediaType.music,
+                        MediaItem.state == FileState.enriched,
+                    )
+                )
+                # ponytail: folder = album; a late arrival reuses the first measurement
+                siblings = sorted(Path(p) for (p,) in rows if Path(p).parent == folder)
+                self._album_gain[folder] = await measure(siblings)
+        album = self._album_gain[folder]
+        if track and album:
+            tags.update(
+                replaygain_track_gain=track[0],
+                replaygain_track_peak=track[1],
+                replaygain_album_gain=album[0],
+                replaygain_album_peak=album[1],
+            )
+        else:
+            self._emit("replaygain", item.id, "skipped", "ffmpeg could not measure")
+
     async def _probe_streams(self, source: str) -> list[dict]:
         rc, out, _ = await run_tool(
             ["ffprobe", "-v", "error", "-show_streams", "-of", "json", source], 120
@@ -342,6 +435,17 @@ class PipelineOrchestrator:
     async def _plan_stage(self, item_id) -> bool:
         async with self.session_factory() as session:
             item = await session.get(MediaItem, item_id)
+            review = ""
+            if item.media_type == MediaType.music:
+                if await self._album_pending(session, item):
+                    return False
+                meta = json.loads(str(item.enrichment_data or "{}"))
+                await self._replaygain(session, item, meta)
+                item.enrichment_data = json.dumps(meta)
+                if meta["music"]["needs_review"]:
+                    score = meta["music"]["score"]
+                    review = f"review_required: match score {score}"
+                    self._emit("review", item_id, "degraded", review)
             streams = (
                 []
                 if is_audio_only(item)
@@ -375,6 +479,7 @@ class PipelineOrchestrator:
                     original_hash=str(item.id),
                     needs_transcode=spec.needs_transcode,
                     needs_rename=True,
+                    execution_log=review,
                 )
             )
             item.state = FileState.planned
@@ -388,9 +493,14 @@ class PipelineOrchestrator:
             media_type = str(MediaType(item.media_type).value)
         if self.cfg.dry_run:
             return await self._dry_run_report(item_id)
-        if media_type in self.cfg.auto_approve_types:
+        if media_type in self.cfg.auto_approve_types and not self._needs_review(item):
             return await self.approve(item_id)
         return False
+
+    @staticmethod
+    def _needs_review(item) -> bool:
+        meta = json.loads(str(item.enrichment_data or "{}"))
+        return bool(meta.get("music", {}).get("needs_review"))
 
     async def _dry_run_report(self, item_id) -> bool:
         """Plan + verify-preflight; the only writes are under work/dry-run/ (R-SAFE-4)."""
@@ -491,6 +601,8 @@ class PipelineOrchestrator:
                 rc, _, err = await self._run_ffmpeg(
                     str(source), list(plan.ffmpeg_args or []), tmp
                 )
+            if rc == 0 and item.media_type == MediaType.music:
+                rc, err = await self._tag_music(item, source, tmp)
             plan.execution_log = f"{plan.execution_log}\nffmpeg rc={rc}\n{err}".strip()
             if rc != 0:
                 tmp.unlink(missing_ok=True)
@@ -505,6 +617,25 @@ class PipelineOrchestrator:
             self._emit("execute", item_id, "success")
             self._record_execute(True)
         return True
+
+    async def _tag_music(self, item, source: Path, out: Path) -> tuple[int, str]:
+        """R-MUSIC-2/3: write the tag map and the embedded front cover into the output."""
+        meta = json.loads(str(item.enrichment_data or "{}"))["music"]
+        cover = await (
+            self.identifier.cover(str(source), item.release_mbid)
+            if self.identifier
+            else asyncio.to_thread(local_cover, source)
+        )
+        if cover is None:
+            self._emit("cover", item.id, "skipped", "no usable cover (>=500px)")
+        tags = {**meta["tags"], "cover": cover}
+        # tags from an identified release replace the file's; otherwise merge into them
+        clean = item.release_mbid is not None
+        if not await asyncio.to_thread(
+            TaggingService().apply_tags, str(out), tags, clean
+        ):
+            return 1, "tagging failed"
+        return 0, ""
 
     @staticmethod
     def _video_reencoded(item, plan) -> bool:
@@ -594,6 +725,8 @@ class PipelineOrchestrator:
                 # resumed after a crash that landed the file but not the state
             else:
                 await publish_file(session, str(plan.id), work, dest, sha)
+            if item.media_type == MediaType.music:
+                await asyncio.to_thread(write_album_cover, dest)
             item.state = FileState.published
             await session.commit()
             self._emit("publish", item_id, "success", str(dest))

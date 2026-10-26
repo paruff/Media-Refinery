@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     DRY_RUN: bool = False
     TMDB_API_KEY: str = ""  # movie enrichment; empty = guessit names only
     TVDB_API_KEY: str = ""  # TV enrichment
+    ACOUSTID_API_KEY: str = ""  # music identification; empty = embedded tags only
+    ACOUSTID_MIN_SCORE: float = 0.85  # below this a music plan needs manual approval
     # Opt-in approval rules: media types ("music", "movie", "series") that skip review.
     AUTO_APPROVE_TYPES: list[str] = []
 
