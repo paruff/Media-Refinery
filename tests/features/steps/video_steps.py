@@ -1,5 +1,7 @@
 import asyncio
 import json
+import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -54,6 +56,9 @@ def _run(context, coro):
 
 @given("a video workspace with mocked TMDB and TVDB")
 def step_workspace(context):
+    if not shutil.which("ffmpeg") and not os.environ.get("REQUIRE_FFMPEG"):
+        context.scenario.skip("ffmpeg not installed (see `make docker-test`)")
+        return
     tmp = tempfile.TemporaryDirectory()
     context.add_cleanup(tmp.cleanup)
     base = Path(tmp.name)
