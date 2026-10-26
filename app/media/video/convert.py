@@ -1,8 +1,10 @@
 """probe -> classify -> repair -> smart bitrate -> encode, in one call."""
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
+from .audio import atmos_stream_index, audio_args
 from .encode import encode
 from .ffprobe_utils import probe
 from .file_classifier import classify_video
@@ -14,9 +16,16 @@ MIN_BITRATE_KBPS = 200
 
 
 def convert_video(
-    src: Path, dst: Path, work_dir: Path, dry_run: bool = False, codec: str = "h264"
+    src: Path,
+    dst: Path,
+    work_dir: Path,
+    dry_run: bool = False,
+    codec: str = "h264",
+    on_event: Callable[[str, str, str], None] | None = None,
 ) -> Path:
     """Repair `src` if its codec needs it, then encode to `dst`. Never touches `src`.
+
+    `on_event(event, status, detail)` reports the Atmos copy-track decision.
 
     Raises ValueError when the source cannot be probed or has no video stream.
     """
@@ -38,8 +47,22 @@ def convert_video(
     sm = SmartMode()
     bitrate = sm.scale_bitrate(stream, sm.get_bitrate(stream, info.get("format")))
     kbps = max(bitrate // 1000, MIN_BITRATE_KBPS)
+    audio_streams = [s for s in info["streams"] if s.get("codec_type") == "audio"]
+    atmos = atmos_stream_index(audio_streams)
+    if on_event:
+        if atmos is None:
+            on_event("audio.atmos", "skipped", "not_detected")
+        else:
+            on_event("audio.atmos", "included", f"stream_index={atmos}")
     try:
-        encode(source, dst, kbps, dry_run=dry_run, codec=codec)
+        encode(
+            source,
+            dst,
+            kbps,
+            dry_run=dry_run,
+            codec=codec,
+            audio_args=audio_args(audio_streams),
+        )
     finally:
         if source != src and not dry_run:
             source.unlink(missing_ok=True)
