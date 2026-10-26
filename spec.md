@@ -66,7 +66,7 @@ convert → verify → publish → notify server.
 
 ### R-VIDEO — Movies & TV → Plex / Jellyfin (Samsung-safe)
 
-- R-VIDEO-1 Container MKV. Video H.264 (High ≤ L4.1) or HEVC (Main/Main10). A conformant source (either codec) is kept as-is (no re-encode); anything that must be re-encoded becomes **H.264**. Audio: AAC stereo + (copy) AC3/E-AC3 surround when present; Atmos E-AC3 copied as-is (from movies2vlib).
+- R-VIDEO-1 Container MKV. Video H.264 (High ≤ L4.1) or HEVC (Main/Main10). A conformant source (either codec) is kept as-is (no re-encode); anything that must be re-encoded becomes **H.264**. Audio: AAC stereo + (copy) AC3/E-AC3 surround when present; Atmos E-AC3 copied as-is (from movies2vlib). movies2vlib's unconditional 640k E-AC3 transcode is not ported: E-AC3 is only copied, never synthesised.
 - R-VIDEO-2 Subtitles: text subs converted to SRT (UTF-8); image subs (PGS/VobSub) kept as-is but flagged; external `.srt` muxed or placed as `{name}.{lang}.srt`.
 - R-VIDEO-3 Device profile `samsung_tizen` (from `profiles/`) must validate: direct-play without server transcode.
 - R-VIDEO-4 Movie layout: `Movies/{Title} ({Year}) {tmdb-{id}}/{Title} ({Year}).mkv`.
