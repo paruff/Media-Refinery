@@ -35,7 +35,6 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py312"
 line-length = 88
-src = ["."]
 extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
@@ -65,7 +64,7 @@ ignore = [
 extend-immutable-calls = ["fastapi.Depends"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "src"]
+known-first-party = ["app"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106", "S108", "S311", "S607", "ASYNC", "T20", "PLW0603"]

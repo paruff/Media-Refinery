@@ -363,7 +363,7 @@ async def test_d9_lifespan_replaces_on_event_and_logs_outside_cwd(
 
     async with app.router.lifespan_context(app):
         assert app.state.watcher is not None
-        assert app.state.coordinator is not None
+        assert app.state.orchestrator is not None
 
     assert not (workdir / "rotation.log").exists()
     assert (tmp_path / "logs" / "rotation.log").exists()

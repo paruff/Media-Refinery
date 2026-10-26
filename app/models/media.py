@@ -27,9 +27,14 @@ class FileState(enum.StrEnum):
     scanned = "scanned"
     enriched = "enriched"
     planned = "planned"
+    approved = "approved"
+    executing = "executing"
     executed = "executed"
+    verified = "verified"
+    published = "published"
     validated = "validated"
     audited = "audited"
+    quarantined = "quarantined"
     error = "error"
 
 
@@ -107,6 +112,20 @@ class MediaItem(Base):  # type: ignore[misc, valid-type]
         uselist=False,
         back_populates="media_item",
         cascade="all, delete-orphan",
+    )
+
+
+class VerificationRecord(Base):  # type: ignore[misc, valid-type]
+    """Result of the spec §6 checks for one item's output (R-VERIFY-1)."""
+
+    __tablename__ = "verification_records"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    media_item_id = Column(String, ForeignKey("media_items.id"), nullable=False)
+    passed = Column(Boolean, nullable=False)
+    checks = Column(JSON, nullable=False)  # [{"name", "passed", "detail"}]
+    output_sha256 = Column(String, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
 
