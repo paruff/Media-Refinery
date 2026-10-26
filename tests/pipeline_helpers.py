@@ -134,3 +134,32 @@ async def import_input(cfg: PipelineConfig, session_factory) -> list[str]:
     async with session_factory() as s:
         ids = list((await s.execute(select(MediaItem.id))).scalars())
     return ids
+
+
+def make_video(
+    path: Path,
+    audio: tuple[str, int] = ("aac", 2),
+    subtitle: str | None = None,
+    seconds: int = 2,
+) -> Path:
+    """Conformant H.264 MKV with one audio track (codec, channels) and an optional
+    text subtitle (ffmpeg codec name, e.g. "ass")."""
+    codec, channels = audio
+    srt = path.with_suffix(".fixture.srt")
+    inputs = [
+        *("-f", "lavfi", "-i", f"testsrc=size=160x120:rate=10:duration={seconds}"),
+        *("-f", "lavfi", "-i", f"sine=frequency=330:duration={seconds}"),
+    ]
+    maps = ["-map", "0:v", "-map", "1:a"]
+    if subtitle:
+        srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n")
+        inputs += ["-i", str(srt)]
+        maps += ["-map", "2:s", "-c:s", subtitle]
+    _ffmpeg(
+        *inputs,
+        *maps,
+        *("-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "high"),
+        *("-c:a", codec, "-ac", str(channels), "-shortest", str(path)),
+    )
+    srt.unlink(missing_ok=True)
+    return path

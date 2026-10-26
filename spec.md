@@ -71,6 +71,7 @@ convert → verify → publish → notify server.
 - R-VIDEO-3 Device profile `samsung_tizen` (from `profiles/`) must validate: direct-play without server transcode.
 - R-VIDEO-4 Movie layout: `Movies/{Title} ({Year}) {tmdb-{id}}/{Title} ({Year}).mkv`.
 - R-VIDEO-5 TV layout: `TV/{Show} ({Year}) {tvdb-{id}}/Season {SS:02}/{Show} - S{SS:02}E{EE:02} - {EpisodeTitle}.mkv`; specials in `Season 00`.
+- R-VIDEO-5a Multi-episode files: `S01E01-E02`. Multi-part movies: `{Title} ({Year}) - part{N}.mkv` in the same folder. Enrichment: TMDB (movies), TVDB v4 (series/episodes); a miss keeps the guessit names. External `.srt` muxing is not implemented yet.
 - R-VIDEO-6 Repair before encode (from converter): MPEG-1 timestamp/GOP repair, WMV packet resync, XviD packed-B-frame unpack; remux-repair fallback (from movies2vlib). Implemented in `app/media/video/`; WMV1/2/3 are all classified `wmv` (ffmpeg can only generate WMV2 fixtures).
 - R-VIDEO-7 Encoder selection: hardware (VideoToolbox / VAAPI / NVENC) when available, libx264/libx265 fallback; smart bitrate scaling (grayscale ×0.75, low-complexity ×0.85).
 

@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.paths import ensure_inside
-from app.core.planning import VIDEO_COPY_CODECS, build_plan, is_audio_only
+from app.core.planning import IMAGE_SUBS, VIDEO_COPY_CODECS, build_plan, is_audio_only
 from app.core.publish import archive_original, publish_file, quarantine_file
 from app.core.scanner import ScannerService
 from app.core.throttle import AdaptiveLimiter
@@ -32,7 +32,9 @@ from app.models.media import (
     VerificationRecord,
 )
 from app.models.saga import SagaFileMoveLog, SagaLogStatus
+from app.services.quality_guard_service import run_vmaf_ffmpeg
 
+MIN_VMAF = 90.0
 ACTIONABLE = (
     FileState.pending,
     FileState.scanned,
@@ -111,10 +113,18 @@ def _now() -> datetime:
 
 class PipelineOrchestrator:
     def __init__(
-        self, session_factory, config: PipelineConfig, logger=None, poll_interval=2
+        self,
+        session_factory,
+        config: PipelineConfig,
+        logger=None,
+        poll_interval=2,
+        enricher=None,
     ):
         self.session_factory = session_factory
         self.cfg = config
+        self.enricher = (
+            enricher  # VideoEnricher (TMDB/TVDB) or None = guessit names only
+        )
         self.logger = logger or logging.getLogger("PipelineOrchestrator")
         self.poll_interval = poll_interval
         self.run_id = (
@@ -286,15 +296,61 @@ class PipelineOrchestrator:
                 item.media_type = (
                     MediaType.music if is_audio_only(item) else MediaType.movie
                 )
+            if self.enricher and item.media_type in (MediaType.movie, MediaType.series):
+                await self._enrich(item)
             item.state = FileState.enriched
             await session.commit()
         return True
 
+    async def _enrich(self, item) -> None:
+        """TMDB (movies) / TVDB (series) identity; a miss keeps the guessit names."""
+        meta = json.loads(str(item.enrichment_data or "{}"))
+        if item.media_type == MediaType.movie:
+            year = meta.get("year")
+            match = await self.enricher.movie(meta.get("title", ""), year)
+            if match:
+                item.tmdb_id, item.canonical_title = match.tmdb_id, match.title
+                item.release_year = match.year or year
+        else:
+            match = await self.enricher.episode(
+                meta.get("series_title", ""),
+                meta.get("year"),
+                int(meta.get("season_number") or 0),
+                int(meta.get("episode_number") or 0),
+            )
+            if match:
+                item.canonical_series_name, item.release_year = match.show, match.year
+                item.episode_title = match.episode_title
+                meta["tvdb_id"] = match.tvdb_id
+                item.enrichment_data = json.dumps(meta)
+        self._emit(
+            "enrich",
+            item.id,
+            "success" if match else "skipped",
+            "no_match" if not match else "",
+        )
+
+    async def _probe_streams(self, source: str) -> list[dict]:
+        rc, out, _ = await run_tool(
+            ["ffprobe", "-v", "error", "-show_streams", "-of", "json", source], 120
+        )
+        try:
+            return json.loads(out).get("streams", []) if rc == 0 else []
+        except ValueError:
+            return []
+
     async def _plan_stage(self, item_id) -> bool:
         async with self.session_factory() as session:
             item = await session.get(MediaItem, item_id)
+            streams = (
+                []
+                if is_audio_only(item)
+                else await self._probe_streams(str(item.source_path))
+            )
+            if any(s.get("codec_name") in IMAGE_SUBS for s in streams):
+                self._emit("subtitle.image", item_id, "flagged", "kept_as_is")
             try:
-                spec = build_plan(item, self.cfg.roots)
+                spec = build_plan(item, self.cfg.roots, streams)
             except ValueError as e:
                 item.state, item.error_log = FileState.error, str(e)
                 await session.commit()
@@ -450,6 +506,23 @@ class PipelineOrchestrator:
             self._record_execute(True)
         return True
 
+    @staticmethod
+    def _video_reencoded(item, plan) -> bool:
+        return not is_audio_only(item) and (
+            item.video_codec not in VIDEO_COPY_CODECS
+            or "libx264" in (plan.ffmpeg_args or [])
+        )
+
+    async def _vmaf_check(
+        self, source: str, out: str, checks: list[dict]
+    ) -> str | None:
+        """Sampled VMAF, only for re-encodes. No libvmaf in ffmpeg = recorded, not failed."""
+        metrics = await run_vmaf_ffmpeg(source, out)
+        ok = metrics.vmaf is None or metrics.vmaf >= MIN_VMAF
+        detail = "unavailable" if metrics.vmaf is None else f"vmaf {metrics.vmaf:.1f}"
+        checks.append({"name": "vmaf", "passed": ok, "detail": detail})
+        return None if ok else "quality_below_threshold"
+
     async def _verify(self, item_id) -> bool:
         async with self.session_factory() as session:
             item = await session.get(MediaItem, item_id)
@@ -462,6 +535,10 @@ class PipelineOrchestrator:
             checks, digest, reason = await verify_output(
                 str(item.source_path), str(work), is_audio_only(item)
             )
+            if reason is None and self._video_reencoded(item, plan):
+                reason = await self._vmaf_check(
+                    str(item.source_path), str(work), checks
+                )
             session.add(
                 VerificationRecord(
                     media_item_id=item_id,

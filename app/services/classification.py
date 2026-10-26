@@ -76,13 +76,21 @@ class ClassificationService:
                 else:
                     media_type = "movie"
                     enrichment_data = {"title": title, "year": year}
+                    if guess.get("part"):  # multi-part movie (R-VIDEO-4)
+                        enrichment_data["part"] = guess["part"]
             # Series
             elif guess.get("type") == "episode":
                 media_type = "series"
+                episodes = guess.get("episode")
+                episodes = episodes if isinstance(episodes, list) else [episodes]
                 enrichment_data = {
                     "series_title": title,
-                    "season_number": guess.get("season"),
-                    "episode_number": guess.get("episode"),
+                    "year": guess.get("year"),
+                    "season_number": guess.get(
+                        "season", 0 if guess.get("episode") else None
+                    ),
+                    "episode_number": min(episodes) if episodes[0] else None,
+                    "episode_end": max(episodes) if episodes[0] else None,
                 }
             else:
                 # Unknown video

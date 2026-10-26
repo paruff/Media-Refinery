@@ -59,16 +59,94 @@ def _music(item: MediaItem, root: str) -> PlanSpec:
     return PlanSpec(str(path), args, needs_transcode=args[-1] == "flac")
 
 
-def _video(item: MediaItem, roots: dict[str, str]) -> PlanSpec:
+H264_PROFILES = {"baseline", "constrained baseline", "main", "high"}
+HEVC_PROFILES = {"main", "main 10"}
+TEXT_SUBS = {"subrip", "srt", "ass", "ssa", "mov_text", "webvtt", "text"}
+IMAGE_SUBS = {"hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub"}
+
+
+def video_conformant(stream: dict | None, fallback_codec: str = "") -> bool:
+    """R-VIDEO-1: H.264 High <= L4.1 or HEVC Main/Main10 is kept as-is."""
+    if stream is None:  # not probed: trust the codec name alone
+        return fallback_codec in VIDEO_COPY_CODECS
+    codec = (stream.get("codec_name") or "").lower()
+    profile = (stream.get("profile") or "").lower()
+    if codec == "h264":
+        return profile in H264_PROFILES and int(stream.get("level") or 0) <= 41
+    return codec == "hevc" and profile in HEVC_PROFILES
+
+
+def _audio_args(audio: list[dict]) -> list[str]:
+    """AAC stereo for every device, surround AC3/E-AC3 copied; DTS/TrueHD/etc. -> AAC stereo."""
+    if not audio:
+        return []
+    args: list[str] = []
+    out = 0
+    for i, s in enumerate(audio):
+        codec, channels = (
+            (s.get("codec_name") or "").lower(),
+            int(s.get("channels") or 2),
+        )
+        if codec in {"ac3", "eac3"} or (codec == "aac" and channels <= 2):
+            args += ["-map", f"0:a:{i}", f"-c:a:{out}", "copy"]
+        else:
+            args += ["-map", f"0:a:{i}", f"-c:a:{out}", "aac", f"-ac:a:{out}", "2"]
+            args += [f"-b:a:{out}", "192k"]
+        out += 1
+    if not any(
+        (s.get("codec_name") or "").lower() == "aac"
+        and int(s.get("channels") or 2) <= 2
+        for s in audio
+    ) and not any(a == "aac" for a in args):
+        args += ["-map", "0:a:0", f"-c:a:{out}", "aac", f"-ac:a:{out}", "2"]
+        args += [f"-b:a:{out}", "192k"]
+    return args
+
+
+def _subtitle_args(subs: list[dict]) -> list[str]:
+    """R-VIDEO-2: text subs -> SRT, image subs (PGS/VobSub) copied untouched."""
+    args: list[str] = []
+    for i, s in enumerate(subs):
+        codec = (s.get("codec_name") or "").lower()
+        kind = "srt" if codec in TEXT_SUBS else "copy"
+        args += ["-map", f"0:s:{i}", f"-c:s:{i}", kind]
+    return args
+
+
+def _video(item: MediaItem, roots: dict[str, str], streams: list[dict]) -> PlanSpec:
     meta = _enrichment(item)
-    vcodec, acodec = (item.video_codec or "").lower(), (item.audio_codec or "").lower()
-    v = "copy" if vcodec in VIDEO_COPY_CODECS else "libx264"
-    a = "copy" if (acodec in AUDIO_COPY_CODECS or not acodec) else "aac"
-    args = ["-map", "0", "-c:v", v]
-    if v == "libx264":  # R-VIDEO-1: everything re-encoded becomes H.264
-        args += ["-pix_fmt", "yuv420p", "-crf", "20"]
-    args += ["-c:a", a, "-c:s", "copy"]
-    needs_transcode = v != "copy" or a != "copy"
+    by_type = {t: [s for s in streams if s.get("codec_type") == t] for t in
+               ("video", "audio", "subtitle")}  # fmt: skip
+    vcodec = (item.video_codec or "").lower()
+    video = by_type["video"][0] if by_type["video"] else None
+    keep = video_conformant(video, vcodec)
+    if not streams:  # unprobed legacy path: previous generic maps
+        a = "copy" if (item.audio_codec or "").lower() in AUDIO_COPY_CODECS else "aac"
+        args = [
+            "-map",
+            "0",
+            "-c:v",
+            "copy" if keep else "libx264",
+            "-c:a",
+            a,
+            "-c:s",
+            "copy",
+        ]
+    else:
+        args = ["-map", "0:v:0", "-c:v", "copy" if keep else "libx264"]
+        args += _audio_args(by_type["audio"]) + _subtitle_args(by_type["subtitle"])
+    if not keep:  # R-VIDEO-1: everything re-encoded becomes H.264
+        args += [
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            "20",
+            "-profile:v",
+            "high",
+            "-level",
+            "4.1",
+        ]
+    needs_transcode = (not keep) or "aac" in args
     year = _year(item.release_year or item.guessed_year or meta.get("year"))
     if item.media_type == MediaType.series:
         show = item.canonical_series_name or meta.get("series_title") or "Unknown Show"
@@ -76,8 +154,14 @@ def _video(item: MediaItem, roots: dict[str, str]) -> PlanSpec:
             int(meta.get("season_number") or 0),
             int(meta.get("episode_number") or 0),
         )
+        end = int(meta.get("episode_end") or episode)
+        code = f"S{season:02d}E{episode:02d}" + (
+            f"-E{end:02d}" if end > episode else ""
+        )
         show_dir = f"{show} ({year})" if year else show
-        name = f"{show} - S{season:02d}E{episode:02d}"
+        if meta.get("tvdb_id"):
+            show_dir += f" {{tvdb-{meta['tvdb_id']}}}"
+        name = f"{sanitize_component(show)} - {code}"
         if item.episode_title:
             name += f" - {item.episode_title}"
         path = confine(roots["series"], show_dir, f"Season {season:02d}", f"{name}.mkv")
@@ -90,14 +174,17 @@ def _video(item: MediaItem, roots: dict[str, str]) -> PlanSpec:
         )
         label = f"{title} ({year})" if year else title
         folder = f"{label} {{tmdb-{item.tmdb_id}}}" if item.tmdb_id else label
-        path = confine(roots["movie"], folder, f"{sanitize_component(label)}.mkv")
+        part = f" - part{int(meta['part'])}" if meta.get("part") else ""
+        path = confine(roots["movie"], folder, f"{sanitize_component(label)}{part}.mkv")
     return PlanSpec(str(path), args, needs_transcode)
 
 
-def build_plan(item: MediaItem, roots: dict[str, str]) -> PlanSpec:
+def build_plan(
+    item: MediaItem, roots: dict[str, str], streams: list[dict] | None = None
+) -> PlanSpec:
     """roots: {"music", "movie", "series"} -> library root. Raises on unsupported types."""
     if item.media_type == MediaType.music:
         return _music(item, roots["music"])
     if item.media_type in (MediaType.movie, MediaType.series):
-        return _video(item, roots)
+        return _video(item, roots, streams or [])
     raise ValueError(f"cannot plan media type {item.media_type}")

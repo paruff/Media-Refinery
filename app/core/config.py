@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     ARCHIVE_DIR: str = str(_ROOT / "archive")
     QUARANTINE_DIR: str = str(_ROOT / "quarantine")
     DRY_RUN: bool = False
+    TMDB_API_KEY: str = ""  # movie enrichment; empty = guessit names only
+    TVDB_API_KEY: str = ""  # TV enrichment
     # Opt-in approval rules: media types ("music", "movie", "series") that skip review.
     AUTO_APPROVE_TYPES: list[str] = []
 
