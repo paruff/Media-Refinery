@@ -19,7 +19,12 @@ def test_saga_file_move_integration():
         with open(src_path, "wb") as f:
             f.write(b"dummy")
         out_path = os.path.join(tmpdir, "out_integ_saga.mp4")
-        plan = {"id": "sagainteg", "source_path": src_path, "target_path": out_path}
+        plan = {
+            "id": "sagainteg",
+            "media_item_id": "m",
+            "source_path": src_path,
+            "target_path": out_path,
+        }
         execute_normalization_plan(plan)
 
         # Wait for WAL commit

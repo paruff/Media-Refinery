@@ -43,6 +43,7 @@ def test_execute_plan_transcode_4k(monkeypatch):
                         if "stream=codec_name" in self.args:
                             return (b"hevc", b"")
                     if "ffmpeg" in self.args[0]:
+                        Path(self.args[-1]).write_bytes(b"encoded")  # last arg = output
                         return (b"ffmpeg ok", b"")
                     return (b"", b"")
 
@@ -115,6 +116,7 @@ def test_execute_plan_transcode_1080p(monkeypatch):
                         if "stream=codec_name" in self.args:
                             return (b"h264", b"")
                     if "ffmpeg" in self.args[0]:
+                        Path(self.args[-1]).write_bytes(b"encoded")  # last arg = output
                         return (b"ffmpeg ok", b"")
                     return (b"", b"")
 

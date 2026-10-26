@@ -34,7 +34,7 @@ async def test_ffmpeg_transcoding_integration(monkeypatch, tmp_path):
             id="pidint",
             media_item_id="midint",
             target_path=str(tmp_path / "output" / "movie.mkv"),
-            ffmpeg_args=[],
+            ffmpeg_args=["-i", str(input_file), "-c:v", "libx264"],
             plan_status=PlanStatus.draft,
             needs_transcode=True,
             needs_rename=True,
@@ -59,6 +59,9 @@ async def test_ffmpeg_transcoding_integration(monkeypatch, tmp_path):
                         if "stream=codec_name" in self.args:
                             return (b"hevc", b"")
                     if "ffmpeg" in self.args[0]:
+                        out = Path(self.args[-1])  # ffmpeg writes its last arg
+                        out.parent.mkdir(parents=True, exist_ok=True)
+                        out.write_bytes(b"encoded")
                         return (b"ffmpeg ok", b"")
                     return (b"", b"")
 
@@ -68,15 +71,6 @@ async def test_ffmpeg_transcoding_integration(monkeypatch, tmp_path):
             "asyncio.create_subprocess_exec", fake_create_subprocess_exec
         )
 
-        # Patch shutil.move to simulate file move
-        def fake_move(src, dst):
-            Path(dst).parent.mkdir(parents=True, exist_ok=True)
-            with open(dst, "wb") as f:
-                f.write(b"data")
-
-        import shutil
-
-        monkeypatch.setattr(shutil, "move", fake_move)
         executor = ExecutionService(session, staging_root=tmp_path)
         await executor.execute_plan(plan)
         # Check output
@@ -88,4 +82,4 @@ async def test_ffmpeg_transcoding_integration(monkeypatch, tmp_path):
         assert updated_item.state == "executed"
         updated_plan = await session.get(NormalizationPlan, "pidint")
         assert updated_plan.plan_status == PlanStatus.completed.value
-        assert "Moved to output" in updated_plan.execution_log
+        assert "Copied to output" in updated_plan.execution_log

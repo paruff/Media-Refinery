@@ -259,22 +259,6 @@ class ExecutionService:
         import shutil
         from pathlib import Path
 
-        if getattr(plan, "needs_transcode", False):
-            args = getattr(plan, "ffmpeg_args", None)
-            if not args:
-                raise ValueError(
-                    f"Plan {plan.id} needs transcode but has no ffmpeg_args"
-                )
-            proc = await asyncio.create_subprocess_exec(
-                "ffmpeg", "-y", "-nostdin", *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )  # fmt: skip
-            _, err = await proc.communicate()
-            if proc.returncode != 0:
-                raise RuntimeError(f"ffmpeg failed: {err.decode()}")
-            return
-
         media_item = getattr(plan, "media_item", None)
         target = getattr(plan, "target_path", None)
         if media_item is None or not target:
@@ -282,5 +266,23 @@ class ExecutionService:
         src, dst = Path(media_item.source_path), Path(target)
         tmp = dst.with_name(f"{dst.stem}.tmp{dst.suffix}")
         dst.parent.mkdir(parents=True, exist_ok=True)
-        await asyncio.to_thread(shutil.copy2, src, tmp)
+
+        if getattr(plan, "needs_transcode", False):
+            args = getattr(plan, "ffmpeg_args", None)
+            if not args:
+                raise ValueError(
+                    f"Plan {plan.id} needs transcode but has no ffmpeg_args"
+                )
+            # Planner args end before the output; write to a temp name, then rename.
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-y", "-nostdin", *args, str(tmp),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )  # fmt: skip
+            _, err = await proc.communicate()
+            if proc.returncode != 0:
+                tmp.unlink(missing_ok=True)
+                raise RuntimeError(f"ffmpeg failed: {err.decode()}")
+        else:
+            await asyncio.to_thread(shutil.copy2, src, tmp)
         os.replace(tmp, dst)
