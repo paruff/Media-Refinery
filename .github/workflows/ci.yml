@@ -84,11 +84,11 @@ jobs:
       - name: Create media directories
         run: mkdir -p input staging output output/movies output/series output/music data
       - name: Unit + integration tests with coverage
-        # Floor is the measured baseline (72%); G0 #46 follow-up raises it to 80 (spec NF-3).
+        # Floor per spec NF-3.
         run: >-
           uv run --no-sync pytest tests/unit tests/integration
           -p no:cacheprovider --timeout=120 -ra
-          --cov=app --cov-report=term --cov-report=xml --cov-fail-under=70
+          --cov=app --cov-report=term --cov-report=xml --cov-fail-under=80
       - name: BDD features
         run: uv run --no-sync behave tests/features
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
