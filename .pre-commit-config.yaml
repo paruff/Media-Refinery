@@ -31,7 +31,6 @@ repos:
       - id: check-vcs-permalinks
       - id: check-yaml
         args: ["--allow-multiple-documents"]
-        exclude: ^docker-compose\.yml$ # TODO(G0 #46): invalid compose file, fixed there
       - id: destroyed-symlinks
       - id: detect-private-key
       - id: end-of-file-fixer
@@ -92,7 +91,6 @@ repos:
       - id: check-github-workflows
       - id: check-dependabot
       - id: check-compose-spec
-        exclude: ^docker-compose\.yml$ # TODO(G0 #46)
   - repo: https://github.com/rhysd/actionlint
     rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
     hooks:

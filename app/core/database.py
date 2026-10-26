@@ -19,7 +19,8 @@ AsyncSessionLocal = sessionmaker(
 async def init_db():
     # Ensure data directory exists
     os.makedirs(
-        os.path.dirname(settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "")),
+        os.path.dirname(settings.DATABASE_URL.replace("sqlite+aiosqlite:///", ""))
+        or ".",
         exist_ok=True,
     )
     async with engine.begin() as conn:

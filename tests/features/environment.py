@@ -1,4 +1,5 @@
 import asyncio
+import os
 import shutil
 import sqlite3
 import tempfile
@@ -9,6 +10,16 @@ from sqlalchemy.orm import sessionmaker
 
 import app.models.saga  # noqa: F401 (import to register models with Base.metadata)
 from app.models.media import Base
+
+
+def before_all(context):
+    """Point the app at a temp-file DB and create its schema once."""
+    os.environ["DATABASE_URL"] = (
+        f"sqlite+aiosqlite:///{tempfile.mkdtemp(prefix='mr-bdd-')}/bdd.sqlite"
+    )
+    from app.core.database import init_db
+
+    asyncio.run(init_db())
 
 
 def before_scenario(context, scenario):

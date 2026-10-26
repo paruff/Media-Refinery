@@ -12,7 +12,7 @@ test-report: check-venv
 
 # Python-centric Makefile for Media-Refinery
 
-.PHONY: hooks hooks-update deps-lock precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
+.PHONY: docker-test hooks hooks-update deps-lock precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
 
 VENV?=.venv
 PYTHON?=$(VENV)/bin/python
@@ -133,6 +133,15 @@ hooks: ## one-time: install git hooks (pre-commit, commit-msg, pre-push)
 hooks-update: ## bump every hook to the latest release, frozen to commit SHAs
 	pre-commit autoupdate --freeze
 
-deps-lock: ## re-lock requirements-dev.txt and requirements-hooks.txt (hash-verified)
+deps-lock: ## re-lock all requirements*.txt (hash-verified)
+	uv pip compile requirements.in --python-version 3.12 --generate-hashes --no-header -o requirements.txt
 	uv pip compile requirements-dev.in -c requirements.txt --python-version 3.12 --generate-hashes --no-header -o requirements-dev.txt
 	uv pip compile requirements-hooks.in --python-version 3.12 --generate-hashes --no-header -o requirements-hooks.txt
+
+docker-test: ## run the CI test job inside the image (real ffmpeg; no local installs)
+	docker build -t media-refinery:ci .
+	docker run --rm --user root -v "$$PWD":/src:ro -e DATABASE_URL=sqlite+aiosqlite:///:memory: media-refinery:ci sh -c \
+	  'cp -r /src /w && cd /w && rm -rf .venv && pip install -q --no-deps --require-hashes -r requirements-dev.txt \
+	  && mkdir -p input staging output data \
+	  && pytest tests/unit tests/integration -p no:cacheprovider --timeout=120 -ra --cov=app --cov-report=term --cov-fail-under=$${COV_MIN:-70}; \
+	  rc=$$?; behave tests/features || rc=1; exit $$rc'

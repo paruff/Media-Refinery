@@ -1,11 +1,18 @@
 import asyncio
 import json
+import os
 import subprocess
+import tempfile
 
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+
+# One temp-file DB for the whole run (":memory:" is per-connection and per-loop).
+os.environ["DATABASE_URL"] = (
+    f"sqlite+aiosqlite:///{tempfile.mkdtemp(prefix='mr-test-')}/test.sqlite"
+)
 
 from app.models.media import Base
 
@@ -69,6 +76,7 @@ def patch_create_subprocess_exec(mocker, request):
     mocker.patch(
         "asyncio.create_subprocess_exec", side_effect=_mocked_create_subprocess_exec
     )
+    yield
 
 
 @pytest.fixture
@@ -79,14 +87,13 @@ def mock_ffprobe():
     return FFPROBE_MKV_H264_DTS
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
-def apply_alembic_migrations():
-    """Ensure all Alembic migrations are applied before tests run."""
-    import shutil
+@pytest.fixture(scope="session", autouse=True)
+def create_app_tables():
+    """Create the app schema in the temp DB before any test runs."""
+    import app.models.saga  # noqa: F401
+    from app.core.database import init_db
 
-    # Only run alembic if the command is available
-    if shutil.which("alembic") is not None:
-        subprocess.run(["alembic", "upgrade", "head"], check=True)
+    asyncio.run(init_db())
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -100,3 +107,31 @@ async def async_session():
     async with async_session_factory() as session:
         yield session
     await engine.dispose()
+
+
+@pytest.fixture
+def make_audio():
+    """Return a factory that renders a short real tone with ffmpeg (skips if absent)."""
+    import shutil
+
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg not installed")
+
+    def _make(path, seconds=1):
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                f"sine=frequency=440:duration={seconds}",
+                str(path),
+            ],
+            check=True,
+        )
+        return path
+
+    return _make

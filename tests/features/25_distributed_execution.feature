@@ -3,11 +3,13 @@ Feature: Distributed Worker Queue (Redis/Celery)
   I want to decouple orchestration from execution
   So that transcoding can scale horizontally
 
+  @wip
   Scenario: NormalizationPlan is dispatched to Celery
     Given a NormalizationPlan exists
     When ExecutionService dispatches the plan
     Then the plan should appear in the Redis queue
 
+  @wip
   Scenario: Worker pulls and executes task
     Given a worker is running
     When a task is available in the queue

@@ -4,12 +4,15 @@ import time
 
 from sqlalchemy import select
 
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, init_db
 from app.models.saga import SagaFileMoveLog, SagaLogStatus
 from app.services.execution_service import execute_normalization_plan
 
 
 def test_saga_file_move_integration():
+    import asyncio
+
+    asyncio.run(init_db())
     # Simulate a real cross-volume move scenario
     with tempfile.TemporaryDirectory() as tmpdir:
         out_path = os.path.join(tmpdir, "out_integ_saga.mp4")
