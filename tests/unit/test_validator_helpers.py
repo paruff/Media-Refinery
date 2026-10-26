@@ -76,3 +76,28 @@ def test_cleanup_staging_removes_only_dirs(svc):
     (svc.staging_dir / "keep.txt").write_text("x")
     svc._cleanup_staging()
     assert [p.name for p in svc.staging_dir.iterdir()] == ["keep.txt"]
+
+
+@pytest.mark.asyncio
+async def test_validate_reports_each_outcome(tmp_path, async_session):
+    out, stg = tmp_path / "out", tmp_path / "stg"
+    for rel in ("music/A/B/good.flac", "music/A/B/bad.flac", "stray/x.txt"):
+        f = out / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"x")
+    (stg / "job").mkdir(parents=True)
+    svc = ValidatorService(out, stg, async_session)
+
+    def probe(path):
+        return "Unsupported Audio: DTS" if path.name == "bad.flac" else ""
+
+    svc._ffprobe_check = probe
+    svc._metadata_check = lambda path: ""
+    report = await svc.validate()
+
+    assert report.total_files == 3
+    assert report.valid == 1
+    assert report.invalid == 2
+    issues = {i["issue"] for i in report.issues}
+    assert {"Path non-compliant", "Unsupported Audio: DTS", "File not in DB"} <= issues
+    assert not list(stg.iterdir())  # staging subdirs cleaned

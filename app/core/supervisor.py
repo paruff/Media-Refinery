@@ -86,7 +86,9 @@ class DaemonSupervisor:
         self.orchestrator.running = True
 
     async def _maybe_heartbeat(self):
-        now = datetime.utcnow()  # noqa: DTZ003
+        now = datetime.now(
+            UTC
+        )  # was naive utcnow(): TypeError vs tz-aware _last_heartbeat
         if (now - self._last_heartbeat).total_seconds() > self._heartbeat_interval:
             summary = await self.reporting_service.get_summary()
             self.logger.info(f"Daemon Heartbeat: {summary.json(indent=2)}")
