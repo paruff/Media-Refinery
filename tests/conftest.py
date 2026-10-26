@@ -135,3 +135,15 @@ def make_audio():
         return path
 
     return _make
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip real-ffmpeg integration tests where ffmpeg is absent (CI sets REQUIRE_FFMPEG=1)."""
+    import shutil
+
+    if shutil.which("ffmpeg") or os.environ.get("REQUIRE_FFMPEG"):
+        return
+    skip = pytest.mark.skip(reason="ffmpeg not installed (see `make docker-test`)")
+    for item in items:
+        if "integration" in str(item.fspath):
+            item.add_marker(skip)
