@@ -1,4 +1,6 @@
 import logging
+from collections.abc import Sequence
+from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import desc, func, select
@@ -36,14 +38,14 @@ class ReportingService:
         # Total count
         total = await self.db.scalar(select(func.count()).select_from(MediaItem))
         # By state
-        state_rows = (
+        state_rows: Sequence[Any] = (
             await self.db.execute(
                 select(MediaItem.state, func.count()).group_by(MediaItem.state)
             )
         ).all()
         by_state = [StateCount(state=s, count=c) for s, c in state_rows]
         # By media_type
-        mt_rows = (
+        mt_rows: Sequence[Any] = (
             await self.db.execute(
                 select(MediaItem.media_type, func.count()).group_by(
                     MediaItem.media_type
@@ -60,7 +62,7 @@ class ReportingService:
 
         from app.models.media import NormalizationPlan
 
-        error_rows = (
+        error_rows: Sequence[Any] = (
             (
                 await self.db.execute(
                     select(NormalizationPlan.execution_log)
