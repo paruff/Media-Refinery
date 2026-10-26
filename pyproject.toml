@@ -27,3 +27,67 @@ dependencies = [
 minversion = "7.0"
 addopts = "--strict-markers"
 testpaths = ["tests"]
+
+# ---------------------------------------------------------------------------
+# Lint / format: ONE config shared by the editor, pre-commit and CI.
+# Tool versions are pinned in .pre-commit-config.yaml (single source of truth).
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["."]
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+	"E", "W",   # pycodestyle
+	"F",        # pyflakes
+	"I",        # isort
+	"B",        # bugbear
+	"UP",       # pyupgrade
+	"S",        # bandit (security)
+	"ASYNC",    # blocking calls in async code
+	"DTZ",      # naive datetimes
+	"C4",       # comprehensions
+	"SIM",      # simplifications
+	"RUF",      # ruff-specific
+	"T20",      # stray print()
+	"LOG",      # logging misuse
+	"PIE", "PGH", "PLE", "PLW", "TID", "FLY",
+]
+ignore = [
+	"E501",     # line length is the formatter's job
+	"S603",     # subprocess with list args is our required pattern (R-SAFE-5)
+	"PLW1510",  # explicit check= is reviewed case by case
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "src"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S108", "S311", "S607", "ASYNC", "T20", "PLW0603"]
+"features/**" = ["S101", "T20", "F811"]
+"scripts/**" = ["T20", "S607"]
+"run_refinery.py" = ["S104"]  # daemon binds 0.0.0.0 inside the container
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "lf"
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = ["app/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
+
+[tool.bandit]
+exclude_dirs = ["tests", "features", ".venv", "alembic/versions"]
+
+[tool.codespell]
+skip = "*.lock,*.sqlite,coverage.xml,./.git,./testdata,./sample_media,./docs/legacy"
+ignore-words-list = "ser,te,fo,nd,ot,ans,astroid"
+check-hidden = false

@@ -1,0 +1,20 @@
+extends: default
+
+ignore: |
+  .venv/
+  node_modules/
+  docker-compose.yml
+  alembic/versions/
+
+rules:
+  line-length: disable
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false # GitHub Actions uses `on:`
+  indentation:
+    spaces: consistent
+    indent-sequences: consistent

@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Deny by default; each job opts in to what it needs.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: "3.12.13"
+  UV_VERSION: "0.13.5"
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+# Determinism rules for this file:
+#   * every action is pinned to a commit SHA (tag in the trailing comment);
+#     Dependabot bumps them, humans never edit them by hand
+#   * fixed runner image (no *-latest), exact Python patch version
+#   * hooks come from .pre-commit-config.yaml (SHA-pinned); Python deps come from
+#     requirements*.txt (exact pins; dev/hooks locks are also hash-verified)
+
+jobs:
+  hooks:
+    name: Lint, format, types, security hooks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install pre-commit (hash-locked)
+        run: python -m pip install --require-hashes --no-deps -r requirements-hooks.txt
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Run all hooks on all files
+        env:
+          # main is protected by PRs, not by a hook; pytest runs in the test job
+          SKIP: no-commit-to-branch,pytest-unit
+        run: pre-commit run --all-files --show-diff-on-failure --color always
+
+  test:
+    name: Tests (py3.12, real ffmpeg)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "requirements*.txt"
+      - name: System tools (ffmpeg, chromaprint, flac)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools flac
+          ffmpeg -version | head -1
+      - name: Install Python dependencies
+        run: |
+          uv venv
+          uv pip install -r requirements.txt
+          uv pip install --no-deps --require-hashes -r requirements-dev.txt
+      - name: Create media directories
+        run: mkdir -p input staging output output/movies output/series output/music data
+      - name: Unit + integration tests with coverage
+        # Floor is the measured baseline (G0 #46 raises it to 80 per spec NF-3).
+        run: >-
+          uv run --no-sync pytest tests/unit tests/integration
+          -p no:cacheprovider --timeout=120 -ra
+          --cov=app --cov-report=term --cov-report=xml --cov-fail-under=49
+      - name: BDD features
+        run: uv run --no-sync behave tests/features
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        if: always()
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Keep logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-logs
+          path: |
+            *.log
+            coverage.xml
+          if-no-files-found: ignore
+
+  docker-build:
+    name: Docker image builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          tags: media-refinery:ci
+
+  docker-canary:
+    name: Publish canary image (main only)
+    needs: [hooks, test, docker-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}:canary

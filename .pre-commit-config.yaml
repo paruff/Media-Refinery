@@ -1,18 +1,142 @@
+# Single source of truth for lint/format/security checks.
+# CI runs exactly this file (`pre-commit run --all-files`), so local == CI.
+#
+# Determinism: every `rev` is a full commit SHA (the `# frozen:` comment is the
+# human-readable tag). Never edit revs by hand; run `make hooks-update`, which
+# is `pre-commit autoupdate --freeze` and is also done weekly by Dependabot.
+#
+# One-time setup:  uv python install 3.12 && pre-commit install   (see Makefile: make hooks)
+minimum_pre_commit_version: "4.0.0"
+default_language_version:
+  python: python3.12
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
+fail_fast: false
+
 repos:
-  - repo: https://github.com/psf/black
-    rev: 24.1.1
-    hooks:
-      - id: black
-        language_version: python3
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.3.7
-    hooks:
-      - id: ruff
-        args: ["--fix"]
+  # ---- repository hygiene -------------------------------------------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-      - id: check-yaml
       - id: check-added-large-files
+        args: ["--maxkb=512"]
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-illegal-windows-names
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+      - id: check-symlinks
+      - id: check-toml
+      - id: check-vcs-permalinks
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+        exclude: ^docker-compose\.yml$ # TODO(G0 #46): invalid compose file, fixed there
+      - id: destroyed-symlinks
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: fix-byte-order-marker
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: no-commit-to-branch
+        args: ["--branch", "main"]
+      - id: trailing-whitespace
+        args: ["--markdown-linebreak-ext=md"]
+
+  # ---- python: lint + format (ruff replaces black/isort/flake8/pyupgrade) --
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: f368fb366ff7f2f808dd324b83a6d32267799e19  # frozen: v0.17.2
+    hooks:
+      - id: ruff-check
+        args: ["--fix", "--exit-non-zero-on-fix"]
+      - id: ruff-format
+
+  # ---- python: types ------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: 2834ec6639549dd6796205c8f011dedcd587288b  # frozen: v2.4.0
+    hooks:
+      - id: mypy
+        args: ["--config-file=mypy.ini"]
+        files: ^app/
+        additional_dependencies:
+          - "pydantic==2.12.5"
+          - "pydantic-settings==2.12.0"
+          - "sqlalchemy[mypy]==2.0.46"
+          - "fastapi==0.128.0"
+          - "watchdog==6.0.0"
+          - "types-PyYAML==6.0.12.20260906"
+
+  # ---- python: security ---------------------------------------------------
+  - repo: https://github.com/PyCQA/bandit
+    rev: 92ae8b82fb422a639f0ed8d99e96cea769594e08  # frozen: 1.9.4
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml", "--severity-level", "medium", "-q"]
+        exclude: ^(tests|features)/
+
+  # ---- secrets ------------------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 2ca41cc1372d1e939a6a879f18cdc19fc1cac1ce  # frozen: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # ---- config / infra files ----------------------------------------------
+  - repo: https://github.com/adrienverge/yamllint
+    rev: cba56bcde1fdd01c1deb3f945e69764c291a6530  # frozen: v1.38.0
+    hooks:
+      - id: yamllint
+        args: ["--strict", "-c", ".yamllint.yaml"]
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 4f85d46a92dc17713078e5de73f8a13190edf6fc  # frozen: 0.38.2
+    hooks:
+      - id: check-github-workflows
+      - id: check-dependabot
+      - id: check-compose-spec
+        exclude: ^docker-compose\.yml$ # TODO(G0 #46)
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
+    hooks:
+      - id: actionlint
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: c92afdf2c6ca336aaa8f39e2bd8d48f62dbd8e1f  # frozen: v1.31.1
+    hooks:
+      - id: zizmor
+        args: ["--min-severity", "medium"]
+  - repo: https://github.com/AleksaC/hadolint-py
+    rev: 6e7504451511eaeb62a3e7f14d63b0296cbf86eb  # frozen: v2.15.1
+    hooks:
+      - id: hadolint
+        args: ["--failure-threshold", "warning", "--ignore", "DL3008"] # apt pins go stale; base image is the pin
+
+  # ---- docs / text --------------------------------------------------------
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: cbcdc463be5464e25e3e955a511599a67b9b987f  # frozen: v0.50.0
+    hooks:
+      - id: markdownlint
+        args: ["--config", ".markdownlint.yaml"]
+        # TODO(G13 #59): legacy docs are rewritten there; lint only current docs until then
+        files: ^(intent|spec|plan|REVIEW|DESIGN)\.md$
+  - repo: https://github.com/codespell-project/codespell
+    rev: 57b21406f092110c18776e39b0bda50d37c945c8  # frozen: v2.4.3
+    hooks:
+      - id: codespell
+        additional_dependencies: ["tomli==2.2.1"]
+
+  # ---- commit message: "<type>: <description>" (see global git workflow) --
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: 3db014c16a9d31997ab8c07a4d61fcce936c8f0d  # frozen: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: ["feat", "fix", "refactor", "docs", "test", "chore", "perf", "ci", "build", "revert"]
+
+  # ---- pre-push: tests that need the project environment -----------------
+  - repo: local
+    hooks:
+      - id: pytest-unit
+        name: pytest (unit)
+        entry: bash -c 'uv run --python 3.12 --no-project --with-requirements requirements.txt --with pytest-mock python -m pytest tests/unit -q -p no:cacheprovider'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

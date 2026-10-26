@@ -1,5 +1,4 @@
 requirements: check-venv
-precom: check-venv
 test: check-venv unit integration features
 unit: check-venv
 integration: check-venv
@@ -13,7 +12,7 @@ test-report: check-venv
 
 # Python-centric Makefile for Media-Refinery
 
-.PHONY: precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
+.PHONY: hooks hooks-update deps-lock precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
 
 VENV?=.venv
 PYTHON?=$(VENV)/bin/python
@@ -23,10 +22,8 @@ BEHAVE?=$(VENV)/bin/behave
 
 
 precom:
-	@echo "[PRECOM] Run black, ruff, and mypy (pre-commit hooks)"
-	@./.venv/bin/black app/ tests/ || echo "black not installed; skipping format"
-	@./.venv/bin/ruff check app/ tests/ || echo "ruff not installed; skipping lint"
-	@./.venv/bin/mypy app/ || echo "mypy not installed; skipping type check"
+	@echo "[PRECOM] Same hooks as CI: ruff, mypy, bandit, gitleaks, yamllint, actionlint, zizmor, hadolint, ..."
+	@SKIP=no-commit-to-branch,pytest-unit pre-commit run --all-files
 
 test: unit integration features
 
@@ -126,3 +123,16 @@ check-venv:
 	  echo "Please activate it with: source $(VENV)/bin/activate"; \
 	  exit 1; \
 	fi
+
+# ---- tooling (no venv required) ----------------------------------------------
+hooks: ## one-time: install git hooks (pre-commit, commit-msg, pre-push)
+	@command -v uv >/dev/null || { echo "install uv: https://docs.astral.sh/uv/"; exit 1; }
+	uv python install 3.12
+	pre-commit install --install-hooks
+
+hooks-update: ## bump every hook to the latest release, frozen to commit SHAs
+	pre-commit autoupdate --freeze
+
+deps-lock: ## re-lock requirements-dev.txt and requirements-hooks.txt (hash-verified)
+	uv pip compile requirements-dev.in -c requirements.txt --python-version 3.12 --generate-hashes --no-header -o requirements-dev.txt
+	uv pip compile requirements-hooks.in --python-version 3.12 --generate-hashes --no-header -o requirements-hooks.txt
