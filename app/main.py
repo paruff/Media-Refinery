@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal, init_db
 from app.core.orchestrator import PipelineConfig, PipelineOrchestrator
 from app.core.watcher import InputWatcher
+from app.services.enrich import VideoEnricher
 
 logger = logging.getLogger("uvicorn")
 LOG_FILE_NAME = "rotation.log"
@@ -40,8 +41,16 @@ def configure_logging() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     await init_db()
+    enricher = (
+        VideoEnricher(settings.TMDB_API_KEY, settings.TVDB_API_KEY)
+        if settings.TMDB_API_KEY and settings.TVDB_API_KEY
+        else None
+    )
     orchestrator = PipelineOrchestrator(
-        AsyncSessionLocal, PipelineConfig.from_settings(), logger=logger
+        AsyncSessionLocal,
+        PipelineConfig.from_settings(),
+        logger=logger,
+        enricher=enricher,
     )
     worker = asyncio.create_task(orchestrator.run_forever())
     watcher = InputWatcher(settings.INPUT_DIR, AsyncSessionLocal, logger=logger)

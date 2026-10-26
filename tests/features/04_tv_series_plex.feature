@@ -1,51 +1,28 @@
-Feature: Ideal Plex TV Series Library Structure
-  Ensures that TV series are named, encoded, and organized so Plex can
-  correctly match episodes and seasons.
+Feature: TV episodes land in the Plex/Jellyfin series layout
+  R-VIDEO-5: TV/{Show} ({Year}) {tvdb-id}/Season NN/{Show} - SxxEyy - {Title}.mkv,
+  specials in Season 00.
 
-  Background:
-    Given a TV library root at "/TV"
+  Scenario: Episode naming and season folder
+    Given a video workspace with mocked TMDB and TVDB
+    And a generated conformant video "Show Name S01E02.mkv"
+    When the video pipeline is approved and run to completion
+    Then the episode is published at "TV/Show Name (2020) {tvdb-81189}/Season 01/Show Name - S01E02 - Second Episode.mkv"
 
-  Scenario: Standard series directory layout
-    Given a show titled "Show Name"
-    Then the directory MUST be:
-      """
-      /TV/Show Name/
-      """
+  Scenario: Specials go to Season 00
+    Given a video workspace with mocked TMDB and TVDB
+    And a generated conformant video "Show Name S00E01.mkv"
+    When the video pipeline is approved and run to completion
+    Then the episode is published at "TV/Show Name (2020) {tvdb-81189}/Season 00/Show Name - S00E01 - Behind The Scenes.mkv"
 
-  Scenario: Standard season directory layout
-    Given season 1 of a show
-    Then the directory MUST be:
-      """
-      /TV/Show Name/Season 01/
-      """
+  Scenario: A file holding two episodes
+    Given a video workspace with mocked TMDB and TVDB
+    And a generated conformant video "Show Name S01E01E02.mkv"
+    When the video pipeline is approved and run to completion
+    Then the episode is published at "TV/Show Name (2020) {tvdb-81189}/Season 01/Show Name - S01E01-E02 - First Episode.mkv"
 
-  Scenario: Episode naming
-    Given an episode with season 1 and episode 2
-    Then the filename MUST be:
-      """
-      Show Name - S01E02 - Episode Title.mkv
-      """
-
-  Scenario: Multi‑episode files
-    Given a file containing episodes 1 and 2
-    Then the filename MUST be:
-      """
-      Show Name - S01E01E02.mkv
-      """
-
-  Scenario: Supported codecs for Samsung Series 65
-    Then the video codec MUST be:
-      | H.264 |
-      | H.265 |
-    And audio MUST be:
-      | AAC |
-      | AC3 |
-      | EAC3 |
-
-  Scenario: Subtitle compatibility
-    Then subtitles MUST be:
-      | SRT |
-      | WebVTT |
-    And MUST NOT be:
-      | PGS |
-      | VobSub |
+  Scenario: Conformant episodes are remuxed, not re-encoded
+    Given a video workspace with mocked TMDB and TVDB
+    And a generated conformant video "Show Name S01E02.mkv"
+    When the video pipeline is approved and run to completion
+    Then the ffmpeg args copy the video and re-encode nothing
+    And the output video codec is "h264"
