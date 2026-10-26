@@ -14,11 +14,12 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.paths import ensure_inside
-from app.core.planning import build_plan, is_audio_only
+from app.core.planning import VIDEO_COPY_CODECS, build_plan, is_audio_only
 from app.core.publish import archive_original, publish_file, quarantine_file
 from app.core.scanner import ScannerService
 from app.core.tools import probe_duration, run_tool
 from app.core.verify import sha256_file, verify_output
+from app.media.video.convert import convert_video
 from app.models.media import (
     FileState,
     MediaItem,
@@ -347,6 +348,20 @@ class PipelineOrchestrator:
             self.cfg.ffmpeg_timeout,
         )
 
+    @staticmethod
+    def _is_video_reencode(item) -> bool:
+        """Legacy-codec video (MPEG-1/2, WMV, XviD...) goes through the converter engine."""
+        return not is_audio_only(item) and item.video_codec not in VIDEO_COPY_CODECS
+
+    async def _convert_video(self, item, out: Path) -> tuple[int, str]:
+        try:
+            await asyncio.to_thread(
+                convert_video, Path(str(item.source_path)), out, out.parent / "repair"
+            )
+        except Exception as e:
+            return 1, str(e)
+        return 0, ""
+
     async def _execute(self, item_id) -> bool:
         if self.cfg.dry_run:
             return False
@@ -362,9 +377,12 @@ class PipelineOrchestrator:
             tmp = work.with_name(
                 f"out.tmp{ext}"
             )  # ffmpeg infers the container from the suffix
-            rc, _, err = await self._run_ffmpeg(
-                str(item.source_path), list(plan.ffmpeg_args or []), tmp
-            )
+            if plan.needs_transcode and self._is_video_reencode(item):
+                rc, err = await self._convert_video(item, tmp)  # repair + smart bitrate
+            else:
+                rc, _, err = await self._run_ffmpeg(
+                    str(item.source_path), list(plan.ffmpeg_args or []), tmp
+                )
             plan.execution_log = f"{plan.execution_log}\nffmpeg rc={rc}\n{err}".strip()
             if rc != 0:
                 tmp.unlink(missing_ok=True)
