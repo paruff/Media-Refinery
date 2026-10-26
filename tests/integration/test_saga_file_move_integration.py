@@ -31,7 +31,9 @@ def test_saga_file_move_integration():
 
                 async with AsyncSessionLocal() as session:
                     result = await session.execute(
-                        select(SagaFileMoveLog).where(SagaFileMoveLog.plan_id == plan_id)
+                        select(SagaFileMoveLog).where(
+                            SagaFileMoveLog.plan_id == plan_id
+                        )
                     )
                     log = result.scalars().first()
                     return log and log.status == SagaLogStatus.committed
