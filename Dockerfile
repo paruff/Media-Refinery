@@ -1,22 +1,33 @@
-# Base image
-FROM python:3.14-slim
+FROM python:3.12-slim
 
-# Install ffmpeg
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools flac \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy project files
-COPY . .
+COPY requirements.txt .
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
-# Install Python dependencies if requirements.txt exists
-RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
+COPY app ./app
+COPY src ./src
+COPY alembic ./alembic
+COPY alembic.ini run_refinery.py ./
 
-# Expose input and output directories as volumes
-VOLUME ["/input", "/output"]
+RUN mkdir -p /input /output /work /data \
+    && useradd --system --uid 1000 refinery \
+    && chown -R refinery /app /input /output /work /data
+USER refinery
 
-# Default command to run the Python application
-ENTRYPOINT ["python", "src/audio/converter.py", "--input", "/input", "--output", "/output"]
+ENV INPUT_DIR=/input \
+    OUTPUT_DIR=/output \
+    STAGING_DIR=/work \
+    DATABASE_URL=sqlite+aiosqlite:////data/media_refinery.sqlite
+
+VOLUME ["/input", "/output", "/work", "/data"]
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"]
+
+CMD ["python", "run_refinery.py"]

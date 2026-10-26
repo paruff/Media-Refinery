@@ -61,6 +61,7 @@ jobs:
       contents: read
     env:
       DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      REQUIRE_FFMPEG: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -84,11 +85,11 @@ jobs:
       - name: Create media directories
         run: mkdir -p input staging output output/movies output/series output/music data
       - name: Unit + integration tests with coverage
-        # Floor is the measured baseline (G0 #46 raises it to 80 per spec NF-3).
+        # Floor per spec NF-3.
         run: >-
           uv run --no-sync pytest tests/unit tests/integration
           -p no:cacheprovider --timeout=120 -ra
-          --cov=app --cov-report=term --cov-report=xml --cov-fail-under=49
+          --cov=app --cov-report=term --cov-report=xml --cov-fail-under=80
       - name: BDD features
         run: uv run --no-sync behave tests/features
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -144,9 +145,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lowercase image name (registries reject uppercase)
+        env:
+          REPO: ${{ github.repository }}
+        run: echo "IMAGE=ghcr.io/${REPO,,}" >> "$GITHUB_ENV"
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository }}:canary
+          tags: ${{ env.IMAGE }}:canary

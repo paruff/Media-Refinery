@@ -12,7 +12,7 @@ test-report: check-venv
 
 # Python-centric Makefile for Media-Refinery
 
-.PHONY: hooks hooks-update deps-lock precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
+.PHONY: docker-test compose-check venv hooks hooks-update deps-lock precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
 
 VENV?=.venv
 PYTHON?=$(VENV)/bin/python
@@ -34,7 +34,7 @@ integration:
 	$(PYTEST) tests/integration/ --maxfail=3 --disable-warnings -v
 
 features:
-	@which behave >/dev/null 2>&1 && $(BEHAVE) features/ || echo "behave not installed; skipping BDD features"
+	$(BEHAVE) tests/features
 
 run:
 	$(PYTHON) -m app.main
@@ -56,7 +56,7 @@ type-check:
 tdd: precom unit
 
 # `ci` runs the full precommit suite and all tests
-ci: precom test
+ci: precom test compose-check
 
 # `check` runs lint and type checks
 check: lint type-check
@@ -77,7 +77,7 @@ test-report:
 	@echo "[TEST-REPORT] Running unit, integration, and BDD tests with coverage and mutation analysis"
 	$(PYTEST) --cov=app --cov=tests --cov-report=term-missing --cov-report=html
 	@echo "[TEST-REPORT] Running behave BDD tests (if available)"
-	@which behave >/dev/null 2>&1 && $(BEHAVE) features/ || echo "behave not installed; skipping BDD features"
+	$(BEHAVE) tests/features
 	@echo "[TEST-REPORT] Running mutation analysis with mutmut (if available)"
 	@which mutmut >/dev/null 2>&1 && mutmut run || echo "mutmut not installed; skipping mutation analysis"
 	@which mutmut >/dev/null 2>&1 && mutmut results || echo "mutmut not installed; skipping mutation results"
@@ -114,15 +114,20 @@ help:
 	@echo "  container-down Stop Docker containers"
 	@echo "  help           Show this help message"
 
-.PHONY: check-venv
+.PHONY: check-venv venv
+venv: ## create .venv from the hash-locked requirements (uv)
+	uv venv --python 3.12 $(VENV)
+	uv pip install --python $(VENV)/bin/python -r requirements.txt
+	uv pip install --python $(VENV)/bin/python --no-deps --require-hashes -r requirements-dev.txt
 
 check-venv:
-	@venv_path="$(VENV)"; \
-	if [ -z "$${VIRTUAL_ENV}" ] || [ "$${VIRTUAL_ENV}" != "$$(cd $(VENV) && pwd)" ]; then \
-	  echo "[ERROR] You are not running in the correct virtual environment ($(VENV))."; \
-	  echo "Please activate it with: source $(VENV)/bin/activate"; \
-	  exit 1; \
-	fi
+	@test -x "$(VENV)/bin/python" || { echo "[ERROR] $(VENV) missing - run: make venv"; exit 1; }
+
+.PHONY: compose-check
+compose-check: ## docker compose config -q (falls back to the official compose image if no plugin)
+	@docker compose version >/dev/null 2>&1 \
+	  && docker compose config -q \
+	  || docker run --rm -v "$$PWD":/w -w /w docker/compose-bin:v2.40.3 /docker-compose config -q
 
 # ---- tooling (no venv required) ----------------------------------------------
 hooks: ## one-time: install git hooks (pre-commit, commit-msg, pre-push)
@@ -133,6 +138,15 @@ hooks: ## one-time: install git hooks (pre-commit, commit-msg, pre-push)
 hooks-update: ## bump every hook to the latest release, frozen to commit SHAs
 	pre-commit autoupdate --freeze
 
-deps-lock: ## re-lock requirements-dev.txt and requirements-hooks.txt (hash-verified)
+deps-lock: ## re-lock all requirements*.txt (hash-verified)
+	uv pip compile requirements.in --upgrade --python-version 3.12 --generate-hashes --no-header -o requirements.txt
 	uv pip compile requirements-dev.in -c requirements.txt --python-version 3.12 --generate-hashes --no-header -o requirements-dev.txt
 	uv pip compile requirements-hooks.in --python-version 3.12 --generate-hashes --no-header -o requirements-hooks.txt
+
+docker-test: ## run the CI test job inside the image (real ffmpeg; no local installs)
+	docker build -t media-refinery:ci .
+	docker run --rm --user root -v "$$PWD":/src:ro -e DATABASE_URL=sqlite+aiosqlite:///:memory: -e REQUIRE_FFMPEG=1 media-refinery:ci sh -c \
+	  'cp -r /src /w && cd /w && rm -rf .venv && pip install -q --no-deps --require-hashes -r requirements-dev.txt \
+	  && mkdir -p input staging output data \
+	  && pytest tests/unit tests/integration -p no:cacheprovider --timeout=120 -ra --cov=app --cov-report=term --cov-fail-under=$${COV_MIN:-80}; \
+	  rc=$$?; behave tests/features || rc=1; exit $$rc'

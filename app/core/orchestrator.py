@@ -131,7 +131,7 @@ class PipelineOrchestrator:
                         item.retry_count = 0
                     elif result.state in ("FAILURE", "REVOKED"):
                         item.state = state_info["fail"]
-                        item.updated_at = datetime.utcnow()  # noqa: DTZ003
+                        item.updated_at = datetime.now(UTC)
                         item.retry_count = getattr(item, "retry_count", 0) + 1
                         if item.retry_count > 3:
                             item.state = "error"
@@ -143,12 +143,12 @@ class PipelineOrchestrator:
                 await asyncio.sleep(0.1)  # Simulate work
                 # On success
                 item.state = state_info["next"]
-                item.updated_at = datetime.utcnow()  # noqa: DTZ003
+                item.updated_at = datetime.now(UTC)
                 item.retry_count = 0
                 # Optionally, append to audit_log
         except Exception as e:
             item.state = state_info["fail"]
-            item.updated_at = datetime.utcnow()  # noqa: DTZ003
+            item.updated_at = datetime.now(UTC)
             item.retry_count = getattr(item, "retry_count", 0) + 1
             if item.retry_count > 3:
                 item.state = "error"

@@ -1,0 +1,21 @@
+# Runtime imports of app/ only. Dev/test tools live in requirements-dev.in.
+# Lock with:  make deps-lock
+aiosqlite
+celery
+fastapi
+filelock
+guessit
+httpx
+imagehash
+musicbrainzngs
+mutagen
+opencv-python-headless
+pillow
+pydantic
+pydantic-settings
+pyyaml
+sqlalchemy[asyncio]
+alembic
+structlog  # legacy src/audio until G2/G3 removes it
+uvicorn
+watchdog

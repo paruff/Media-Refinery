@@ -38,10 +38,7 @@ async def test_convert_to_flac(audio_converter, tmp_path):
 
     # Mock ffmpeg execution to create the temp output file
     async def _mock_exec(cmd):
-        # find .tmp arg and create the temp file
-        for a in cmd:
-            if str(a).endswith(".tmp"):
-                Path(a).write_bytes(b"fake audio")
+        Path(cmd[-1]).write_bytes(b"fake audio")  # ffmpeg output path is last
         return (0, "", "")
 
     from unittest.mock import patch
@@ -63,9 +60,7 @@ async def test_convert_preserves_metadata(audio_converter, tmp_path):
     output_dir.mkdir()
 
     async def _mock_exec(cmd):
-        for a in cmd:
-            if str(a).endswith(".tmp"):
-                Path(a).write_bytes(b"fake audio")
+        Path(cmd[-1]).write_bytes(b"fake audio")
         return (0, "", "")
 
     from unittest.mock import patch

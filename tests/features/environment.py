@@ -1,14 +1,28 @@
 import asyncio
+import os
 import shutil
 import sqlite3
 import tempfile
 from pathlib import Path
+
+# Must be set before anything imports app.core.database (behave loads the step
+# modules, and that import binds the global engine to DATABASE_URL).
+os.environ["DATABASE_URL"] = (
+    f"sqlite+aiosqlite:///{tempfile.mkdtemp(prefix='mr-bdd-')}/bdd.sqlite"
+)
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 import app.models.saga  # noqa: F401 (import to register models with Base.metadata)
 from app.models.media import Base
+
+
+def before_all(context):
+    """Create the schema in the temp-file DB selected at import time."""
+    from app.core.database import init_db
+
+    asyncio.run(init_db())
 
 
 def before_scenario(context, scenario):
@@ -19,18 +33,6 @@ def before_scenario(context, scenario):
         tempdir = tempfile.TemporaryDirectory()
         context.tempdirs[d] = tempdir
         setattr(context, f"{d}_dir", tempdir.name)
-
-    # Ensure working directories exist
-    for d in ["output", "work", "logs", "data"]:
-        dir_path = Path(d)
-        if dir_path.exists():
-            shutil.rmtree(dir_path)
-        dir_path.mkdir(parents=True, exist_ok=True)
-
-    # Remove any previous sqlite DB to start clean
-    db_path = Path("data/media_refinery.sqlite")
-    if db_path.exists():
-        db_path.unlink()
 
     # Setup an in-memory async DB engine and create tables
     context.engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True)
@@ -50,18 +52,18 @@ def before_scenario(context, scenario):
 
 def after_scenario(context, scenario):
     """Cleanup after each scenario and dump artifacts on failure."""
-    db_path = Path("data/media_refinery.sqlite")
+    db_path = Path(os.environ["DATABASE_URL"].removeprefix("sqlite+aiosqlite:///"))
 
-    # On failure, dump DB and copy ffmpeg logs for debugging
+    # On failure, dump DB and copy ffmpeg logs into the scenario's temp output dir
     if scenario.status == "failed":
         if db_path.exists():
-            dump_path = Path("output/failure_db_dump.sql")
+            dump_path = Path(context.output_dir) / "failure_db_dump.sql"
             with sqlite3.connect(str(db_path)) as conn, open(dump_path, "w") as f:
                 for line in conn.iterdump():
                     f.write(f"{line}\n")
         ffmpeg_log = Path("logs/ffmpeg.log")
         if ffmpeg_log.exists():
-            shutil.copy(ffmpeg_log, "output/ffmpeg_failure.log")
+            shutil.copy(ffmpeg_log, Path(context.output_dir) / "ffmpeg_failure.log")
 
     # Dispose DB engine if the test created one
     engine = getattr(context, "engine", None)

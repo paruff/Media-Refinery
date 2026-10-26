@@ -19,21 +19,33 @@ def test_celery_task_registration(monkeypatch):
 def test_execute_normalization_plan_runs():
     # Should not raise, simulates work
     with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "in.mp4")
         out_path = os.path.join(tmpdir, "out.mp4")
-        # Create a dummy source file
-        with open(out_path, "wb") as f:
+        with open(src_path, "wb") as f:
             f.write(b"dummy")
-        plan = {"id": "testid", "target_path": out_path}
+        plan = {
+            "id": "testid",
+            "media_item_id": "m",
+            "source_path": src_path,
+            "target_path": out_path,
+        }
         execute_normalization_plan(plan)
+        assert os.path.exists(out_path)
 
 
 def test_idempotency_of_execute_normalization_plan():
     # Running the same plan twice should not duplicate work
     with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "in.mp4")
         out_path = os.path.join(tmpdir, "out.mp4")
-        with open(out_path, "wb") as f:
+        with open(src_path, "wb") as f:
             f.write(b"dummy")
-        plan = {"id": "idempotent", "target_path": out_path}
+        plan = {
+            "id": "idempotent",
+            "media_item_id": "m",
+            "source_path": src_path,
+            "target_path": out_path,
+        }
         execute_normalization_plan(plan)
         # Run again, should skip
         execute_normalization_plan(plan)

@@ -60,4 +60,4 @@ async def test_execution_service_integration(tmp_path):
         assert updated_item.state == "executed"
         updated_plan = await session.get(NormalizationPlan, "pid1")
         assert updated_plan.plan_status == PlanStatus.completed.value
-        assert "Moved to output" in updated_plan.execution_log
+        assert "Copied to output" in updated_plan.execution_log

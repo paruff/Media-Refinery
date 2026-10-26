@@ -233,12 +233,11 @@ async def test_execute_plan_failure_cleanup(mock_makedirs, mock_move, mock_subpr
         plan.target_path = str(staging_dir / "final.flac")
         # Patch Path.exists and stat, and force an error
         with (
-            patch.object(Path, "exists", return_value=False),
-            patch.object(Path, "stat", return_value=MagicMock(st_size=1)),
-            patch("shutil.move", side_effect=Exception("move failed")),
+            patch("shutil.copy2", side_effect=OSError("copy failed")),
         ):
             service = ExecutionService(
                 db, staging_root=staging, session_factory=session_factory
             )
-            await service.execute_plan(plan)
-    assert db.commit.called
+            with pytest.raises(OSError, match="copy failed"):
+                await service.execute_plan(plan)
+    assert db.commit.called  # failure state is persisted before raising

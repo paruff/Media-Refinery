@@ -13,6 +13,7 @@ Feature: Transactional Saga Pattern for File Moves
     And the .tmp file is atomically renamed
     And the output file exists
 
+  @wip
   Scenario: Recovery of unfinished .tmp files
     Given a NormalizationPlan with a .tmp file left from a crash
     When the system restarts

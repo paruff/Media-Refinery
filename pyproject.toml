@@ -61,6 +61,9 @@ ignore = [
 	"PLW1510",  # explicit check= is reviewed case by case
 ]
 
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["app", "src"]
 

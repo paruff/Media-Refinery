@@ -8,6 +8,6 @@ router = APIRouter()
 
 
 @router.get("/v1/summary", response_model=SystemSummary)
-async def get_summary(session: AsyncSession = Depends(get_async_session)):  # noqa: B008
+async def get_summary(session: AsyncSession = Depends(get_async_session)):
     service = ReportingService(session)
     return await service.get_summary()

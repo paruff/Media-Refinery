@@ -13,10 +13,16 @@ from app.services.execution_service import execute_normalization_plan
 @given("a NormalizationPlan with a valid source and target")
 def step_given_plan(context):
     context.tmpdir = tempfile.TemporaryDirectory()
+    src_path = os.path.join(context.tmpdir.name, "in_bdd_saga.mp4")
     out_path = os.path.join(context.tmpdir.name, "out_bdd_saga.mp4")
-    with open(out_path, "wb") as f:
+    with open(src_path, "wb") as f:
         f.write(b"dummy")
-    context.plan = {"id": "bddsaga", "target_path": out_path}
+    context.plan = {
+        "id": "bddsaga",
+        "media_item_id": "bddsaga-item",
+        "source_path": src_path,
+        "target_path": out_path,
+    }
     context.out_path = out_path
 
 

@@ -17,11 +17,17 @@ def test_saga_file_move_integration():
         from app.core.database import init_db
 
         asyncio.run(init_db())
-        out_path = os.path.join(tmpdir, "out_integ_saga.mp4")
-        with open(out_path, "wb") as f:
+        src_path = os.path.join(tmpdir, "in_integ_saga.mp4")
+        with open(src_path, "wb") as f:
             f.write(b"dummy")
+        out_path = os.path.join(tmpdir, "out_integ_saga.mp4")
         plan_id = f"sagainteg-{uuid.uuid4()}"
-        plan = {"id": plan_id, "target_path": out_path}
+        plan = {
+            "id": plan_id,
+            "media_item_id": "m",
+            "source_path": src_path,
+            "target_path": out_path,
+        }
         execute_normalization_plan(plan)
 
         # Wait for WAL commit

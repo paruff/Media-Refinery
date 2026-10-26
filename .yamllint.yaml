@@ -3,7 +3,6 @@ extends: default
 ignore: |
   .venv/
   node_modules/
-  docker-compose.yml
   alembic/versions/
 
 rules:

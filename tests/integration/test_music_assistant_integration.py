@@ -1,5 +1,4 @@
 import shutil
-import subprocess
 
 import pytest
 
@@ -7,7 +6,7 @@ from src.audio.converter import AudioConverter
 
 
 @pytest.mark.asyncio
-async def test_music_album_conversion(tmp_path):
+async def test_music_album_conversion(tmp_path, make_audio):
     # Simulate a music album directory with multiple tracks
     if shutil.which("ffmpeg") is None:
         pytest.skip("ffmpeg is required for this integration test")
@@ -17,23 +16,7 @@ async def test_music_album_conversion(tmp_path):
     tracks = []
     for i in range(1, 4):
         f = album_dir / f"0{i} - Heat of the Moment.mp3"
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "lavfi",
-                "-i",
-                "anullsrc=r=44100:cl=stereo",
-                "-t",
-                "1",
-                str(f),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        tracks.append(f)
+        tracks.append(make_audio(f))
     output_dir = tmp_path / "output"
     output_dir.mkdir()
     converter = AudioConverter()
