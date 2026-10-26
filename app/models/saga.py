@@ -1,14 +1,16 @@
+import enum
+import uuid
+
 from sqlalchemy import (
     Column,
-    String,
     DateTime,
     Enum,
+    String,
     Text,
     func,
 )
+
 from app.core.database import Base
-import enum
-import uuid
 
 
 class SagaLogStatus(enum.Enum):

@@ -1,7 +1,8 @@
-import unittest
 import subprocess
-from src.metadata.metadata import MetadataExtractor
+import unittest
 from unittest.mock import patch
+
+from src.metadata.metadata import MetadataExtractor
 
 
 class TestMetadataExtractor(unittest.TestCase):

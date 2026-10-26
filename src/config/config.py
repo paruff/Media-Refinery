@@ -1,6 +1,7 @@
 from pathlib import Path
+from typing import Any
+
 import yaml
-from typing import Any, Dict
 
 
 class ConfigLoader:
@@ -11,7 +12,7 @@ class ConfigLoader:
     def __init__(self, config_path: Path):
         self.config_path = config_path
 
-    def load_config(self) -> Dict[str, Any]:
+    def load_config(self) -> dict[str, Any]:
         """
         Loads the configuration file and parses it as a dictionary.
 
@@ -22,5 +23,5 @@ class ConfigLoader:
             with self.config_path.open("r") as file:
                 return yaml.safe_load(file)
         except Exception as e:
-            print(f"Failed to load configuration: {e}")
+            print(f"Failed to load configuration: {e}")  # noqa: T201
             return {}

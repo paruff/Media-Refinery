@@ -1,9 +1,10 @@
-from typing import List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select, desc
-from app.models.media import MediaItem
-from pydantic import BaseModel
 import logging
+
+from pydantic import BaseModel
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.media import MediaItem
 
 
 class StateCount(BaseModel):
@@ -18,11 +19,11 @@ class MediaTypeCount(BaseModel):
 
 class SystemSummary(BaseModel):
     total: int
-    by_state: List[StateCount]
-    by_media_type: List[MediaTypeCount]
+    by_state: list[StateCount]
+    by_media_type: list[MediaTypeCount]
     validated_success_rate: float
-    error_log: List[str]
-    warnings: List[str] = []
+    error_log: list[str]
+    warnings: list[str] = []
     storage_bytes: int = 0
 
 
@@ -55,9 +56,9 @@ class ReportingService:
         validated_success_rate = (validated / total) * 100 if total else 0.0
         # Error log (last 10 unique)
         # from sqlalchemy.orm import joinedload (unused)
-        from app.models.media import NormalizationPlan
-
         from typing import cast
+
+        from app.models.media import NormalizationPlan
 
         error_rows = (
             (

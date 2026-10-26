@@ -1,5 +1,6 @@
 import pytest
-from app.models.media import MediaItem, FileState, MediaType
+
+from app.models.media import FileState, MediaItem, MediaType
 from app.services.auditor import IssueDetectorService
 
 

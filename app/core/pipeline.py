@@ -1,9 +1,11 @@
 import asyncio
 import logging
-from app.models.media import MediaItem, FileState
-from sqlalchemy.future import select
 from datetime import datetime
+
+from sqlalchemy.future import select
+
 from app.core.scanner import ScannerService
+from app.models.media import FileState, MediaItem
 
 MAX_CONCURRENT_SCANS = 2
 
@@ -19,7 +21,7 @@ class PipelineCoordinator:
 
     async def start(self):
         self.running = True
-        asyncio.create_task(self.worker_loop())
+        asyncio.create_task(self.worker_loop())  # noqa: RUF006
 
     async def stop(self):
         self.running = False
@@ -48,7 +50,7 @@ class PipelineCoordinator:
                 return
             # Transition to scanning
             item.state = FileState.scanning
-            item.updated_at = datetime.utcnow()
+            item.updated_at = datetime.utcnow()  # noqa: DTZ003
             await session.commit()
             self.logger.info(f"MediaItem {media_id} state: PENDING -> SCANNING")
         try:
@@ -71,4 +73,4 @@ class MediaScanner:
     async def run(self, media_id):
         # Simulate scanning
         await asyncio.sleep(1)
-        print(f"Scanned media {media_id}")
+        print(f"Scanned media {media_id}")  # noqa: T201

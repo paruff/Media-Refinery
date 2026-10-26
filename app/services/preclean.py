@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Dict, List
 
 
 class PrecleanDetector:
@@ -8,15 +7,15 @@ class PrecleanDetector:
     Provides small, well-typed helpers used by Behave steps and unit tests.
     """
 
-    REQUIRED_TAGS = ["Title", "Year", "Season/Episode", "Artist/Album"]
+    REQUIRED_TAGS = ["Title", "Year", "Season/Episode", "Artist/Album"]  # noqa: RUF012
 
-    def scan_metadata(self, file_path: Path) -> List[str]:
+    def scan_metadata(self, file_path: Path) -> list[str]:
         """Scan metadata for a file and return a list of flags.
 
         Flags are simple strings like "missing:Title".
         """
         metadata = self._read_metadata(file_path)
-        flags: List[str] = []
+        flags: list[str] = []
 
         for tag in self.REQUIRED_TAGS:
             if not metadata.get(tag):
@@ -31,12 +30,12 @@ class PrecleanDetector:
         except UnicodeEncodeError:
             return True
 
-    ILLEGAL_CHARS = set('/\\:*?"<>|')
+    ILLEGAL_CHARS = set('/\\:*?"<>|')  # noqa: RUF012
 
-    def illegal_filesystem_chars(self, filename: str) -> List[str]:
+    def illegal_filesystem_chars(self, filename: str) -> list[str]:
         return [c for c in filename if c in self.ILLEGAL_CHARS]
 
-    def _read_metadata(self, file_path: Path) -> Dict[str, str]:
+    def _read_metadata(self, file_path: Path) -> dict[str, str]:
         """Placeholder metadata reader.
 
         In production this would probe tags from files; tests may monkeypatch this.
@@ -44,33 +43,33 @@ class PrecleanDetector:
         # Default: no metadata
         return {}
 
-    def scan_metadata_dict(self, metadata: Dict[str, str]) -> List[str]:
+    def scan_metadata_dict(self, metadata: dict[str, str]) -> list[str]:
         """Scan a metadata dictionary for missing required tags.
 
         This helper allows callers that already parsed metadata (e.g. scanner)
         to reuse the same detection logic without re-reading files.
         """
-        flags: List[str] = []
+        flags: list[str] = []
         for tag in self.REQUIRED_TAGS:
             if not metadata.get(tag):
                 flags.append(f"missing:{tag}")
         return flags
 
-    def detect_conflicts(self, files_meta: List[Dict[str, str]]) -> List[str]:
+    def detect_conflicts(self, files_meta: list[dict[str, str]]) -> list[str]:
         """Detect simple conflicts among files with same title.
 
         Expects a list of metadata dicts that include at least 'Title'.
         Returns human-readable conflict flags.
         """
-        flags: List[str] = []
-        by_title: Dict[str, List[Dict[str, str]]] = {}
+        flags: list[str] = []
+        by_title: dict[str, list[dict[str, str]]] = {}
         for m in files_meta:
             title = m.get("Title")
             if not title:
                 continue
             by_title.setdefault(title, []).append(m)
 
-        for title, metas in by_title.items():
+        for title, metas in by_title.items():  # noqa: B007
             if len(metas) < 2:
                 continue
             years = {m.get("Year") for m in metas}

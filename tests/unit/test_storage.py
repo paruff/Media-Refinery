@@ -1,4 +1,5 @@
 import pytest
+
 from src.storage.storage import Storage
 
 

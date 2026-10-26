@@ -1,7 +1,9 @@
-from behave import given, when, then  # type: ignore[import-untyped]
-from unittest.mock import patch, MagicMock
-from app.models.media import MediaItem, FileState
+from unittest.mock import MagicMock, patch
+
+from behave import given, then, when  # type: ignore[import-untyped]
+
 from app.core.scanner import ScannerService
+from app.models.media import FileState, MediaItem
 
 
 @given('a media library with an audio file "{filename}"')
@@ -93,7 +95,7 @@ class DummySession:
                             i.error_log = (
                                 "Duplicate audio fingerprint detected. Skipping."
                             )
-                    return MagicMock(scalar_one_or_none=lambda: item)
+                    return MagicMock(scalar_one_or_none=lambda: item)  # noqa: B023
         if hasattr(query, "where") and "video_fingerprint" in str(query):
             for item in self.items:
                 if item.video_fingerprint == "vfp123" and item.id != "4":
@@ -103,7 +105,7 @@ class DummySession:
                             i.error_log = (
                                 "Duplicate video fingerprint detected. Skipping."
                             )
-                    return MagicMock(scalar_one_or_none=lambda: item)
+                    return MagicMock(scalar_one_or_none=lambda: item)  # noqa: B023
         return MagicMock(scalar_one_or_none=lambda: None)
 
     async def commit(self):

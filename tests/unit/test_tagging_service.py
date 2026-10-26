@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock
+
 from app.services.tagging_service import TaggingService
 
 

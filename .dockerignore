@@ -1,40 +1,17 @@
-# Git
 .git
-.gitignore
-
-# Build artifacts
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-coverage.*
-*.coverprofile
-
-# Directories
-input/
-output/
-work/
-config/
-
-# Documentation
-*.md
-!README.md
-
-# IDE
-.idea
-.vscode
-.DS_Store
-
-# Configs
-config.yaml
-*.local.yaml
-
-# Logs
+.venv
+__pycache__
+*.pyc
+input
+output
+work
+staging
+data
+logs
+tests
+testdata
+sample_media
+docs
+*.db
 *.log
-
-# Go workspace
-go.work
-go.work.sum
+coverage.xml

@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any
 
 
 class IntegrationManager:
@@ -7,7 +7,7 @@ class IntegrationManager:
     """
 
     def __init__(self):
-        self.integrations: Dict[str, Any] = {}
+        self.integrations: dict[str, Any] = {}
 
     def register_integration(self, name: str, integration: Any) -> None:
         """

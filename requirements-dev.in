@@ -1,0 +1,7 @@
+# Test-only dependencies, locked against requirements.txt:  make deps-lock
+behave
+pytest
+pytest-asyncio
+pytest-cov
+pytest-mock
+pytest-timeout

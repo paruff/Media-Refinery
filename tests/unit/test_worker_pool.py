@@ -1,4 +1,5 @@
 import pytest
+
 from src.processor.worker_pool import WorkerPool
 
 
@@ -9,7 +10,7 @@ async def test_worker_pool():
 
     pool = WorkerPool(num_workers=2)
 
-    tasks = [lambda: sample_task(i) for i in range(5)]
+    tasks = [lambda: sample_task(i) for i in range(5)]  # noqa: B023
 
     await pool.run(tasks)
 

@@ -1,13 +1,15 @@
 """Unit tests for audio format detection module."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from src.audio.format_detector import (
-    AudioFormatDetector,
-    UnsupportedAudioFormatError,
-    CorruptedAudioFileError,
     AudioFormat,
+    AudioFormatDetector,
+    CorruptedAudioFileError,
+    UnsupportedAudioFormatError,
 )
 
 

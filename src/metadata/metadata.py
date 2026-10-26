@@ -1,8 +1,8 @@
 import json
-import subprocess
-from pathlib import Path
 import logging
 import re
+import subprocess
+from pathlib import Path
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class MetadataExtractor:
 
         try:
             output = subprocess.check_output(
-                [
+                [  # noqa: S607
                     "ffprobe",
                     "-v",
                     "quiet",

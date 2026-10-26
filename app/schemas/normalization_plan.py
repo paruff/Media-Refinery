@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from typing import Optional
 
 
 class NormalizationPlanSchema(BaseModel):
@@ -9,7 +8,7 @@ class NormalizationPlanSchema(BaseModel):
     needs_transcode: bool = False
     needs_rename: bool = False
     needs_tagging: bool = False
-    surround: Optional[bool] = False
+    surround: bool | None = False
     # Add any other fields required for execution
 
     class Config:

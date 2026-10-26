@@ -1,8 +1,10 @@
+import uuid
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from app.models.media import Base, MediaItem, NormalizationPlan, PlanStatus
-import uuid
 
 
 @pytest.fixture(scope="function")
@@ -78,7 +80,7 @@ def test_unique_target_path_integration(db_session):
         execution_log="",
     )
     db_session.add(plan2)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # noqa: B017
         db_session.commit()
 
 

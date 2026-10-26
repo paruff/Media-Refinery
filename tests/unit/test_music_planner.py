@@ -1,5 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from app.models.media import MediaItem, MediaType, PlanStatus
 from app.services.music_planner import MusicPlanningService
 

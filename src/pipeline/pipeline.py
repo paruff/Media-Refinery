@@ -1,4 +1,5 @@
-from typing import Callable, List, Any
+from collections.abc import Callable
+from typing import Any
 
 
 class Pipeline:
@@ -7,7 +8,7 @@ class Pipeline:
     """
 
     def __init__(self):
-        self.steps: List[Callable[..., Any]] = []
+        self.steps: list[Callable[..., Any]] = []
 
     def add_step(self, step: Callable[..., Any]) -> None:
         """
@@ -32,6 +33,6 @@ class Pipeline:
             try:
                 data = step(data)
             except Exception as e:
-                print(f"Step failed with error: {e}")
+                print(f"Step failed with error: {e}")  # noqa: T201
                 break
         return data

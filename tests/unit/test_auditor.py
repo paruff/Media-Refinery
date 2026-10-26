@@ -1,9 +1,11 @@
+import json
+
 import pytest
 import pytest_asyncio
-import json
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from app.models.media import Base, MediaItem, FileState, MediaType
+
+from app.models.media import Base, FileState, MediaItem, MediaType
 from app.services.auditor import IssueDetectorService
 
 
@@ -30,7 +32,7 @@ async def test_filename_rule(db):
     db.add(item)
     await db.commit()
     auditor = IssueDetectorService(db)
-    issues, status = await auditor.audit("f1")
+    issues, status = await auditor.audit("f1")  # noqa: RUF059
     assert any(i["code"] == "ILLEGAL_CHAR" for i in issues)
     refreshed = await db.get(MediaItem, "f1")
     assert refreshed.state == FileState.audited
@@ -50,7 +52,7 @@ async def test_codec_rule(db):
     db.add(item)
     await db.commit()
     auditor = IssueDetectorService(db)
-    issues, status = await auditor.audit("c1")
+    issues, status = await auditor.audit("c1")  # noqa: RUF059
     codes = {i["code"] for i in issues}
     assert "UNSUPPORTED_VIDEO_CODEC" in codes
     assert "UNSUPPORTED_AUDIO_CODEC" in codes
@@ -76,7 +78,7 @@ async def test_subtitle_rule(db):
     item.has_subtitles = True
     item.subtitle_language = None
     await db.commit()
-    issues, status = await auditor.audit("s1")
+    issues, status = await auditor.audit("s1")  # noqa: RUF059
     assert any(i["code"] == "MISSING_SUB_LANG" for i in issues)
     refreshed = await db.get(MediaItem, "s1")
     assert refreshed.state == FileState.audited
@@ -97,7 +99,7 @@ async def test_metadata_rule(db):
     db.add(item)
     await db.commit()
     auditor = IssueDetectorService(db)
-    issues, status = await auditor.audit("m1")
+    issues, status = await auditor.audit("m1")  # noqa: RUF059
     codes = {i["code"] for i in issues}
     assert "MISSING_TRACK_NUMBER" in codes
     assert "MISSING_TAGS" in codes
@@ -116,10 +118,10 @@ async def test_state_transitions(db):
     db.add(item)
     await db.commit()
     auditor = IssueDetectorService(db)
-    issues, status = await auditor.audit("st1")
+    issues, status = await auditor.audit("st1")  # noqa: RUF059
     refreshed = await db.get(MediaItem, "st1")
     assert refreshed.state == FileState.audited
     # Re-audit should not change state
-    issues2, status2 = await auditor.audit("st1")
+    issues2, status2 = await auditor.audit("st1")  # noqa: RUF059
     refreshed2 = await db.get(MediaItem, "st1")
     assert refreshed2.state == FileState.audited

@@ -4,9 +4,11 @@ Following TDD principles, these tests define the expected behavior
 of the AudioConverter before implementation.
 """
 
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from src.audio.converter import AudioConverter
 
 
@@ -253,7 +255,7 @@ class TestAudioConverter:
         async def mock_execute(cmd):
             # Record which output file was used in command
             # Current implementation writes directly to final output (not .tmp)
-            for i, arg in enumerate(cmd):
+            for i, arg in enumerate(cmd):  # noqa: B007
                 if str(output_dir) in str(arg) and not str(arg).endswith(".tmp"):
                     output_files_created.append(arg)
             return (0, "", "")

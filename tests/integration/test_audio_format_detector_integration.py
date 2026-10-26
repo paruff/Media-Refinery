@@ -1,10 +1,12 @@
 """Integration tests for audio format detection with real files."""
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from src.audio.format_detector import (
-    AudioFormatDetector,
     AudioFormat,
+    AudioFormatDetector,
     UnsupportedAudioFormatError,
 )
 
@@ -120,14 +122,14 @@ class TestAudioFormatDetectorIntegration:
 
     @pytest.mark.asyncio
     async def test_full_detection_pipeline_real_files(
-        self, detector: AudioFormatDetector, testdata_dir: Path
+        self, detector: AudioFormatDetector, tmp_path: Path, make_audio
     ):
-        """Test complete detection pipeline with real files."""
+        """Test complete detection pipeline with ffmpeg-rendered files."""
         test_files = [
-            (testdata_dir / "sample.mp3", AudioFormat.MP3),
-            (testdata_dir / "sample.flac", AudioFormat.FLAC),
-            (testdata_dir / "sample.wav", AudioFormat.WAV),
-            (testdata_dir / "sample.ogg", AudioFormat.OGG),
+            (make_audio(tmp_path / "sample.mp3"), AudioFormat.MP3),
+            (make_audio(tmp_path / "sample.flac"), AudioFormat.FLAC),
+            (make_audio(tmp_path / "sample.wav"), AudioFormat.WAV),
+            (make_audio(tmp_path / "sample.ogg"), AudioFormat.OGG),
         ]
 
         for file_path, expected_format in test_files:

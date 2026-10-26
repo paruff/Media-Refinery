@@ -1,18 +1,27 @@
 import enum
 import uuid
-from sqlalchemy import Column, String, DateTime, Enum, Boolean, Integer, Text
-from sqlalchemy import ForeignKey, UniqueConstraint, JSON
-from sqlalchemy.orm import relationship, DeclarativeBase
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
 
 
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
 
-    pass
 
-
-class FileState(str, enum.Enum):
+class FileState(str, enum.Enum):  # noqa: UP042
     pending = "pending"
     scanning = "scanning"
     scanned = "scanned"
@@ -24,7 +33,7 @@ class FileState(str, enum.Enum):
     error = "error"
 
 
-class MediaType(str, enum.Enum):
+class MediaType(str, enum.Enum):  # noqa: UP042
     movie = "movie"
     series = "series"
     music = "music"
@@ -135,9 +144,7 @@ class NormalizationPlan(Base):  # type: ignore[misc, valid-type]
     original_hash = Column(String, nullable=False)
 
     # Status management
-    plan_status = Column(
-        Enum(PlanStatus), default=PlanStatus.draft, nullable=False
-    )  # type: ignore[var-annotated]
+    plan_status = Column(Enum(PlanStatus), default=PlanStatus.draft, nullable=False)  # type: ignore[var-annotated]
     execution_log = Column(Text, default="", nullable=False)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

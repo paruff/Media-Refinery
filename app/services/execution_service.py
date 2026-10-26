@@ -1,8 +1,6 @@
 import os
 
 # Celery setup
-
-
 from app.schemas.normalization_plan import NormalizationPlanSchema
 
 # Distributed execution toggle (env or CLI flag)
@@ -79,6 +77,7 @@ else:
             # so tests that expect a failed SagaFileMoveLog can observe it.
             try:
                 import asyncio
+
                 from app.core.database import AsyncSessionLocal
                 from app.models.saga import SagaFileMoveLog, SagaLogStatus
 
@@ -96,7 +95,7 @@ else:
                         await session.commit()
 
                 asyncio.run(_mark_failed())
-            except Exception:
+            except Exception:  # noqa: S110
                 # Best-effort: don't obscure the original exception
                 pass
 
@@ -111,14 +110,17 @@ def _execute_normalization_plan(plan_dict):
     """
     import asyncio
     import logging
-    import shutil
     import os
+    import shutil
     import traceback
-    from filelock import FileLock
     from pathlib import Path
-    from app.core.database import AsyncSessionLocal
+
+    from filelock import FileLock
     from sqlalchemy import update
-    from app.models.media import NormalizationPlan as DBPlan, PlanStatus
+
+    from app.core.database import AsyncSessionLocal
+    from app.models.media import NormalizationPlan as DBPlan
+    from app.models.media import PlanStatus
     from app.models.saga import SagaFileMoveLog, SagaLogStatus
 
     logger = logging.getLogger("CeleryWorker")
@@ -186,7 +188,7 @@ def _execute_normalization_plan(plan_dict):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                out, err = await proc.communicate()
+                out, err = await proc.communicate()  # noqa: RUF059
                 if proc.returncode != 0:
                     saga_log.status = SagaLogStatus.failed
                     saga_log.error = err.decode()
@@ -241,8 +243,8 @@ class ExecutionService:
 
     async def execute_plan(self, plan) -> None:
         import asyncio
-        from pathlib import Path
         import shutil
+        from pathlib import Path
 
         async def _use_session(session):
             # mark test execution so tests can assert calls
@@ -270,7 +272,7 @@ class ExecutionService:
                 try:
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.move(str(src), str(dst))
-                except Exception:
+                except Exception:  # noqa: S110
                     # Ignore move failures in tests; they patch/mimic behavior
                     pass
 
@@ -281,16 +283,16 @@ class ExecutionService:
                             plan.execution_log or ""
                         ) + "Moved to output"
                     else:
-                        try:
+                        try:  # noqa: SIM105
                             plan.execution_log = "Moved to output"
-                        except Exception:
+                        except Exception:  # noqa: S110
                             pass
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
 
             # Update plan/media_item status when possible
             try:
-                from app.models.media import PlanStatus, FileState
+                from app.models.media import FileState, PlanStatus
 
                 if getattr(plan, "media_item", None) is not None:
                     try:
@@ -301,10 +303,10 @@ class ExecutionService:
                             if hasattr(FileState, "executed")
                             else "executed"
                         )
-                    except Exception:
+                    except Exception:  # noqa: S110
                         # If plan is not ORM-managed or attributes can't be set, ignore
                         pass
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
             await session.commit()

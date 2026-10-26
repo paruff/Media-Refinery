@@ -1,4 +1,5 @@
 import os
+
 from behave import given, then
 
 
@@ -12,9 +13,11 @@ def step_given_file_in_input(context, filename):
 
 @then('the database should show the file "{filename}" in "{state}" state')
 def step_then_db_file_state(context, filename, state):
-    from sqlalchemy.future import select
-    from app.models.media import MediaItem
     import asyncio
+
+    from sqlalchemy.future import select
+
+    from app.models.media import MediaItem
 
     async def check():
         async with context.db() as session:

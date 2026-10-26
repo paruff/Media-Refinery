@@ -1,12 +1,14 @@
 import os
 import tempfile
+
 import pytest
+
 from app.services.execution_service import execute_normalization_plan
 
 
 def test_celery_task_registration(monkeypatch):
     class MockCelery:
-        tasks = {"execute_normalization_plan": lambda: None}
+        tasks = {"execute_normalization_plan": lambda: None}  # noqa: RUF012
 
     monkeypatch.setattr("app.services.execution_service.celery_app", MockCelery())
     from app.services.execution_service import celery_app as patched_app

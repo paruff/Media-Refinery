@@ -2,11 +2,12 @@
 """Diagnostic runner: run ffmpeg into a pytest-like tmpdir and capture PID, stderr,
 and directory listings. Used to debug file visibility issues under pytest/tmp_path.
 """
+
 import asyncio
 import os
 import shutil
-import tempfile
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -35,7 +36,7 @@ async def run_ffmpeg_to(path: Path):
     except Exception as e:
         running_list = f"ls failed: {e}"
     print("LS while running:", running_list)
-    out, err = await proc.communicate()
+    out, err = await proc.communicate()  # noqa: RUF059
     print("RC", proc.returncode)
     print("STDERR (truncated):")
     print(err.decode("utf-8", errors="replace")[:2000])
@@ -44,9 +45,9 @@ async def run_ffmpeg_to(path: Path):
     except Exception as e:
         after_list = f"ls failed: {e}"
     print("LS after:", after_list)
-    print("Exists?", path.exists())
-    if path.exists():
-        st = path.stat()
+    print("Exists?", path.exists())  # noqa: ASYNC240
+    if path.exists():  # noqa: ASYNC240
+        st = path.stat()  # noqa: ASYNC240
         print("Size", st.st_size, "mtime", st.st_mtime)
 
 
@@ -59,7 +60,7 @@ async def main():
     print("UID/GID", os.getuid(), os.getgid())
 
     try:
-        df = subprocess.run(["df", "-h", str(tmpdir)], capture_output=True, text=True)
+        df = subprocess.run(["df", "-h", str(tmpdir)], capture_output=True, text=True)  # noqa: ASYNC221
         print("DF:", df.stdout)
     except Exception as e:
         print("DF failed:", e)
@@ -75,7 +76,7 @@ async def main():
         res = await conv.convert(Path("testdata/audio/test_valid.mp3"), tmpdir)
         print("CONVERTER RESULT:", res)
         try:
-            final_list = [p.name for p in tmpdir.iterdir()]
+            final_list = [p.name for p in tmpdir.iterdir()]  # noqa: ASYNC240
         except Exception as e:
             final_list = f"ls failed: {e}"
         print("LS final:", final_list)
@@ -83,9 +84,9 @@ async def main():
         print("Converter call failed:", e)
 
     # cleanup
-    try:
+    try:  # noqa: SIM105
         shutil.rmtree(tmpdir)
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
 

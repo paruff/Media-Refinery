@@ -1,8 +1,10 @@
-from behave import given, when, then  # type: ignore[import-untyped]
+import asyncio
+
+from behave import given, then, when  # type: ignore[import-untyped]
+from pydantic import BaseModel
+
 from app.models.media import NormalizationPlan, PlanStatus
 from app.services.vmaf_guardrail_service import VMAFGuardrailService
-from pydantic import BaseModel
-import asyncio
 
 
 class DummyDB:

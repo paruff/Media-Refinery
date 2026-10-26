@@ -42,6 +42,7 @@ import pytest
 from pathlib import Path
 from media_refinery.audio.converter import AudioConverter
 
+
 class TestAudioConverter:
     @pytest.fixture
     def converter(self):
@@ -49,10 +50,7 @@ class TestAudioConverter:
 
     def test_build_command_basic(self, converter):
         """Test FFmpeg command building."""
-        cmd = converter.build_ffmpeg_command(
-            Path("input.mp3"),
-            Path("output.flac")
-        )
+        cmd = converter.build_ffmpeg_command(Path("input.mp3"), Path("output.flac"))
 
         assert "ffmpeg" in cmd
         assert "-i" in cmd
@@ -67,8 +65,7 @@ async def test_ffmpeg_conversion_real():
     """Test real FFmpeg conversion."""
     converter = AudioConverter()
     result = await converter.convert_file(
-        Path("testdata/sample.mp3"),
-        Path("/tmp/output.flac")
+        Path("testdata/sample.mp3"), Path("/tmp/output.flac")
     )
 
     assert result.success
@@ -93,12 +90,13 @@ async def test_async_function():
 ```python
 from unittest.mock import Mock, AsyncMock, patch
 
+
 @pytest.mark.asyncio
 async def test_with_mock():
     """Test with mocked dependency."""
     mock_ffmpeg = AsyncMock(return_value="success")
 
-    with patch('media_refinery.audio.converter.execute_ffmpeg', mock_ffmpeg):
+    with patch("media_refinery.audio.converter.execute_ffmpeg", mock_ffmpeg):
         result = await convert_file(Path("input.mp3"))
 
     assert result.success

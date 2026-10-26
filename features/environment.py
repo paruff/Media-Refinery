@@ -1,10 +1,12 @@
-import tempfile
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-from app.models.media import Base  # FIX: Use the correct Base
-from fastapi.testclient import TestClient
-from app.main import app
 import asyncio
+import tempfile
+
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.main import app
+from app.models.media import Base  # FIX: Use the correct Base
 
 
 def before_all(context):
@@ -13,7 +15,7 @@ def before_all(context):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-    from app.core.database import engine, Base
+    from app.core.database import Base, engine
 
     asyncio.run(create_all())
 

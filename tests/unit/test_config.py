@@ -1,6 +1,7 @@
 import pytest
-from src.config.config import ConfigLoader
 import yaml
+
+from src.config.config import ConfigLoader
 
 
 @pytest.fixture

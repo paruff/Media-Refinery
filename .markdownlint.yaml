@@ -1,0 +1,7 @@
+default: true
+MD013: false # line length: prose is wrapped by humans
+MD024:
+  siblings_only: true # "Done when" repeats under each goal
+MD033: false # inline HTML (badges)
+MD041: false # first line need not be an H1
+MD060: false # table column style

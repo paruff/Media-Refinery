@@ -1,7 +1,8 @@
 import pytest
-from app.services.vmaf_guardrail_service import VMAFGuardrailService
-from app.models.media import NormalizationPlan, PlanStatus
 from pydantic import BaseModel
+
+from app.models.media import NormalizationPlan, PlanStatus
+from app.services.vmaf_guardrail_service import VMAFGuardrailService
 
 
 class DummyDB:

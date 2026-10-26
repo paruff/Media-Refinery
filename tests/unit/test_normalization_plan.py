@@ -1,9 +1,11 @@
+import uuid
+
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+
 from app.models.media import Base, MediaItem, NormalizationPlan, PlanStatus
-import uuid
 
 
 @pytest.fixture(scope="function")

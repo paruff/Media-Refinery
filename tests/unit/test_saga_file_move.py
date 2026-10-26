@@ -1,13 +1,15 @@
+import asyncio
+
 import pytest
 from sqlalchemy import select
-import asyncio
 
 
 def test_saga_prepare_commit_cleanup():
-    import uuid
-    import tempfile
-    import os
     import importlib
+    import os
+    import tempfile
+    import uuid
+
     from sqlalchemy import text
 
     # Use a temp SQLite file DB for test isolation
@@ -18,7 +20,7 @@ def test_saga_prepare_commit_cleanup():
         import app.core.database
 
         importlib.reload(app.core.database)
-        from app.core.database import init_db, AsyncSessionLocal
+        from app.core.database import AsyncSessionLocal, init_db
         from app.models.media import NormalizationPlan
         from app.models.saga import SagaFileMoveLog, SagaLogStatus
 
@@ -70,12 +72,12 @@ def test_saga_prepare_commit_cleanup():
 
 
 def test_saga_rollback_on_failure(monkeypatch):
-    from sqlalchemy import select
-    import uuid
-    import tempfile
-    import os
     import importlib
-    from sqlalchemy import text
+    import os
+    import tempfile
+    import uuid
+
+    from sqlalchemy import select, text
 
     # Use a temp SQLite file DB for test isolation
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -85,7 +87,7 @@ def test_saga_rollback_on_failure(monkeypatch):
         import app.core.database
 
         importlib.reload(app.core.database)
-        from app.core.database import init_db, AsyncSessionLocal
+        from app.core.database import AsyncSessionLocal, init_db
         from app.models.media import NormalizationPlan
         from app.models.saga import SagaFileMoveLog, SagaLogStatus
 

@@ -1,6 +1,7 @@
 import unittest
-from src.metadata.metadata import MetadataExtractor
 from pathlib import Path
+
+from src.metadata.metadata import MetadataExtractor
 
 
 class TestMetadataIntegration(unittest.TestCase):

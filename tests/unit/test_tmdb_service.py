@@ -1,9 +1,11 @@
-import pytest
 import asyncio
+
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.tmdb import TMDBService
+
 from app.models.media import MediaItem
+from app.services.tmdb import TMDBService
 
 
 class MockTransport(httpx.AsyncBaseTransport):
@@ -155,7 +157,7 @@ async def test_tmdb_enrichment_429(async_session: AsyncSession):
             result = await asyncio.wait_for(
                 service.fetch_movie_metadata(async_session, "testid4"), timeout=12
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pytest.fail(
                 "TMDBService.fetch_movie_metadata timed out (possible lock deadlock after cancellation)"
             )

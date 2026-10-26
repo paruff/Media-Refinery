@@ -1,8 +1,10 @@
-import re
 import json
 import logging
-from sqlalchemy.ext.asyncio import AsyncSession
+import re
+
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.media import MediaItem
 
 logger = logging.getLogger("media_refinery.auditor")
@@ -40,7 +42,7 @@ class IssueDetectorService:
         # Non-canonical naming
         from typing import cast
 
-        if item.media_type == "movie":
+        if item.media_type == "movie":  # noqa: SIM102
             if not (
                 item.year
                 or (

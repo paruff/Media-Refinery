@@ -1,5 +1,5 @@
 from app.services.device_profile_service import DeviceProfileService
-from app.services.planning_service import PlanningService, FileAttributes
+from app.services.planning_service import FileAttributes, PlanningService
 
 
 def test_device_profile_integration():
@@ -16,8 +16,8 @@ def test_device_profile_integration():
     assert plan["resize"] is False
     assert plan["remux"] is False
     # Add a new profile file and verify reload
-    import os
     import json
+    import os
 
     new_profile = {
         "id": "test_device",

@@ -1,0 +1,3 @@
+# Only the pre-commit runner. The linters themselves are pinned by commit SHA in
+# .pre-commit-config.yaml. Lock with:  make deps-lock
+pre-commit

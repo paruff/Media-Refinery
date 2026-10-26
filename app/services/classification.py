@@ -1,9 +1,11 @@
-import re
 import logging
+import re
+
 from guessit import guessit
 from mutagen import File as MutagenFile
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.media import MediaItem
 
 SCENE_TAGS = [

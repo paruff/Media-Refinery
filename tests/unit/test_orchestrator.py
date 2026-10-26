@@ -1,5 +1,6 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
+
 from app.core.orchestrator import PipelineOrchestrator
 
 
@@ -56,8 +57,8 @@ def test_orchestrator_dispatch_fail(monkeypatch):
 
     monkeypatch.setattr(orchestrator, "_dispatch", fail)
     # Should not raise, but set state to error after retries
-    try:
+    try:  # noqa: SIM105
         asyncio.run(orchestrator._dispatch(item, "scanner", state_info))
-    except Exception:
+    except Exception:  # noqa: S110
         pass
     # retry_count incremented or state set to error
