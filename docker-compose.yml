@@ -9,6 +9,8 @@ services:
       - ${INPUT_DIR:-./input}:/input
       - ${OUTPUT_DIR:-./output}:/output
       - ${WORK_DIR:-./work}:/work
+      - ${ARCHIVE_DIR:-./archive}:/archive
+      - ${QUARANTINE_DIR:-./quarantine}:/quarantine
       - ${DATA_DIR:-./data}:/data
     ports:
       - "8000:8000"

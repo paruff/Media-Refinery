@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 import sys
 from collections.abc import AsyncIterator
@@ -11,7 +13,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.summary import router as summary_router
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, init_db
-from app.core.pipeline import PipelineCoordinator
+from app.core.orchestrator import PipelineConfig, PipelineOrchestrator
 from app.core.watcher import InputWatcher
 
 logger = logging.getLogger("uvicorn")
@@ -38,19 +40,22 @@ def configure_logging() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     await init_db()
-    coordinator = PipelineCoordinator(AsyncSessionLocal, logger=logger)
-    await coordinator.start()
-    watcher = InputWatcher(
-        settings.INPUT_DIR, AsyncSessionLocal, logger=logger, coordinator=coordinator
+    orchestrator = PipelineOrchestrator(
+        AsyncSessionLocal, PipelineConfig.from_settings(), logger=logger
     )
+    worker = asyncio.create_task(orchestrator.run_forever())
+    watcher = InputWatcher(settings.INPUT_DIR, AsyncSessionLocal, logger=logger)
     watcher.run()  # non-blocking; must run on the loop thread
-    app.state.coordinator = coordinator
+    app.state.orchestrator = orchestrator
     app.state.watcher = watcher
     try:
         yield
     finally:
         watcher.stop()
-        await coordinator.stop()
+        orchestrator.running = False
+        worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await worker
 
 
 app = FastAPI(title="Media Normalizer Daemon Edition", lifespan=lifespan)

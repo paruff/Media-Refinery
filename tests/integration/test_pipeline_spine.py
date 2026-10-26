@@ -1,0 +1,222 @@
+"""G2 pipeline spine with real ffmpeg on generated fixtures (R-PIPE-1, R-SAFE-1..4)."""
+
+import json
+
+import pytest
+import pytest_asyncio
+from sqlalchemy import select
+
+from app.core.orchestrator import PipelineOrchestrator
+from app.models.media import FileState, MediaItem, NormalizationPlan, VerificationRecord
+from tests.pipeline_helpers import (
+    import_input,
+    make_avi,
+    make_config,
+    make_mkv,
+    make_mp3,
+    make_session_factory,
+    tree_digest,
+)
+
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
+
+
+class Crash(BaseException):
+    """Simulates the daemon being killed: not an Exception, so nothing handles it."""
+
+
+@pytest_asyncio.fixture
+async def env(tmp_path):
+    cfg = make_config(tmp_path)
+    engine, factory = await make_session_factory(tmp_path)
+    yield cfg, factory
+    await engine.dispose()
+
+
+async def _items(factory):
+    async with factory() as s:
+        return (await s.execute(select(MediaItem))).scalars().all()
+
+
+async def _approve_all(orch, factory):
+    for item in await _items(factory):
+        if item.state == FileState.planned:
+            assert await orch.approve(str(item.id))
+
+
+async def test_mp3_and_mkv_reach_validated_after_approval(env):
+    cfg, factory = env
+    make_mp3(
+        cfg.input_dir / "song.mp3",
+        artist="The Artist",
+        album="The Album",
+        title="Song",
+        date="2020",
+        track="1",
+    )
+    make_mkv(cfg.input_dir / "Test Movie (2020).mkv")
+    originals = {p.name: p.read_bytes() for p in cfg.input_dir.iterdir()}
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+
+    await orch.run_until_idle()
+    states = {i.state for i in await _items(factory)}
+    assert states == {FileState.planned}, "nothing runs before approval"
+    assert not list(cfg.music_root.rglob("*")) and not list(cfg.movies_root.rglob("*"))
+
+    await _approve_all(orch, factory)
+    await orch.run_until_idle()
+
+    items = await _items(factory)
+    assert {i.state for i in items} == {FileState.validated}, [
+        (i.source_path, i.state, i.error_log) for i in items
+    ]
+    assert (
+        cfg.music_root / "The Artist" / "The Album (2020)" / "01 - Song.mp3"
+    ).is_file()
+    assert (cfg.movies_root / "Test Movie (2020)" / "Test Movie (2020).mkv").is_file()
+    archived = {
+        p.name: p.read_bytes() for p in cfg.archive_dir.rglob("*") if p.is_file()
+    }
+    assert archived == originals and not list(cfg.input_dir.iterdir())
+    async with factory() as s:
+        records = (await s.execute(select(VerificationRecord))).scalars().all()
+    assert len(records) == 2 and all(r.passed and r.output_sha256 for r in records)
+    assert {c["name"] for c in records[0].checks} == {"decode", "duration", "sha256"}
+
+
+async def test_non_conformant_video_is_reencoded_to_h264(env):
+    cfg, factory = env
+    make_avi(cfg.input_dir / "Old Movie (1999).avi")
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    await _approve_all(orch, factory)
+    await orch.run_until_idle()
+    (item,) = await _items(factory)
+    assert item.state == FileState.validated, item.error_log
+    out = cfg.movies_root / "Old Movie (1999)" / "Old Movie (1999).mkv"
+    from app.core.tools import run_tool
+
+    _, probe, _ = await run_tool(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name",
+            "-of",
+            "csv=p=0",
+            str(out),
+        ]
+    )
+    assert probe.strip() == "h264"
+
+
+async def test_auto_approve_rule_is_opt_in(env):
+    cfg, factory = env
+    cfg.auto_approve_types = frozenset({"music"})
+    make_mp3(cfg.input_dir / "a.mp3", artist="X", album="Y", title="Z")
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    (item,) = await _items(factory)
+    assert item.state == FileState.validated, item.error_log
+
+
+async def test_crash_mid_execute_then_restart_completes(env):
+    cfg, factory = env
+    make_mp3(cfg.input_dir / "a.mp3", artist="X", album="Y", title="Z")
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    await _approve_all(orch, factory)
+
+    async def die(source, args, out):
+        out.write_bytes(b"partial")  # half-written output, then the process dies
+        raise Crash
+
+    orch._run_ffmpeg = die  # type: ignore[method-assign]
+    with pytest.raises(Crash):
+        await orch.run_once()
+    (item,) = await _items(factory)
+    assert item.state == FileState.executing
+
+    restarted = PipelineOrchestrator(factory, cfg)  # new process: fresh instance
+    await restarted.recover()
+    await restarted.run_until_idle()
+    (item,) = await _items(factory)
+    assert item.state == FileState.validated, item.error_log
+    assert (cfg.music_root / "X" / "Y" / "Z.mp3").stat().st_size > len(b"partial")
+
+
+async def test_corrupt_output_is_quarantined_and_original_untouched(env):
+    cfg, factory = env
+    src = make_mp3(cfg.input_dir / "a.mp3", artist="X", album="Y", title="Z")
+    before = src.read_bytes()
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    await _approve_all(orch, factory)
+
+    async def garbage(source, args, out):
+        out.write_bytes(b"not media at all")
+        return 0, "", ""
+
+    orch._run_ffmpeg = garbage  # type: ignore[method-assign]
+    await orch.run_until_idle()
+    (item,) = await _items(factory)
+    assert item.state == FileState.quarantined and item.error_log.startswith(
+        "decode_failed"
+    )
+    assert len(list((cfg.quarantine_dir / "decode_failed").iterdir())) == 1
+    assert src.read_bytes() == before and not list(cfg.music_root.rglob("*.mp3"))
+    assert not cfg.archive_dir.exists()
+
+
+async def test_failed_conversion_is_quarantined(env):
+    cfg, factory = env
+    make_mp3(cfg.input_dir / "a.mp3", artist="X", album="Y", title="Z")
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    await _approve_all(orch, factory)
+
+    async def fail(source, args, out):
+        return 1, "", "boom"
+
+    orch._run_ffmpeg = fail  # type: ignore[method-assign]
+    await orch.run_until_idle()
+    (item,) = await _items(factory)
+    assert item.state == FileState.quarantined and item.error_log.startswith(
+        "convert_failed"
+    )
+
+
+async def test_dry_run_changes_nothing_outside_work_dry_run(env):
+    cfg, factory = env
+    cfg.dry_run = True
+    make_mp3(cfg.input_dir / "a.mp3", artist="X", album="Y", title="Z")
+    make_mkv(cfg.input_dir / "Test Movie (2020).mkv")
+    await import_input(cfg, factory)
+    before = tree_digest(cfg.input_dir, cfg.music_root, cfg.movies_root, cfg.tv_root)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    assert (
+        tree_digest(cfg.input_dir, cfg.music_root, cfg.movies_root, cfg.tv_root)
+        == before
+    )
+    assert {p.name for p in cfg.work_dir.rglob("*") if p.is_file()} and all(
+        "dry-run" in p.parts for p in cfg.work_dir.rglob("*") if p.is_file()
+    )
+    assert not cfg.archive_dir.exists() and not cfg.quarantine_dir.exists()
+    reports = [
+        json.loads(p.read_text()) for p in (cfg.work_dir / "dry-run").glob("*.json")
+    ]
+    assert len(reports) == 2 and all(
+        c["passed"] for r in reports for c in r["preflight"]
+    )
+    async with factory() as s:
+        assert (await s.execute(select(NormalizationPlan))).scalars().all()
