@@ -71,7 +71,7 @@ convert → verify → publish → notify server.
 - R-VIDEO-3 Device profile `samsung_tizen` (from `profiles/`) must validate: direct-play without server transcode.
 - R-VIDEO-4 Movie layout: `Movies/{Title} ({Year}) {tmdb-{id}}/{Title} ({Year}).mkv`.
 - R-VIDEO-5 TV layout: `TV/{Show} ({Year}) {tvdb-{id}}/Season {SS:02}/{Show} - S{SS:02}E{EE:02} - {EpisodeTitle}.mkv`; specials in `Season 00`.
-- R-VIDEO-6 Repair before encode (from converter): MPEG-1 timestamp/GOP repair, WMV packet resync, XviD packed-B-frame unpack; remux-repair fallback (from movies2vlib).
+- R-VIDEO-6 Repair before encode (from converter): MPEG-1 timestamp/GOP repair, WMV packet resync, XviD packed-B-frame unpack; remux-repair fallback (from movies2vlib). Implemented in `app/media/video/`; WMV1/2/3 are all classified `wmv` (ffmpeg can only generate WMV2 fixtures).
 - R-VIDEO-7 Encoder selection: hardware (VideoToolbox / VAAPI / NVENC) when available, libx264/libx265 fallback; smart bitrate scaling (grayscale ×0.75, low-complexity ×0.85).
 
 ### R-EBOOK — Ebooks → Calibre
