@@ -13,6 +13,8 @@ import httpx
 import mutagen
 from PIL import Image
 
+from app.core.redact import http_error_summary
+
 logger = logging.getLogger("music_id")
 
 ACOUSTID_URL = "https://api.acoustid.org/v2"
@@ -153,7 +155,7 @@ class MusicIdentifier:
                         tags = self._tags(release, rec["id"])
                         return (float(result["score"]), tags) if tags else None
         except (httpx.HTTPError, ValueError, KeyError) as e:
-            logger.warning("identify failed for %s: %s", path, e)
+            logger.warning("identify failed for %s: %s", path, http_error_summary(e))
         return None
 
     async def _release(self, release_id: str) -> dict:
@@ -213,6 +215,8 @@ class MusicIdentifier:
             resp = await self.client.get(f"{CAA_URL}/release/{release_id}/front")
             resp.raise_for_status()
         except httpx.HTTPError as e:
-            logger.warning("cover art lookup failed for %s: %s", release_id, e)
+            logger.warning(
+                "cover art lookup failed for %s: %s", release_id, http_error_summary(e)
+            )
             return None
         return await asyncio.to_thread(jpeg_cover, resp.content)

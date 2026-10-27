@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 
 from app.core.config import settings
+from app.core.redact import http_error_summary
 
 log = logging.getLogger("notify")
 
@@ -75,6 +76,8 @@ class Notifier:
             try:
                 (await self.client.request(**req)).raise_for_status()
             except Exception as e:  # any failure is only a warning
-                log.warning("%s rescan failed for %s: %s", server, folder, e)
+                log.warning(
+                    "%s rescan failed for %s: %s", server, folder, http_error_summary(e)
+                )
                 failed.append(server)
         return failed

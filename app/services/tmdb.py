@@ -7,6 +7,7 @@ import httpx
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redact import http_error_summary
 from app.models.media import MediaItem
 
 TMDB_API_URL = "https://api.themoviedb.org/3/search/movie"
@@ -118,7 +119,7 @@ class TMDBService:
                     try:
                         resp = await self.client.get(TMDB_API_URL, params=params)
                     except Exception as e:
-                        logger.error(f"TMDB request failed: {e}")
+                        logger.error("TMDB request failed: %s", http_error_summary(e))
                         await self._flag_failed(session, media)
                         return None
                     if resp.status_code == 401:
