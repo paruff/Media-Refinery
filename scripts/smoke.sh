@@ -7,7 +7,9 @@ set -eu
 IMAGE=${1:-media-refinery:ci}
 ROOT=$(mktemp -d "$HOME/.mrsmoke.XXXXXX")  # under $HOME: colima/Docker Desktop share it with the VM
 P=mrsmoke
-trap 'docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" down >/dev/null 2>&1 || true; rm -rf "$ROOT"' EXIT
+# container-written files belong to uid 1000, which the host user may not be: delete as root
+trap 'docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" down >/dev/null 2>&1 || true
+  docker run --rm --user root -v "$ROOT":/r "$IMAGE" sh -c "rm -rf /r/*" >/dev/null 2>&1 || true; rm -rf "$ROOT"' EXIT
 for d in input output work archive quarantine data; do mkdir -p "$ROOT/$d"; done
 chmod -R 777 "$ROOT"
 
