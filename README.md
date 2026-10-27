@@ -5,7 +5,7 @@
 [![CI](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml/badge.svg)](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/paruff/Media-Refinery/branch/main/graph/badge.svg)](https://codecov.io/gh/paruff/Media-Refinery)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 
@@ -24,7 +24,7 @@ docker compose up -d
 
 Open <http://localhost:8000/ui>, drop files into the input folder and approve plans in the Review view.
 
-CLI (inside the container or a dev venv): `refinery scan|plan|approve|run|verify|audit [--dry-run] PATH`.
+CLI: `docker compose exec media-refinery refinery scan|plan|approve|run|verify|audit [--dry-run] PATH`.
 
 ## Documentation
 

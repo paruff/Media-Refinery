@@ -5,8 +5,8 @@ Host tools such as ffmpeg are not required: anything that needs them runs in Doc
 ## Setup
 
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
+make venv                  # uv, Python 3.14, hash-locked requirements
+source .venv/bin/activate
 pre-commit install
 ```
 
@@ -42,7 +42,7 @@ tests/features     behave (Gherkin) happy paths
 ## Observability
 
 Logs are structured with `item_id` and `run_id`. `/health` and `/ready` are the probes.
-A Prometheus `/metrics` endpoint is specified in [spec.md](../spec.md) but not yet implemented.
+Prometheus metrics (`media_refinery_items{state,type}`) are at `GET /api/v1/metrics` (bearer token required).
 
 ## FAQ
 

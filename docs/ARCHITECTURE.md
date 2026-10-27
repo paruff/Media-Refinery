@@ -1,6 +1,6 @@
 # Architecture
 
-Media Refinery is a single Python 3.12 FastAPI daemon that watches `input/`, normalizes
+Media Refinery is a single Python 3.14 FastAPI daemon that watches `input/`, normalizes
 music, audiobooks, movies, TV and ebooks to one canonical format per type, verifies the
 result, publishes it into the library and tells the media server to rescan.
 Requirements live in [spec.md](../spec.md); this page describes how they are met.
@@ -47,8 +47,8 @@ checks), with `quarantined` and `error` as exits.
 
 ## Interfaces
 
-- **REST** `/api/v1`: `GET /health`, `GET /ready`, `GET /items`, `GET /items/{id}`, `POST /items/{id}/approve|reject|retry`. Bound to `127.0.0.1` by default; any other `MR_API_HOST` requires `MR_API_TOKEN`.
-- **Web UI** at `/ui`: queue, review (approve/reject plans), item detail.
+- **REST** `/api/v1`: `GET /health`, `GET /ready` (open); `GET /items`, `GET /items/{id}`, `POST /items/{id}/approve|reject|retry`, `POST /scan`, `GET /summary`, `GET /metrics` need `Authorization: Bearer <MR_API_TOKEN>`. Bound to `127.0.0.1` by default; any other `MR_API_HOST` requires `MR_API_TOKEN`.
+- **Web UI** at `/ui`: queue, review (approve/reject plans, bulk actions), item detail, quarantine, summary.
 - **CLI**: `refinery scan|plan|approve|run|verify|audit [--dry-run] [--type …] PATH`.
 - **Notify**: optional Plex, Jellyfin, Audiobookshelf and Music Assistant rescan after publish; Calibre via `calibredb add`.
 
