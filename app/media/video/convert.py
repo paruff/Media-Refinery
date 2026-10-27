@@ -47,7 +47,9 @@ def convert_video(
     sm = SmartMode()
     bitrate = sm.scale_bitrate(stream, sm.get_bitrate(stream, info.get("format")))
     kbps = max(bitrate // 1000, MIN_BITRATE_KBPS)
-    audio_streams = [s for s in info["streams"] if s.get("codec_type") == "audio"]
+    # a repair can reorder streams: map audio by the indices of the file actually encoded
+    encoded = info if source == src else (probe(source, dry_run=dry_run) or info)
+    audio_streams = [s for s in encoded["streams"] if s.get("codec_type") == "audio"]
     atmos = atmos_stream_index(audio_streams)
     if on_event:
         if atmos is None:

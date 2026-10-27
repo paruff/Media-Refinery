@@ -81,3 +81,19 @@ def test_available_encoders_empty_without_ffmpeg():
     with patch("subprocess.run", side_effect=FileNotFoundError):
         assert available_encoders() == frozenset()
     available_encoders.cache_clear()
+
+
+def test_attached_cover_art_is_not_mapped_as_video():
+    from app.media.video.encode import _command
+
+    cmd = _command(
+        Path("/in/a.mkv"),
+        Path("/o.mkv"),
+        1000,
+        "libx264",
+        [],
+        [],
+        True,
+        ["-map", "0:a:0?"],
+    )
+    assert "0:V" in cmd and "0:v" not in cmd

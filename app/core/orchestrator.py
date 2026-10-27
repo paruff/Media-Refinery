@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import shutil
+import subprocess
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -716,6 +717,8 @@ class PipelineOrchestrator:
             await asyncio.to_thread(
                 convert_video, source, out, out.parent / "repair", on_event=on_event
             )
+        except subprocess.CalledProcessError as e:
+            return 1, f"{e}\n{e.stderr or ''}".strip()
         except Exception as e:
             return 1, str(e)
         return 0, ""
@@ -741,7 +744,10 @@ class PipelineOrchestrator:
                 self._emit(
                     "healthcheck", item_id, "passed" if healthy else "failed", detail
                 )
-                if not healthy:  # remux-repair fallback, else quarantine the original
+                if detail == "healthcheck_timeout":
+                    # inconclusive: do not call good media corrupt; VERIFY checks the output
+                    self._emit("healthcheck", item_id, "inconclusive", detail)
+                elif not healthy:  # remux-repair fallback, else quarantine the original
                     repaired = await asyncio.to_thread(
                         repair_remux, source, work.parent / "repair"
                     )
@@ -752,10 +758,10 @@ class PipelineOrchestrator:
                         "remux_to_mkv",
                     )
                     if repaired is None:
+                        # bad input is not resource pressure: don't feed the throttle
                         await self._quarantine(
                             session, item, "healthcheck_failed", detail, source
                         )
-                        self._record_execute(False)
                         return True
                     source = repaired
             self._emit("execute", item_id, "started")

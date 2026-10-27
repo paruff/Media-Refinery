@@ -18,6 +18,7 @@ Status = Literal[
     "included",
     "degraded",
     "dry_run",
+    "inconclusive",
 ]
 
 

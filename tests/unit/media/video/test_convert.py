@@ -48,3 +48,33 @@ def test_unreadable_source_raises():
         pytest.raises(ValueError),
     ):
         convert_video(SRC, DST, WORK)
+
+
+def test_atmos_index_comes_from_the_file_actually_encoded():
+    """After a repair the stream order can change: probe the repaired file's audio."""
+    fixed = WORK / "a_fixed.mkv"
+    eac3 = {
+        "codec_type": "audio",
+        "codec_name": "eac3",
+        "profile": "Dolby Digital Plus + Dolby Atmos",
+    }
+    original = {**INFO, "streams": [*INFO["streams"], {**eac3, "index": 1}]}
+    repaired = {
+        **INFO,
+        "streams": [
+            *INFO["streams"],
+            {"codec_type": "audio", "codec_name": "aac", "index": 1},
+            {**eac3, "index": 2},
+        ],
+    }
+    probes = {SRC: original, fixed: repaired}
+    with (
+        patch(
+            "app.media.video.convert.probe",
+            side_effect=lambda p, dry_run=False: probes[p],
+        ),
+        patch("app.media.video.convert.RepairDispatcher.dispatch", return_value=fixed),
+        patch("app.media.video.convert.encode") as enc,
+    ):
+        convert_video(SRC, DST, WORK)
+    assert "0:2" in enc.call_args.kwargs["audio_args"]
