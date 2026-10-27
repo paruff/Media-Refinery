@@ -32,3 +32,7 @@ document.addEventListener("keydown", (e) => {
     rows[i].querySelector(e.key === "a" ? "[data-act=approve]" : "[data-act=reject]").click();
   }
 });
+// Item page actions reload the page (CSP forbids inline hx-on handlers).
+document.addEventListener("htmx:afterRequest", (e) => {
+  if (e.detail.elt.hasAttribute("data-reload")) location.reload();
+});

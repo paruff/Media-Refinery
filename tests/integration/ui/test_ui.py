@@ -106,7 +106,7 @@ def test_approve_from_review_reaches_validated(live, page):
 def test_axe_serious_or_critical_is_zero(live, page, view):
     base = live(_seed)
     page.goto(f"{base}/ui/{view}")
-    page.add_script_tag(content=AXE)
+    page.evaluate(AXE)  # evaluate, not a script tag: the UI CSP forbids inline scripts
     found = page.evaluate(AXE_RUN)
     assert found["passes"] > 10, "axe evaluated almost nothing"
     assert found["bad"] == [], found["bad"]
@@ -116,7 +116,7 @@ def test_axe_harness_detects_a_violation(page):
     page.set_content(
         '<html lang="en"><title>t</title><main><img src="x.png"></main></html>'
     )
-    page.add_script_tag(content=AXE)
+    page.evaluate(AXE)  # evaluate, not a script tag: the UI CSP forbids inline scripts
     assert page.evaluate(AXE_RUN)["bad"], "axe should flag the image with no alt text"
 
 
