@@ -47,6 +47,16 @@ from app.services.replaygain import measure
 from app.services.tagging_service import TaggingService
 
 MIN_VMAF = 90.0
+STAGE_ORDER = (
+    FileState.pending,
+    FileState.scanned,
+    FileState.enriched,
+    FileState.planned,
+    FileState.approved,
+    FileState.executed,
+    FileState.verified,
+    FileState.published,
+)
 ACTIONABLE = (
     FileState.pending,
     FileState.scanned,
@@ -181,21 +191,38 @@ class PipelineOrchestrator:
                 self.logger.exception("Orchestrator pass failed")
             await asyncio.sleep(self.poll_interval)
 
-    async def run_once(self) -> int:
-        """Advance every actionable item by one stage; return how many moved."""
+    async def run_once(
+        self,
+        until: FileState | None = None,
+        only: set[str] | None = None,
+        types: set[str] | None = None,
+    ) -> int:
+        """Advance every actionable item by one stage; return how many moved.
+
+        `until` leaves items already at that stage alone, `only` limits to item ids
+        and `types` to media types (unclassified items still pass, to get classified).
+        """
         async with self.session_factory() as session:
             result = await session.execute(
-                select(MediaItem.id, MediaItem.state).where(
+                select(MediaItem.id, MediaItem.state, MediaItem.media_type).where(
                     MediaItem.state.in_(ACTIONABLE)
                 )
             )
             rows = result.all()
-        moved = await asyncio.gather(*(self._guarded(i, s) for i, s in rows))
+        stop = STAGE_ORDER.index(until) if until else len(STAGE_ORDER)
+        todo = [
+            (i, s)
+            for i, s, t in rows
+            if STAGE_ORDER.index(s) < stop
+            and (only is None or i in only)
+            and (not types or t == MediaType.unknown or t.value in types)
+        ]
+        moved = await asyncio.gather(*(self._guarded(i, s) for i, s in todo))
         return sum(moved)
 
-    async def run_until_idle(self, max_passes: int = 100) -> None:
+    async def run_until_idle(self, max_passes: int = 100, **filters) -> None:
         for _ in range(max_passes):
-            if not await self.run_once():
+            if not await self.run_once(**filters):
                 return
 
     # ---- crash resume (R-PIPE-1) -----------------------------------------
@@ -236,6 +263,42 @@ class PipelineOrchestrator:
             item.updated_at = _now()
             await session.commit()
             return True
+
+    async def reject(self, item_id: str) -> bool:
+        """A reviewer declines a plan: nothing is touched, the item parks in quarantine."""
+        async with self.session_factory() as session:
+            item = await session.get(MediaItem, item_id)
+            if item is None or item.state != FileState.planned:
+                return False
+            await self._quarantine(session, item, "rejected", "declined at review")
+            return True
+
+    async def retry(self, item_id: str) -> bool:
+        """Re-queue a failed/quarantined item from the start; its source must still exist."""
+        async with self.session_factory() as session:
+            item = await session.get(MediaItem, item_id)
+            if item is None or item.state not in (
+                FileState.error,
+                FileState.quarantined,
+            ):
+                return False
+            if not await asyncio.to_thread(Path(str(item.source_path)).is_file):
+                return False
+            plan = await session.execute(
+                select(NormalizationPlan).where(
+                    NormalizationPlan.media_item_id == item_id
+                )
+            )
+            if (old := plan.scalar_one_or_none()) is not None:
+                await session.delete(old)
+            item.state, item.error_log, item.updated_at = (
+                FileState.pending,
+                None,
+                _now(),
+            )
+            await session.commit()
+        shutil.rmtree(self.cfg.work_dir / item_id, ignore_errors=True)
+        return True
 
     # ---- dispatch -----------------------------------------------------------
     async def _guarded(self, item_id, state) -> bool:

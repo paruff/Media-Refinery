@@ -7,16 +7,17 @@ from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
-from app.api.v1.health import router as health_router
-from app.api.v1.summary import router as summary_router
+from app.api.auth import require_token
+from app.api.v1.items import router as items_router
+from app.api.v1.ops import router as ops_router
+from app.api.v1.ops import secured as ops_secured_router
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, init_db
-from app.core.orchestrator import PipelineConfig, PipelineOrchestrator
+from app.core.orchestrator import PipelineConfig
 from app.core.watcher import InputWatcher
-from app.services.enrich import VideoEnricher
-from app.services.music_id import MusicIdentifier
+from app.services.refinery import build_orchestrator
 
 logger = logging.getLogger("uvicorn")
 LOG_FILE_NAME = "rotation.log"
@@ -42,24 +43,8 @@ def configure_logging() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     await init_db()
-    enricher = (
-        VideoEnricher(settings.TMDB_API_KEY, settings.TVDB_API_KEY)
-        if settings.TMDB_API_KEY and settings.TVDB_API_KEY
-        else None
-    )
-    identifier = (
-        MusicIdentifier(
-            settings.ACOUSTID_API_KEY, threshold=settings.ACOUSTID_MIN_SCORE
-        )
-        if settings.ACOUSTID_API_KEY
-        else None
-    )
-    orchestrator = PipelineOrchestrator(
-        AsyncSessionLocal,
-        PipelineConfig.from_settings(),
-        logger=logger,
-        enricher=enricher,
-        identifier=identifier,
+    orchestrator = build_orchestrator(
+        AsyncSessionLocal, PipelineConfig.from_settings(), logger=logger
     )
     worker = asyncio.create_task(orchestrator.run_forever())
     watcher = InputWatcher(settings.INPUT_DIR, AsyncSessionLocal, logger=logger)
@@ -78,5 +63,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Media Normalizer Daemon Edition", lifespan=lifespan)
 
-app.include_router(health_router, prefix="/health")
-app.include_router(summary_router)
+app.include_router(
+    ops_router, include_in_schema=False
+)  # /health and /ready stay at the root for probes
+app.include_router(ops_router, prefix="/api/v1")
+secured = [Depends(require_token)]
+app.include_router(ops_secured_router, prefix="/api/v1", dependencies=secured)
+app.include_router(items_router, prefix="/api/v1", dependencies=secured)

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
 _ROOT = Path(__file__).parent.parent.parent
@@ -31,8 +32,16 @@ class Settings(BaseSettings):
     # Opt-in approval rules: media types ("music", "movie", "series", "audiobook", "ebook") that skip review.
     AUTO_APPROVE_TYPES: list[str] = []
 
+    # R-API-1: loopback needs no token; any other bind host requires MR_API_TOKEN.
+    API_HOST: str = Field(
+        "127.0.0.1", validation_alias=AliasChoices("MR_API_HOST", "API_HOST")
+    )
+    API_TOKEN: str = Field(
+        "", validation_alias=AliasChoices("MR_API_TOKEN", "API_TOKEN")
+    )
+
     class Config:
         env_file = ".env"
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]  # API_* are env-only aliases
