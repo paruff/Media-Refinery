@@ -8,6 +8,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import require_token
 from app.api.v1.items import router as items_router
@@ -18,6 +19,8 @@ from app.core.database import AsyncSessionLocal, init_db
 from app.core.orchestrator import PipelineConfig
 from app.core.watcher import InputWatcher
 from app.services.refinery import build_orchestrator
+from app.ui.routes import HERE as UI_DIR
+from app.ui.routes import router as ui_router
 
 logger = logging.getLogger("uvicorn")
 LOG_FILE_NAME = "rotation.log"
@@ -70,3 +73,5 @@ app.include_router(ops_router, prefix="/api/v1")
 secured = [Depends(require_token)]
 app.include_router(ops_secured_router, prefix="/api/v1", dependencies=secured)
 app.include_router(items_router, prefix="/api/v1", dependencies=secured)
+app.include_router(ui_router)
+app.mount("/ui/static", StaticFiles(directory=UI_DIR / "static"), name="ui-static")

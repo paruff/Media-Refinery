@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "base.html" import chip %}
+{% block title %}Quarantine{% endblock %}
+{% block body %}
+<h1>Quarantine</h1>
+<table>
+  <caption class="sr">Quarantined and failed items</caption>
+  <thead><tr><th scope="col">File</th><th scope="col">State</th><th scope="col">Reason</th><th scope="col">Actions</th></tr></thead>
+  <tbody>
+  {% for i in items %}
+  <tr>
+    <td class="edge edge-{{ i.media_type.value }}"><a href="/ui/items/{{ i.id }}"><code>{{ i.source_path }}</code></a></td>
+    <td>{{ chip(i.state) }}</td>
+    <td><code>{{ i.error_log or "" }}</code></td>
+    <td><button class="btn" type="button" hx-post="/ui/items/{{ i.id }}/retry" hx-target="closest tr" hx-swap="outerHTML">Retry</button></td>
+  </tr>
+  {% else %}<tr><td colspan="4" class="muted">Nothing is quarantined.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

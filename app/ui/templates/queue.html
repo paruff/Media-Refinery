@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Queue{% endblock %}
+{% block body %}
+<h1>Queue</h1>
+<form class="filters" method="get" action="/ui/queue">
+  <label>State
+    <select name="state"><option value="">All</option>
+      {% for s in states %}<option value="{{ s }}" {{ "selected" if s == state }}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Type
+    <select name="type"><option value="">All</option>
+      {% for t in types %}<option value="{{ t }}" {{ "selected" if t == type }}>{{ t }}</option>{% endfor %}</select></label>
+  <button class="btn" type="submit">Filter</button>
+</form>
+<table>
+  <caption class="sr">Pipeline queue</caption>
+  <thead><tr><th scope="col">File</th><th scope="col">Type</th><th scope="col">State</th><th scope="col">Updated</th></tr></thead>
+  <tbody hx-get="/ui/queue/rows?{{ qs }}" hx-trigger="every 5s" hx-swap="innerHTML">{% include "_queue_rows.html" %}</tbody>
+</table>
+{% endblock %}

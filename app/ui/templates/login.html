@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block body %}
+<form class="login" method="post" action="/ui/login">
+  <h1>Sign in</h1>
+  {% if bad %}<p role="alert">That token was not accepted.</p>{% endif %}
+  <label for="token">API token</label>
+  <input id="token" name="token" type="password" autocomplete="current-password" required>
+  <button class="btn primary" type="submit">Sign in</button>
+</form>
+{% endblock %}

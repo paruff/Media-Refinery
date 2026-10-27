@@ -1,0 +1,24 @@
+{% for i, p in rows %}
+<tr data-review-row>
+  <td class="edge edge-{{ i.media_type.value }}"><input type="checkbox" name="ids" value="{{ i.id }}" aria-label="Select {{ i.source_path.rsplit('/', 1)[-1] }}"></td>
+  <td>
+    <a href="/ui/items/{{ i.id }}"><strong>{{ i.source_path.rsplit('/', 1)[-1] }}</strong></a>
+    <div class="muted">{{ i.media_type.value }}</div>
+  </td>
+  <td>
+    <div class="diff">
+      <div><h3>Before</h3><code>{{ i.source_path }}</code></div>
+      <div><h3>After <span aria-hidden="true">→</span></h3><code class="changed">{{ p.target_path }}</code>
+        <div class="muted">{{ "transcode" if p.needs_transcode else "copy / remux" }}</div></div>
+    </div>
+  </td>
+  <td>
+    <button class="btn" type="button" data-act="approve"
+      hx-post="/ui/items/{{ i.id }}/approve" hx-target="closest tr" hx-swap="outerHTML">Approve</button>
+    <button class="btn danger" type="button" data-act="reject" hx-confirm="Reject and quarantine this item?"
+      hx-post="/ui/items/{{ i.id }}/reject" hx-target="closest tr" hx-swap="outerHTML">Reject</button>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="4" class="muted">No plans waiting for review.</td></tr>
+{% endfor %}

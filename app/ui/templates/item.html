@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "base.html" import chip %}
+{% block title %}{{ item.source_path.rsplit('/', 1)[-1] }}{% endblock %}
+{% block body %}
+<h1>{{ item.source_path.rsplit('/', 1)[-1] }} {{ chip(item.state) }}</h1>
+<p class="muted">{{ item.media_type.value }} · <a href="/ui/queue">Back to queue</a></p>
+{% set plan = detail.plan %}
+<h2>Before → after</h2>
+<div class="diff">
+  <div><h3>Before</h3><code>{{ item.source_path }}</code>
+    <p class="muted">{{ item.container or "?" }} · {{ item.video_codec or item.audio_codec or "?" }}</p></div>
+  <div><h3>After <span aria-hidden="true">→</span></h3>
+    {% if plan %}<code class="changed">{{ plan.target_path }}</code>
+    <p class="muted">{{ "transcode" if plan.needs_transcode else "copy / remux" }} · plan {{ plan.plan_status }}</p>
+    {% if plan.ffmpeg_args %}<code>ffmpeg {{ plan.ffmpeg_args | join(" ") }}</code>{% endif %}
+    {% else %}<p class="muted">No plan yet.</p>{% endif %}</div>
+</div>
+<h2>Verification</h2>
+{% for v in detail.verification %}
+<ul class="checks">
+  {% for c in v.checks %}<li><span aria-hidden="true">{{ "✓" if c.passed else "✗" }}</span>
+    <span class="sr">{{ "Passed" if c.passed else "Failed" }}:</span> {{ c.name }} <code>{{ c.detail }}</code></li>{% endfor %}
+</ul>
+{% else %}<p class="muted">No verification yet.</p>{% endfor %}
+{% if detail.log %}<h2>Log</h2><pre class="diff-log"><code>{{ detail.log | join("\n") }}</code></pre>{% endif %}
+<div class="bar" role="group" aria-label="Item actions">
+  {% if item.state.value == "planned" %}
+  <button class="btn primary" type="button" hx-post="/ui/items/{{ item.id }}/approve" hx-swap="none"
+    hx-on::after-request="location.reload()">Approve</button>
+  <button class="btn danger" type="button" hx-confirm="Reject and quarantine this item?" hx-post="/ui/items/{{ item.id }}/reject" hx-swap="none"
+    hx-on::after-request="location.reload()">Reject</button>
+  {% elif item.state.value in ("error", "quarantined") %}
+  <button class="btn primary" type="button" hx-post="/ui/items/{{ item.id }}/retry" hx-swap="none"
+    hx-on::after-request="location.reload()">Retry</button>
+  {% else %}<span class="muted">No actions for state {{ item.state.value }}.</span>{% endif %}
+</div>
+{% endblock %}
