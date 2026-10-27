@@ -5,6 +5,8 @@ services:
     container_name: media-refinery
     environment:
       TZ: ${TZ:-UTC}
+      MR_API_HOST: 0.0.0.0  # published port; token below is then mandatory (R-API-1)
+      MR_API_TOKEN: ${MR_API_TOKEN:?set MR_API_TOKEN to expose the API}
     volumes:
       - ${INPUT_DIR:-./input}:/input
       - ${OUTPUT_DIR:-./output}:/output
