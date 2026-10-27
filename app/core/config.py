@@ -40,6 +40,18 @@ class Settings(BaseSettings):
         "", validation_alias=AliasChoices("MR_API_TOKEN", "API_TOKEN")
     )
 
+    # R-NOTIFY: each server is optional; empty URL = off. Secrets via env only.
+    PLEX_URL: str = ""
+    PLEX_TOKEN: str = ""
+    PLEX_SECTIONS: dict[str, str] = {}  # media type -> Plex section id
+    JELLYFIN_URL: str = ""
+    JELLYFIN_API_KEY: str = ""
+    ABS_URL: str = ""
+    ABS_TOKEN: str = ""
+    ABS_LIBRARY_ID: str = ""
+    MUSIC_ASSISTANT_URL: str = ""
+    MUSIC_ASSISTANT_TOKEN: str = ""
+
     class Config:
         env_file = ".env"
 

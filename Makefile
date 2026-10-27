@@ -153,6 +153,7 @@ docker-test: ## run the CI test job inside the image (real ffmpeg; no local inst
 	docker build -t media-refinery:ci .
 	docker run --rm --user root -v "$$PWD":/src:ro -e DATABASE_URL=sqlite+aiosqlite:///:memory: -e REQUIRE_FFMPEG=1 media-refinery:ci sh -c \
 	  'cp -r /src /w && cd /w && rm -rf .venv && pip install -q --no-deps --require-hashes -r requirements-dev.txt \
+	  && playwright install --with-deps chromium >/dev/null \
 	  && mkdir -p input staging output data \
 	  && pytest tests/unit tests/integration -p no:cacheprovider --timeout=120 -ra --cov=app --cov-report=term --cov-fail-under=$${COV_MIN:-80}; \
 	  rc=$$?; behave tests/features || rc=1; exit $$rc'

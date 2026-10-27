@@ -42,6 +42,7 @@ from app.models.media import (
 )
 from app.models.saga import SagaFileMoveLog, SagaLogStatus
 from app.services.music_id import local_cover, write_album_cover
+from app.services.notify import Notifier
 from app.services.quality_guard_service import run_vmaf_ffmpeg
 from app.services.replaygain import measure
 from app.services.tagging_service import TaggingService
@@ -152,6 +153,7 @@ class PipelineOrchestrator:
         poll_interval=2,
         enricher=None,
         identifier=None,
+        notifier=None,
     ):
         self.session_factory = session_factory
         self.cfg = config
@@ -161,6 +163,7 @@ class PipelineOrchestrator:
         self.identifier = (
             identifier  # MusicIdentifier (AcoustID/MB) or None = tags only
         )
+        self.notifier = notifier or Notifier()
         self.logger = logger or logging.getLogger("PipelineOrchestrator")
         self.poll_interval = poll_interval
         self.run_id = (
@@ -957,6 +960,7 @@ class PipelineOrchestrator:
             item.state = FileState.published
             await session.commit()
             self._emit("publish", item_id, "success", str(dest))
+        await self.notifier.published(str(item.media_type), dest)  # non-fatal
         return True
 
     async def _publish_ebook(self, session, item, plan, work: Path) -> bool:

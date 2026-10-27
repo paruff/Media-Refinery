@@ -238,3 +238,42 @@ async def test_dry_run_changes_nothing_outside_work_dry_run(env):
     )
     async with factory() as s:
         assert (await s.execute(select(NormalizationPlan))).scalars().all()
+
+
+async def test_failing_server_only_warns_item_still_validated(env, caplog):
+    import logging
+    from types import SimpleNamespace
+
+    import httpx
+
+    from app.services.notify import Notifier
+
+    cfg, factory = env
+    make_mkv(cfg.input_dir / "Test Movie (2020).mkv")
+    await import_input(cfg, factory)
+    seen = []
+
+    def down(req):
+        seen.append(req)
+        return httpx.Response(503)
+
+    notifier = Notifier(
+        SimpleNamespace(
+            PLEX_URL="http://plex",
+            PLEX_TOKEN="t",
+            PLEX_SECTIONS={"movie": "1"},
+            JELLYFIN_URL="",
+            ABS_URL="",
+            MUSIC_ASSISTANT_URL="",
+        ),
+        httpx.AsyncClient(transport=httpx.MockTransport(down)),
+    )
+    orch = PipelineOrchestrator(factory, cfg, notifier=notifier)
+    await orch.run_until_idle()
+    await _approve_all(orch, factory)
+    with caplog.at_level(logging.WARNING, logger="notify"):
+        await orch.run_until_idle()
+
+    assert {i.state for i in await _items(factory)} == {FileState.validated}
+    assert [r.url.path for r in seen] == ["/library/sections/1/refresh"]
+    assert "plex rescan failed" in caplog.text
