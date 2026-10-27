@@ -59,6 +59,42 @@ class DebounceHandler(FileSystemEventHandler):
         self._enqueue(event.dest_path)
 
 
+async def import_file(path, db_session_factory, logger, coordinator=None):
+    """Insert one pending item for `path`; return its id, or None for a duplicate."""
+    file_hash = await asyncio.to_thread(content_hash, path)
+    async with db_session_factory() as session:
+        result = await session.execute(
+            select(MediaItem).where(MediaItem.id == file_hash)
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            if existing.source_path == path:
+                return file_hash
+            # Same content at a new path: a move, unless the old path is still there.
+            if await asyncio.to_thread(os.path.exists, existing.source_path):
+                logger.warning(
+                    f"Duplicate content at {path} (already imported as {existing.source_path})"
+                )
+                return None
+            existing.source_path = path
+            await session.commit()
+            logger.info(f"Item {file_hash} moved to {path}")
+            return file_hash
+        session.add(
+            MediaItem(
+                source_path=path,
+                state=FileState.pending,
+                media_type=MediaType.unknown,
+                id=file_hash,
+            )
+        )
+        await session.commit()
+        logger.info(f"Inserted new file: {path}")
+        if coordinator:
+            await coordinator.enqueue(file_hash)
+        return file_hash
+
+
 class InputWatcher:
     def __init__(self, input_dir, db_session_factory, logger=None, coordinator=None):
         self.input_dir = input_dir
@@ -106,36 +142,9 @@ class InputWatcher:
             await asyncio.sleep(POLL_INTERVAL)
 
     async def insert_if_new(self, path):
-        file_hash = await asyncio.to_thread(content_hash, path)
-        async with self.db_session_factory() as session:
-            result = await session.execute(
-                select(MediaItem).where(MediaItem.id == file_hash)
-            )
-            existing = result.scalar_one_or_none()
-            if existing:
-                if existing.source_path == path:
-                    return
-                # Same content at a new path: a move, unless the old path is still there.
-                if await asyncio.to_thread(os.path.exists, existing.source_path):
-                    self.logger.warning(
-                        f"Duplicate content at {path} (already imported as {existing.source_path})"
-                    )
-                    return
-                existing.source_path = path
-                await session.commit()
-                self.logger.info(f"Item {file_hash} moved to {path}")
-                return
-            item = MediaItem(
-                source_path=path,
-                state=FileState.pending,
-                media_type=MediaType.unknown,
-                id=file_hash,
-            )
-            session.add(item)
-            await session.commit()
-            self.logger.info(f"Inserted new file: {path}")
-            if self.coordinator:
-                await self.coordinator.enqueue(file_hash)
+        return await import_file(
+            path, self.db_session_factory, self.logger, self.coordinator
+        )
 
     def run(self):
         """Start watching. Non-blocking; call from the event-loop thread."""

@@ -93,3 +93,9 @@ exclude_dirs = ["tests", "features", ".venv", "alembic/versions"]
 skip = "*.lock,*.sqlite,coverage.xml,./.git,./testdata,./sample_media,./docs/legacy"
 ignore-words-list = "ser,te,fo,nd,ot,ans,astroid"
 check-hidden = false
+
+[project.scripts]
+refinery = "app.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
