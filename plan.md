@@ -165,11 +165,7 @@ G3/G4 can run in parallel; G6/G7/G8 can run in parallel once G2 lands.
 
 **Depends on:** G3, G4, G12.
 **Scope:** Replace Go-era `docs/ARCHITECTURE.md`/`SUMMARY.md` with an architecture doc for the actual system; README quickstart = compose; fold DOCKER/TESTING/DEVELOPMENT/PERFORMANCE/METRICS/FAQ into `docs/`; archive `paruff/converter` and `paruff/movies2vlib` with pointer READMEs.
-**Done when:** `grep -rn "pkg/\|Go module\|beets\|Tdarr" docs README.md` returns nothing; every link in README/docs resolves (lychee); both sibling repos archived.
-
-```text
-/goal G13 from plan.md: replace Go-era docs with current architecture, consolidate root docs into docs/, and archive converter + movies2vlib — done when no Go/beets/Tdarr references remain, lychee finds no broken links, and both repos are archived.
-```
+**Done when:** no Go-era references remain in the repo, lychee finds no broken links, and both sibling repos are archived. **Status:** done (PR #84; `paruff/converter` and `paruff/movies2vlib` archived with pointer READMEs).
 
 ---
 
