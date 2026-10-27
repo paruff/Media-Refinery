@@ -31,14 +31,23 @@ def natural_key(path: Path | str) -> list:
     return [int(p) if p.isdigit() else p for p in parts]
 
 
+DISC_FOLDER = re.compile(r"^(cd|disc|disk|part)[\s._-]*\d+$", re.IGNORECASE)
+
+
 def book_dir(path: str | Path, input_dir: Path) -> Path:
-    """The unit merged into one book: the first folder under input/ (loose files stand alone)."""
+    """The unit merged into one book: the folder holding the audio, with a CD1/Disc 2/Part 3
+    folder folded into its parent. Loose files directly in input/ stand alone."""
     path = Path(path)
     try:
         rel = path.resolve().relative_to(input_dir.resolve())
     except ValueError:
         return path
-    return input_dir / rel.parts[0] if len(rel.parts) > 1 else path
+    folders = rel.parts[:-1]
+    if not folders:
+        return path
+    if len(folders) > 1 and DISC_FOLDER.match(folders[-1]):
+        folders = folders[:-1]
+    return input_dir.joinpath(*folders)
 
 
 def _stamp(text: str) -> float:
