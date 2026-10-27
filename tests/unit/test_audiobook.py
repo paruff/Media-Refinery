@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from app.core.planning import build_plan
 from app.media.audiobook import (
     audio_args,
@@ -31,6 +33,35 @@ def test_book_dir_spans_disc_folders_but_loose_files_stand_alone(tmp_path):
     assert book_dir(deep, tmp_path) == tmp_path / "Book"
     loose = tmp_path / "x.m4b"
     assert book_dir(loose, tmp_path) == loose
+
+
+@pytest.mark.parametrize(
+    "rel,unit",
+    [
+        ("Author/Book1/01.mp3", "Author/Book1"),
+        ("Author/Book2/01.mp3", "Author/Book2"),
+        ("Author/Book1/CD1/01.mp3", "Author/Book1"),
+        ("Author/Book1/Disc 2/01.mp3", "Author/Book1"),
+        ("Author/Book1/Part 03/01.mp3", "Author/Book1"),
+        ("Audiobooks/Some Book/01.mp3", "Audiobooks/Some Book"),
+        ("Book/cd01/01.mp3", "Book"),
+        (
+            "CD1/01.mp3",
+            "CD1",
+        ),  # a disc folder at the top has no parent book to fold into
+    ],
+)
+def test_book_unit_is_the_deepest_folder_with_disc_folders_folded_up(
+    tmp_path, rel, unit
+):
+    path = tmp_path / rel
+    assert book_dir(path, tmp_path) == tmp_path / unit
+
+
+def test_two_books_by_one_author_are_not_merged(tmp_path):
+    a = book_dir(tmp_path / "Author" / "Book1" / "01.mp3", tmp_path)
+    b = book_dir(tmp_path / "Author" / "Book2" / "01.mp3", tmp_path)
+    assert a != b
 
 
 def test_cue_chapters():
