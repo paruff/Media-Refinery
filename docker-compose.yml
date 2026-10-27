@@ -3,12 +3,15 @@ services:
     build: .
     image: media-refinery:latest
     container_name: media-refinery
+    # Run as the owner of your library folders (`id -u` / `id -g`).
+    user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       TZ: ${TZ:-UTC}
       MR_API_HOST: 0.0.0.0  # published port; token below is then mandatory (R-API-1)
       MR_API_TOKEN: ${MR_API_TOKEN:?set MR_API_TOKEN to expose the API}
     volumes:
       - ${INPUT_DIR:-./input}:/input
+      # /output holds all five libraries: Movies/ TV/ Music/ Audiobooks/ Books/ (Calibre)
       - ${OUTPUT_DIR:-./output}:/output
       - ${WORK_DIR:-./work}:/work
       - ${ARCHIVE_DIR:-./archive}:/archive

@@ -1,6 +1,7 @@
 """PUBLISH / archive / quarantine file operations (R-SAFE-1, R-SAFE-2)."""
 
 import asyncio
+import errno
 import os
 import shutil
 from pathlib import Path
@@ -16,10 +17,6 @@ def _fsync_copy(src: Path, dst: Path) -> None:
         os.fsync(fout.fileno())
 
 
-def same_device(a: Path, b: Path) -> bool:
-    return a.stat().st_dev == b.stat().st_dev
-
-
 def _unique(path: Path) -> Path:
     candidate, n = path, 1
     while candidate.exists():
@@ -31,12 +28,14 @@ def _unique(path: Path) -> Path:
 def _move_into_place(work_file: Path, dest: Path, tmp: Path, sha: str) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
-        if same_device(work_file, dest.parent):
-            os.replace(work_file, dest)  # atomic, same filesystem
-        else:
+        try:
+            os.replace(work_file, dest)  # atomic when work and dest share a mount
+        except OSError as e:
+            if e.errno != errno.EXDEV:  # separate bind mounts: same st_dev, still EXDEV
+                raise
             _fsync_copy(work_file, tmp)
             if sha256_file(str(tmp)) != sha:
-                raise OSError("checksum mismatch after copy")
+                raise OSError("checksum mismatch after copy") from e
             os.replace(tmp, dest)
             work_file.unlink()
     finally:
