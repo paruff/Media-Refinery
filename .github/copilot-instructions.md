@@ -900,11 +900,11 @@ make type-check     # Run mypy type checking
 
 ## 📚 Additional Resources
 
-- [Architecture Documentation](docs/ARCHITECTURE.md)
-- [Product Vision](docs/PRODUCT_VISION.md)
-- [Contributing Guide](docs/CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
-- [FAQ](FAQ.md)
+- [Architecture Documentation](../docs/ARCHITECTURE.md)
+- [Product Vision](../docs/PRODUCT_VISION.md)
+- [Contributing Guide](../docs/CONTRIBUTING.md)
+- [Security Policy](../SECURITY.md)
+- [Development guide](../docs/DEVELOPMENT.md)
 
 ---
 

@@ -1,110 +1,63 @@
-# System Architecture
+# Architecture
 
-The Media Refinery system is designed as a production-grade media normalization and organization pipeline. Its flexible and modular architecture enables safe and reliable processing of multimedia libraries. Below is an overview of the top-level components and their interactions.
+Media Refinery is a single Python 3.12 FastAPI daemon that watches `input/`, normalizes
+music, audiobooks, movies, TV and ebooks to one canonical format per type, verifies the
+result, publishes it into the library and tells the media server to rescan.
+Requirements live in [spec.md](../spec.md); this page describes how they are met.
 
-## Core Design Principles
-- **Idempotency**: Operations produce consistent results when run multiple times.
-- **Safety**: Features such as dry-run mode and transaction-like rollback ensure no accidental data loss.
-- **Extensibility**: A highly modular design allows for easy addition of new functionalities and integrations.
-- **Observability**: Granular logging and error reporting enhance the ability to monitor operations.
+## Pipeline
 
-## Core System Components
-
-### 1. Configuration System (`pkg/config`)
-- YAML-based configuration files.
-- Environment variable support for overriding defaults.
-- Strong validation and error handling mechanisms.
-
-### 2. Logger (`pkg/logger`)
-- Provides structured logging in text or JSON formats.
-- Ensures thread-safe operations with configurable log levels.
-- Includes counters for tracking system observability.
-
-### 3. Validator (`pkg/validator`)
-- Validates file types and computes SHA-256 checksums.
-- Performs second-level validation by scanning for malicious files.
-- Ensures compliance with input path constraints.
-
-### 4. Metadata System (`pkg/metadata`)
-- Extracts and parses filename metadata.
-- Cleans up and standardizes metadata tags.
-- Supports customizable path templates.
-- Facilitates metadata merging for enriched information.
-
-### 5. Storage System (`pkg/storage`)
-- Handles file movement with safety mechanisms.
-- Supports dry-runs and transaction-like rollback.
-- Provides intelligent backups to prevent data loss.
-
-### 6. Processors (`pkg/processors`)
-- Plugin-based processors for handling multimedia content.
-    - **Audio Processing**: Converts audio formats to FLAC.
-    - **Video Processing**: Handles video normalization into MKV and H.264/AAC compression formats.
-- Provides hooks for extensibility.
-
-### 7. Pipeline Orchestration (`pkg/pipeline`)
-- Coordinates workflow steps such as scanning, validation, processing, and reporting.
-- Optimized for concurrency with advanced error handling.
-- Tracks and reports performance metrics.
-
-### 8. Integrations Layer (`pkg/integrations`)
-- Leverages APIs of third-party systems for auxiliary functions.
-    - **Beets**: Organizes and manages music libraries using MusicBrainz metadata.
-    - **Tdarr**: Automates transcoding workflows with hardware acceleration.
-    - **Radarr**: Enhances movie metadata and collection organization.
-    - **Sonarr**: Manages episodic TV content with metadata from TVDB.
-
-## Typical Workflow
-The workflow for processing media files involves the following key steps:
-1. **Scan**: Identify media files in input directories.
-2. **Validate**: Check the integrity and format of each file.
-3. **Extract**: Retrieve metadata and attributes.
-4. **Process**: Transform files into user-defined formats.
-5. **Organize**: Rename files and arrange them into folder structures compatible with Plex and Music Assistant.
-6. **Verify**: Confirm successful processing.
-7. **Report**: Record statistics and log analysis.
-
-
-## Execution Modes
-
-Media Refinery supports two execution modes:
-
-- **Local Mode (default):**
-    - All processing is performed in-process, no external dependencies required.
-    - No Redis or Celery required.
-    - Recommended for single-node or development setups.
-
-- **Distributed Mode (optional):**
-    - Tasks are dispatched to a Celery worker queue using Redis as the broker.
-    - Enable by running with `python run_refinery.py --distributed` or setting `MEDIA_REFINERY_DISTRIBUTED=1`.
-    - Requires a running Redis server and Celery worker.
-    - Suitable for scaling out processing across multiple nodes.
-
-## Safe Operating Features
-- **Dry-Run Mode**: Executes a simulated run to validate workflows without modifying files.
-- **Rollback Mechanisms**: Ensures that failed processing results in no data loss.
-- **Checksum Validation**: Safeguards file integrity during all operations.
-- **Concurrent Processing**: Speeds up operations using a tunable worker pool.
-
-## Directory Structure
-Example setup for media processing:
-```
-media-refinery/
-├── input/              # Input media files.
-├── output/             # Output files after processing.
-├── work/               # Temporary workspace.
-├── config/             # Configuration files.
-│   ├── beets/
-│   ├── tdarr/
-│   ├── radarr/
-│   ├── sonarr/
-│   └── plex/
+```text
+input/ ─watch─▶ DISCOVER ─▶ PROBE ─▶ CLASSIFY ─▶ ENRICH ─▶ PLAN ─▶ [APPROVE] ─▶ EXECUTE ─▶ VERIFY ─▶ PUBLISH ─▶ NOTIFY
+                                                                                              │fail
+                                                                                              ▼
+                                                                                    quarantine/{reason}/
 ```
 
-## Future Enhancements
-The project roadmap includes:
-- Adding a web UI for real-time monitoring.
-- Supporting cloud storage systems like S3.
-- Direct API integrations with MusicBrainz, TMDB, and TVDB.
-- Advanced duplicate detection algorithms.
-- System-wide Prometheus metrics export for distributed setups.
+Each stage is a `FileState` transition on `MediaItem`, persisted before side effects so the
+daemon resumes after a crash. States: `pending → scanning → scanned → enriched → planned →
+approved → executing → executed → verified → published` (`validated`/`audited` after later
+checks), with `quarantined` and `error` as exits.
+
+## Components
+
+| Path | Role |
+|---|---|
+| `app/main.py` | FastAPI app and lifespan: starts the watcher and orchestrator, mounts API and UI. |
+| `app/core/watcher.py` | watchdog `InputWatcher`; waits for file stability, imports by content hash. |
+| `app/core/scanner.py`, `pipeline.py`, `orchestrator.py` | ffprobe scan, per-stage bounded workers, stage driver. |
+| `app/core/planning.py`, `publish.py`, `verify.py` | plan building, atomic publish (work → library), verification checks. |
+| `app/core/throttle.py`, `supervisor.py`, `tools.py` | adaptive worker throttle, crash recovery, subprocess wrapper (argument lists, timeouts). |
+| `app/services/` | enrichment (TMDB, TVDB, MusicBrainz/AcoustID), per-type planners, tagging, subtitles, VMAF guardrail, duplicate detection, server notify. |
+| `app/media/video/` | probe, health check, repair, encode/profile logic for movies and TV. |
+| `app/media/audiobook.py`, `ebook.py` | audiobook (M4B) and ebook (Calibre) handling. |
+| `app/models/` | SQLAlchemy models: `MediaItem`, `NormalizationPlan`, `SagaFileMoveLog`, device profiles. Schema managed by Alembic. |
+| `app/api/v1/` | REST API (`/api/v1`). |
+| `app/ui/` | Jinja2 + htmx web UI, styled per [DESIGN.md](../DESIGN.md). |
+| `app/cli.py` | `refinery` Typer CLI; shares `app/services/refinery.py` with the API (no logic in either). |
+
+## Safety invariants
+
+- Originals are never modified; after VERIFY they move to `archive/` (R-SAFE-1).
+- All writes go to `work/` first, then an atomic rename (or copy + fsync + verify) into the library (R-SAFE-2).
+- Generated paths are sanitized and must resolve inside the library root (R-SAFE-3).
+- `--dry-run` writes nothing outside `work/dry-run/` (R-SAFE-4).
+- Every subprocess (ffmpeg, ffprobe, fpcalc, calibre) runs without a shell, with a timeout (R-SAFE-5).
+- API keys come from the environment only and are never logged or returned (R-SAFE-6).
+
+## Interfaces
+
+- **REST** `/api/v1`: `GET /health`, `GET /ready`, `GET /items`, `GET /items/{id}`, `POST /items/{id}/approve|reject|retry`. Bound to `127.0.0.1` by default; any other `MR_API_HOST` requires `MR_API_TOKEN`.
+- **Web UI** at `/ui`: queue, review (approve/reject plans), item detail.
+- **CLI**: `refinery scan|plan|approve|run|verify|audit [--dry-run] [--type …] PATH`.
+- **Notify**: optional Plex, Jellyfin, Audiobookshelf and Music Assistant rescan after publish; Calibre via `calibredb add`.
+
+## Data and deployment
+
+SQLite (`data/`) holds item state. The Docker image (non-root, ffmpeg, chromaprint, flac,
+calibre) is the supported runtime; see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Observability
+
+Structured logs carry `item_id` and `run_id`; each run writes a JSONL trace. `/health` is
+liveness, `/ready` checks the database, ffmpeg and writable library roots.
