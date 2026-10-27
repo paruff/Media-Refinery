@@ -91,7 +91,7 @@ jobs:
       - name: Unit + integration tests with coverage
         # Floor per spec NF-3.
         run: >-
-          uv run --no-sync pytest tests/unit tests/integration
+          uv run --no-sync pytest tests/unit tests/integration -n auto
           -p no:cacheprovider --timeout=120 -ra
           --cov=app --cov-report=term --cov-report=xml --cov-fail-under=80
       - name: BDD features
@@ -122,12 +122,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+          fetch-depth: 0
+      # The job always runs (so the check is reported); on PRs the build is
+      # skipped unless something baked into the image changed.
+      - name: Did the image inputs change?
+        id: img
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT" != pull_request ] || git diff --name-only "origin/$BASE...HEAD" \
+            | grep -qE '^(Dockerfile|\.dockerignore|requirements\.txt|app/|alembic/|alembic\.ini|run_refinery\.py|\.github/workflows/ci\.yml)'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.img.outputs.build
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - if: steps.img.outputs.build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: false
           tags: media-refinery:ci
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max
 
   docker-canary:
     name: Publish canary image (main only)
@@ -159,3 +176,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE }}:canary
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max
