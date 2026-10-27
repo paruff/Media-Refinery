@@ -213,6 +213,10 @@ class PipelineOrchestrator:
             )
             rows = result.all()
         stop = STAGE_ORDER.index(until) if until else len(STAGE_ORDER)
+        if (
+            self.cfg.dry_run
+        ):  # R-SAFE-4: never act past planning, whatever state the DB is in
+            stop = min(stop, STAGE_ORDER.index(FileState.approved))
         todo = [
             (i, s)
             for i, s, t in rows
@@ -231,6 +235,8 @@ class PipelineOrchestrator:
     # ---- crash resume (R-PIPE-1) -----------------------------------------
     async def recover(self) -> None:
         """Reset items caught mid-flight and drop half-finished publish temp files."""
+        if self.cfg.dry_run:  # R-SAFE-4: recovery deletes work files and rewrites sagas
+            return
         async with self.session_factory() as session:
             for item in await self._items(session, FileState.scanning):
                 item.state = FileState.pending
