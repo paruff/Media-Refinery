@@ -1,11 +1,10 @@
 # Documentation Index
 
 - [Architecture](ARCHITECTURE.md)
-- [Product Vision](PRODUCT_VISION.md)
-- [Implementation Summary](SUMMARY.md)
-- [Contribution Guide](CONTRIBUTING.md)
+- [Deployment](DEPLOYMENT.md)
+- [Development](DEVELOPMENT.md) (testing, performance, observability, FAQ)
+- [Contributing](CONTRIBUTING.md)
 - [Maintainers Guide](MAINTAINERS_GUIDE.md)
-- [Legacy Docs](legacy/)
+- [Product Vision](PRODUCT_VISION.md)
 
-
-See the main [README.md](../README.md) for project overview, quickstart, and details on local vs distributed (Celery/Redis) execution modes.
+Project root: [spec](../spec.md) · [plan](../plan.md) · [intent](../intent.md) · [design](../DESIGN.md) · [security](../SECURITY.md)

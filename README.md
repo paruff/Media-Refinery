@@ -3,140 +3,31 @@
 
 
 [![CI](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml/badge.svg)](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml)
-[![Tests](https://github.com/paruff/Media-Refinery/actions/workflows/tests.yml/badge.svg)](https://github.com/paruff/Media-Refinery/actions/workflows/tests.yml)
 [![Coverage](https://codecov.io/gh/paruff/Media-Refinery/branch/main/graph/badge.svg)](https://codecov.io/gh/paruff/Media-Refinery)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 
-Media Refinery is a Python-based media processing pipeline designed to handle audio and video processing tasks efficiently. This project is a conversion from a Go-based implementation to Python, leveraging modern Python practices.
-
-## Features
-- Audio and video processing modules
-- Asyncio-based concurrency
-- Pydantic for configuration validation
-- Typer and Rich for a user-friendly CLI
-- Organized testing with pytest
-
-## Requirements
-- Python 3.11+
-
-## Installation
-```bash
-pip install .
-```
-
-## Usage
-```bash
-python -m media_refinery
-```
-
-## Convert Your Music Library
-Media Refinery can help you convert a messy music library into a well-structured, metadata-enhanced `.flac` collection. Follow these steps:
-
-### Using Docker
-1. **Build the Docker Image**:
-   ```bash
-   docker build -t media-refinery .
-   ```
-
-2. **Run the Docker Container**:
-   ```bash
-   docker run --rm -v /path/to/your/music:/input -v /path/to/output:/output media-refinery
-   ```
-   Replace `/path/to/your/music` with the directory containing your music files and `/path/to/output` with the directory where you want the converted files to be saved.
-
-3. **Verify the Output**:
-   Check the `/path/to/output` directory for `.flac` files with embedded metadata (e.g., artist, album, title, album art).
-
-
-
+Media Refinery watches a drop folder and normalizes music, audiobooks, movies, TV and ebooks
+to one canonical, verified format per type, publishes them into your libraries and tells
+Plex, Jellyfin, Audiobookshelf or Music Assistant to rescan. Originals are never modified.
 
 ## Quickstart
 
 ```bash
 git clone https://github.com/paruff/Media-Refinery.git
 cd Media-Refinery
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pre-commit install  # optional, for auto-formatting
+cp .env.example .env     # set MR_API_TOKEN, PUID/PGID, folder paths
+docker compose up -d
 ```
 
+Open <http://localhost:8000/ui>, drop files into the input folder and approve plans in the Review view.
 
-## Project Structure
-
-```
-media-refinery/
-├── app/            # Main FastAPI application code (API, models, services)
-├── src/            # Supporting modules (audio, video, pipeline, etc.)
-├── config/         # Configuration files and templates
-├── tests/          # Unit, integration, and BDD tests
-├── sample_media/   # Sample media files for testing/demo
-├── work/           # Working directory for runtime artifacts, logs, and db
-├── docs/           # Documentation (see below)
-├── .github/        # GitHub Actions workflows and templates
-├── Makefile        # Common development commands
-├── requirements.txt# Python dependencies
-├── pyproject.toml  # Project metadata and tool config
-├── README.md       # Project overview and usage
-└── ...             # Other supporting files
-```
+CLI: `docker compose exec media-refinery refinery scan|plan|approve|run|verify|audit [--dry-run] PATH`.
 
 ## Documentation
 
-All detailed documentation is now in the [docs/](docs/README.md) directory:
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Product Vision](docs/PRODUCT_VISION.md)
-- [Implementation Summary](docs/SUMMARY.md)
-- [Contribution Guide](docs/CONTRIBUTING.md)
-- [Maintainers Guide](docs/MAINTAINERS_GUIDE.md)
-- [Legacy Docs](docs/legacy/)
-
-
-## Testing & Quality
-
-Run all tests and check coverage:
-```bash
-pytest --cov=app --cov=src --cov-report=term-missing
-```
-
-Test types:
-- **Unit tests:** `pytest tests/unit/`
-- **Integration tests:** `pytest tests/integration/`
-- **End-to-end tests:** `pytest tests/e2e/`
-- **BDD tests:** `behave tests/features/`
-
-Lint and format:
-```bash
-make precom
-```
-
-Pre-commit hooks are configured for linting and formatting. Install with `pre-commit install`.
-## FAQ
-
-See [FAQ.md](FAQ.md) for common questions and troubleshooting.
-## Security & Observability
-
-## Usage
-```bash
-python run_refinery.py           # Local execution (default, no Redis/Celery required)
-python run_refinery.py --distributed  # Enable distributed execution (requires Redis/Celery)
-```
-
-By default, Media Refinery runs all tasks locally and does not require Redis or Celery. To enable distributed execution (using Celery and Redis as a task queue), use the `--distributed` flag or set the environment variable `MEDIA_REFINERY_DISTRIBUTED=1`.
-
-**Distributed mode requirements:**
-- Redis server running (see [DOCKER.md](DOCKER.md) for setup)
-- Celery worker running: `celery -A app.services.execution_service.celery_app worker --loglevel=info`
-
-**Local mode:**
-- No Redis or Celery required; all processing is in-process.
-
-- See [SECURITY.md](SECURITY.md) for security practices and how to report vulnerabilities.
-- See [METRICS.md](METRICS.md) for metrics and observability endpoints.
-## Example Config & Sample Media
-
-See [sample_media/README.md](sample_media/README.md) and [sample_media/config.example.yaml](sample_media/config.example.yaml) for example files.
+- [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Development](docs/DEVELOPMENT.md)
+- [Contributing](docs/CONTRIBUTING.md) · [Maintainers](docs/MAINTAINERS_GUIDE.md) · [Product vision](docs/PRODUCT_VISION.md)
+- [Intent](intent.md) · [Spec](spec.md) · [Plan](plan.md) · [Design](DESIGN.md) · [Security](SECURITY.md)

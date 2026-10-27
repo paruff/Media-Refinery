@@ -15,8 +15,7 @@
 
 **Key External Dependencies**:
 - FFmpeg (audio/video processing)
-- Beets (music library organization)
-- Radarr/Sonarr/Tdarr APIs (media server integrations)
+- Plex/Jellyfin/Audiobookshelf/Music Assistant rescan APIs (optional)
 
 ---
 
@@ -900,11 +899,11 @@ make type-check     # Run mypy type checking
 
 ## 📚 Additional Resources
 
-- [Architecture Documentation](docs/ARCHITECTURE.md)
-- [Product Vision](docs/PRODUCT_VISION.md)
-- [Contributing Guide](docs/CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
-- [FAQ](FAQ.md)
+- [Architecture Documentation](../docs/ARCHITECTURE.md)
+- [Product Vision](../docs/PRODUCT_VISION.md)
+- [Contributing Guide](../docs/CONTRIBUTING.md)
+- [Security Policy](../SECURITY.md)
+- [Development guide](../docs/DEVELOPMENT.md)
 
 ---
 
