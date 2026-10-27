@@ -1,3 +1,6 @@
+{% if skipped %}
+<tr><td colspan="4" role="status">{{ skipped }} of {{ total }} not actioned: no longer awaiting review.</td></tr>
+{% endif %}
 {% for i, p in rows %}
 <tr data-review-row>
   <td class="edge edge-{{ i.media_type.value }}"><input type="checkbox" name="ids" value="{{ i.id }}" aria-label="Select {{ i.source_path.rsplit('/', 1)[-1] }}"></td>

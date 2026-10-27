@@ -205,10 +205,14 @@ async def act_bulk(
 ):
     if action not in ("approve", "reject"):
         raise HTTPException(404)
+    skipped = 0
     for item_id in ids:
-        await _act(orch, action, item_id)
+        if not await _act(orch, action, item_id):
+            skipped += 1
     return templates.TemplateResponse(
-        request, "_review_rows.html", {"rows": await _review_rows(session)}
+        request,
+        "_review_rows.html",
+        {"rows": await _review_rows(session), "skipped": skipped, "total": len(ids)},
     )
 
 

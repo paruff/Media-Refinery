@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import check_bind_security, require_token
@@ -69,6 +69,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Media Normalizer Daemon Edition", lifespan=lifespan)
+
+UI_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+    "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Anti-clickjacking/sniffing everywhere; a strict CSP on the UI (the API docs use a CDN)."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if request.url.path.startswith("/ui"):
+        response.headers["Content-Security-Policy"] = UI_CSP
+    return response
+
 
 app.include_router(
     ops_router, include_in_schema=False

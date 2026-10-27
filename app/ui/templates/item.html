@@ -25,13 +25,10 @@
 {% if detail.log %}<h2>Log</h2><pre class="diff-log"><code>{{ detail.log | join("\n") }}</code></pre>{% endif %}
 <div class="bar" role="group" aria-label="Item actions">
   {% if item.state.value == "planned" %}
-  <button class="btn primary" type="button" hx-post="/ui/items/{{ item.id }}/approve" hx-swap="none"
-    hx-on::after-request="location.reload()">Approve</button>
-  <button class="btn danger" type="button" hx-confirm="Reject and quarantine this item?" hx-post="/ui/items/{{ item.id }}/reject" hx-swap="none"
-    hx-on::after-request="location.reload()">Reject</button>
+  <button class="btn primary" type="button" hx-post="/ui/items/{{ item.id }}/approve" hx-swap="none" data-reload>Approve</button>
+  <button class="btn danger" type="button" hx-confirm="Reject and quarantine this item?" hx-post="/ui/items/{{ item.id }}/reject" hx-swap="none" data-reload>Reject</button>
   {% elif item.state.value in ("error", "quarantined") %}
-  <button class="btn primary" type="button" hx-post="/ui/items/{{ item.id }}/retry" hx-swap="none"
-    hx-on::after-request="location.reload()">Retry</button>
+  <button class="btn primary" type="button" hx-post="/ui/items/{{ item.id }}/retry" hx-swap="none" data-reload>Retry</button>
   {% else %}<span class="muted">No actions for state {{ item.state.value }}.</span>{% endif %}
 </div>
 {% endblock %}
