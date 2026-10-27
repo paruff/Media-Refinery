@@ -48,7 +48,6 @@ input/
 
 # Configuration (keep examples)
 config.yaml
-!config.example.yaml
 
 # Dependencies
 /vendor/

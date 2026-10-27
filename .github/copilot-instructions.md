@@ -15,8 +15,7 @@
 
 **Key External Dependencies**:
 - FFmpeg (audio/video processing)
-- Beets (music library organization)
-- Radarr/Sonarr/Tdarr APIs (media server integrations)
+- Plex/Jellyfin/Audiobookshelf/Music Assistant rescan APIs (optional)
 
 ---
 
