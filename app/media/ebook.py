@@ -127,14 +127,14 @@ def epub_text_length(path: Path) -> int:
 
 
 async def to_epub(source: Path, out: Path) -> tuple[int, str]:
-    """R-EBOOK-1: EPUB 3 via ebook-convert; an EPUB source is copied as is."""
+    """R-EBOOK-1: EPUB 3 (else Calibre default) via ebook-convert; an EPUB source is copied as is."""
     if source.suffix.lower() == ".epub":
         await asyncio.to_thread(shutil.copyfile, source, out)
         return 0, ""
-    rc, _, err = await run_tool(
-        ["ebook-convert", str(source), str(out), "--epub-version", "3"],
-        CALIBRE_TIMEOUT,
-    )
+    cmd = ["ebook-convert", str(source), str(out)]
+    rc, _, err = await run_tool([*cmd, "--epub-version", "3"], CALIBRE_TIMEOUT)
+    if rc != 0:  # EPUB 3 is preferred, not required: Calibre 7.6 crashes in its upgrade
+        rc, _, err = await run_tool(cmd, CALIBRE_TIMEOUT)
     return rc, err
 
 

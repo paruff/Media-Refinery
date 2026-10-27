@@ -1,6 +1,8 @@
 import struct
 import zipfile
 
+import pytest
+
 from app.media import ebook
 from tests.ebook_helpers import make_drm_epub, make_epub
 
@@ -73,3 +75,17 @@ def test_add_args_carry_metadata(tmp_path):
         "A & B",
     ]
     assert "--cover" in args and "--series-index" in args
+
+
+@pytest.mark.asyncio
+async def test_to_epub_falls_back_when_epub3_upgrade_crashes(tmp_path, monkeypatch):
+    """Calibre 7.6 (Ubuntu 24.04) crashes in upgrade_to_epub3; EPUB 3 is only preferred."""
+    calls = []
+
+    async def fake_run_tool(args, limit):
+        calls.append(args)
+        return (1, "", "TypeError") if "--epub-version" in args else (0, "", "")
+
+    monkeypatch.setattr(ebook, "run_tool", fake_run_tool)
+    rc, _ = await ebook.to_epub(tmp_path / "a.mobi", tmp_path / "out.epub")
+    assert rc == 0 and len(calls) == 2 and "--epub-version" not in calls[1]
