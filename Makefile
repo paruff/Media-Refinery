@@ -12,7 +12,7 @@ test-report: check-venv
 
 # Python-centric Makefile for Media-Refinery
 
-.PHONY: docker-test compose-check venv hooks hooks-update deps-lock precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
+.PHONY: ui-test docker-test compose-check venv hooks hooks-update deps-lock precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
 
 VENV?=.venv
 PYTHON?=$(VENV)/bin/python
@@ -142,6 +142,12 @@ deps-lock: ## re-lock all requirements*.txt (hash-verified)
 	uv pip compile requirements.in --upgrade --python-version 3.14 --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header -o requirements.txt
 	uv pip compile requirements-dev.in -c requirements.txt --python-version 3.14 --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header -o requirements-dev.txt
 	uv pip compile requirements-hooks.in --python-version 3.14 --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header -o requirements-hooks.txt
+
+ui-test: ## G10 web UI tests (Playwright + axe) inside the image: real ffmpeg, no local installs
+	docker build -t media-refinery:ci .
+	docker run --rm --user root -v "$$PWD":/src:ro -e REQUIRE_FFMPEG=1 media-refinery:ci sh -c \
+	  'cp -r /src /w && cd /w && rm -rf .venv && pip install -q --no-deps --require-hashes -r requirements-dev.txt \
+	  && playwright install --with-deps chromium >/dev/null && pytest tests/integration/ui -p no:cacheprovider -ra'
 
 docker-test: ## run the CI test job inside the image (real ffmpeg; no local installs)
 	docker build -t media-refinery:ci .

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Review{% endblock %}
+{% block body %}
+<h1>Review</h1>
+<p class="muted">Keys: <span class="kbd">j</span>/<span class="kbd">k</span> move, <span class="kbd">a</span> approve, <span class="kbd">r</span> reject.</p>
+<form id="review" hx-target="#review-body" hx-swap="innerHTML">
+<table>
+  <caption class="sr">Plans waiting for approval</caption>
+  <thead><tr><th scope="col"><span class="sr">Select</span></th><th scope="col">Item</th><th scope="col">Before → after</th><th scope="col">Actions</th></tr></thead>
+  <tbody id="review-body">{% include "_review_rows.html" %}</tbody>
+</table>
+<div class="bar" role="group" aria-label="Bulk actions">
+  <button class="btn primary" type="button" data-verb="Approve" hx-post="/ui/review/approve">Approve selected</button>
+  <button class="btn danger" type="button" data-verb="Reject and quarantine" hx-post="/ui/review/reject">Reject selected</button>
+</div>
+</form>
+{% endblock %}

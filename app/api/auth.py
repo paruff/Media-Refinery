@@ -9,19 +9,23 @@ from app.core.config import settings
 from app.core.orchestrator import PipelineOrchestrator
 
 LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+TOKEN_COOKIE = "mr_token"  # noqa: S105 (cookie name, not a secret)
 _bearer = HTTPBearer(auto_error=False)
 
 
 def require_token(
+    request: Request,
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> None:
     if settings.API_HOST in LOOPBACK_HOSTS:
         return
     # No token configured on a non-loopback bind fails closed: nobody gets in.
+    # Browsers can't set headers on navigation, so the web UI login stores the token in a cookie.
+    supplied = creds.credentials if creds else request.cookies.get(TOKEN_COOKIE)
     if (
         not settings.API_TOKEN
-        or creds is None
-        or not hmac.compare_digest(creds.credentials, settings.API_TOKEN)
+        or supplied is None
+        or not hmac.compare_digest(supplied, settings.API_TOKEN)
     ):
         raise HTTPException(
             401,

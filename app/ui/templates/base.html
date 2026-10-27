@@ -1,0 +1,42 @@
+{% macro chip(state) -%}
+{%- set s = state.value if state.value is defined else state -%}
+<span class="chip {{ 'ok' if s in ('validated','audited') else 'bad' if s in ('error','quarantined') else 'warn' if s == 'planned' else '' }}">
+  <span aria-hidden="true">{{ '✓' if s in ('validated','audited') else '✗' if s in ('error','quarantined') else '●' }}</span>{{ s }}</span>
+{%- endmacro %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% endblock %} · Media Refinery</title>
+<link rel="stylesheet" href="/ui/static/ui.css">
+<script src="/ui/static/htmx.min.js" defer></script>
+<script src="/ui/static/ui.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+{% if nav %}
+<nav class="side" aria-label="Main">
+  <p class="brand">Media Refinery</p>
+  <ul>
+  {% for key, label in (("queue","Queue"),("review","Review"),("quarantine","Quarantine"),("summary","Summary")) %}
+    <li><a href="/ui/{{ key }}" {% if nav == key %}aria-current="page"{% endif %}>{{ label }}</a></li>
+  {% endfor %}
+  </ul>
+</nav>
+{% endif %}
+<main id="main">
+{% block body %}{% endblock %}
+</main>
+<dialog id="confirm" aria-labelledby="confirm-title">
+  <form method="dialog">
+    <h2 id="confirm-title">Please confirm</h2>
+    <p></p>
+    <div class="actions">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" value="ok" data-ok>Confirm</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>

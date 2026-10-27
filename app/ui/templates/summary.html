@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Summary{% endblock %}
+{% block body %}
+<h1>Summary</h1>
+<div class="cards">
+  <div class="card"><span class="muted">Items</span><b>{{ s.total }}</b></div>
+  <div class="card"><span class="muted">Validated</span><b>{{ "%.0f"|format(s.validated_success_rate) }}%</b></div>
+  <div class="card"><span class="muted">Storage</span><b>{{ "%.1f"|format(s.storage_bytes / 1e9) }} GB</b></div>
+</div>
+<h2>By state</h2>
+<table><caption class="sr">Items by state</caption>
+  <thead><tr><th scope="col">State</th><th scope="col">Count</th></tr></thead>
+  <tbody>{% for r in s.by_state %}<tr><td>{{ r.state }}</td><td>{{ r.count }}</td></tr>{% endfor %}</tbody></table>
+<h2>By type</h2>
+<table><caption class="sr">Items by media type</caption>
+  <thead><tr><th scope="col">Type</th><th scope="col">Count</th></tr></thead>
+  <tbody>{% for r in s.by_media_type %}<tr><td>{{ r.media_type }}</td><td>{{ r.count }}</td></tr>{% endfor %}</tbody></table>
+{% if s.error_log %}<h2>Recent errors</h2><ul>{% for e in s.error_log %}<li><code>{{ e }}</code></li>{% endfor %}</ul>{% endif %}
+{% if s.warnings %}<h2>Warnings</h2><ul>{% for w in s.warnings %}<li><code>{{ w }}</code></li>{% endfor %}</ul>{% endif %}
+{% endblock %}

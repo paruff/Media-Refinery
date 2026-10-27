@@ -20,3 +20,5 @@ uvicorn
 watchdog
 rich
 typer
+jinja2
+python-multipart

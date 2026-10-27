@@ -1,0 +1,11 @@
+{% from "base.html" import chip %}
+{% for i in items %}
+<tr>
+  <td class="edge edge-{{ i.media_type.value }}"><a href="/ui/items/{{ i.id }}"><code>{{ i.source_path }}</code></a></td>
+  <td>{{ i.media_type.value }}</td>
+  <td>{{ chip(i.state) }}</td>
+  <td class="muted">{{ i.updated_at.strftime("%Y-%m-%d %H:%M") if i.updated_at else "" }}</td>
+</tr>
+{% else %}
+<tr><td colspan="4" class="muted">Nothing in the queue.</td></tr>
+{% endfor %}

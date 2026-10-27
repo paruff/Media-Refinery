@@ -84,6 +84,8 @@ jobs:
           uv venv
           uv pip install -r requirements.txt
           uv pip install --no-deps --require-hashes -r requirements-dev.txt
+      - name: Playwright browser (web UI tests)
+        run: uv run --no-sync playwright install --with-deps chromium
       - name: Create media directories
         run: mkdir -p input staging output output/movies output/series output/music data
       - name: Unit + integration tests with coverage
