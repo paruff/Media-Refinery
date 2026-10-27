@@ -43,6 +43,7 @@ class MediaType(enum.StrEnum):
     series = "series"
     music = "music"
     audiobook = "audiobook"
+    ebook = "ebook"
     unknown = "unknown"
 
 

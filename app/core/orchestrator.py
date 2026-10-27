@@ -20,7 +20,8 @@ from app.core.scanner import ScannerService
 from app.core.throttle import AdaptiveLimiter
 from app.core.tools import probe_duration, run_tool
 from app.core.trace import Status, TraceWriter
-from app.core.verify import sha256_file, verify_output
+from app.core.verify import sha256_file, verify_ebook, verify_output
+from app.media import ebook
 from app.media.audiobook import (
     book_dir,
     concat_list,
@@ -68,6 +69,8 @@ class PipelineConfig:
     movies_root: Path
     tv_root: Path
     audiobooks_root: Path
+    ebooks_root: Path  # the Calibre library
+    ebook_fetch: bool = False
     dry_run: bool = False
     auto_approve_types: frozenset[str] = field(default_factory=frozenset)
     ffmpeg_timeout: float = 6 * 3600
@@ -87,6 +90,8 @@ class PipelineConfig:
             movies_root=Path(settings.MOVIES_ROOT),
             tv_root=Path(settings.TV_ROOT),
             audiobooks_root=Path(settings.AUDIOBOOKS_ROOT),
+            ebooks_root=Path(settings.CALIBRE_LIBRARY),
+            ebook_fetch=settings.EBOOK_FETCH_METADATA,
             trace_path=Path(settings.LOG_DIR) / "trace.jsonl",
             dry_run=settings.DRY_RUN,
             auto_approve_types=frozenset(settings.AUTO_APPROVE_TYPES),
@@ -99,6 +104,7 @@ class PipelineConfig:
             "movie": str(self.movies_root),
             "series": str(self.tv_root),
             "audiobook": str(self.audiobooks_root),
+            "ebook": str(self.ebooks_root),
         }
 
     def root_for(self, media_type) -> Path:
@@ -107,6 +113,7 @@ class PipelineConfig:
             MediaType.movie: self.movies_root,
             MediaType.series: self.tv_root,
             MediaType.audiobook: self.audiobooks_root,
+            MediaType.ebook: self.ebooks_root,
         }[MediaType(media_type)]
 
 
@@ -160,6 +167,7 @@ class PipelineOrchestrator:
         self.trace = TraceWriter(trace_path, self.run_id)
         self._scanner = ScannerService(session_factory, logger=self.logger)
         self._album_lock = asyncio.Lock()
+        self._calibre_lock = asyncio.Lock()  # one calibredb writer per library
         self._album_gain: dict[Path, tuple[str, str] | None] = {}
 
     # ---- loop -----------------------------------------------------------
@@ -308,8 +316,11 @@ class PipelineOrchestrator:
         from app.services.classification import ClassificationService
 
         async with self.session_factory() as session:
-            await ClassificationService(session).classify_file(item_id)  # type: ignore[arg-type]
             item = await session.get(MediaItem, item_id)
+            if ebook.is_ebook(str(item.source_path)):
+                await self._classify_ebook(session, item)
+                return True
+            await ClassificationService(session).classify_file(item_id)  # type: ignore[arg-type]
             await session.refresh(item)
             if (
                 item.media_type == MediaType.unknown
@@ -324,6 +335,31 @@ class PipelineOrchestrator:
             item.state = FileState.enriched
             await session.commit()
         return True
+
+    async def _classify_ebook(self, session, item) -> None:
+        """R-EBOOK-4 DRM -> quarantine/drm, never processed; R-EBOOK-2 metadata."""
+        source = Path(str(item.source_path))
+        item.media_type = MediaType.ebook
+        if drm := await asyncio.to_thread(ebook.detect_drm, source):
+            await asyncio.to_thread(
+                quarantine_file, source, self.cfg.quarantine_dir, "drm", str(item.id)
+            )
+            item.state, item.error_log = FileState.quarantined, f"drm: {drm}"
+            self._emit("quarantine", item.id, "success", "drm")
+            await session.commit()
+            return
+        meta = await ebook.read_meta(source)
+        if self.cfg.ebook_fetch:
+            fetched = await ebook.fetch_meta(meta)
+            self._emit("enrich", item.id, "success" if fetched else "skipped")
+            meta.update(fetched)
+        ext = source.suffix.lstrip(".").lower()
+        meta["title"] = meta.get("title") or source.stem
+        meta["authors"] = meta.get("authors") or ["Unknown"]
+        meta["format"], meta["convert"] = "epub" if ext != "pdf" else ext, ext != "epub"
+        item.enrichment_data = json.dumps({"ebook": meta})
+        item.state = FileState.enriched
+        await session.commit()
 
     async def _enrich(self, item) -> None:
         """TMDB (movies) / TVDB (series) identity; a miss keeps the guessit names."""
@@ -628,7 +664,7 @@ class PipelineOrchestrator:
                 f"out.tmp{ext}"
             )  # ffmpeg infers the container from the suffix
             source = Path(str(item.source_path))
-            if not is_audio_only(item):
+            if item.media_type != MediaType.ebook and not is_audio_only(item):
                 healthy, detail = await asyncio.to_thread(health_check, source)
                 self._emit(
                     "healthcheck", item_id, "passed" if healthy else "failed", detail
@@ -651,7 +687,16 @@ class PipelineOrchestrator:
                         return True
                     source = repaired
             self._emit("execute", item_id, "started")
-            if item.media_type == MediaType.audiobook:
+            if item.media_type == MediaType.ebook:
+                rc, err, tmp = await self._build_ebook(item, source, tmp)
+                if (
+                    rc == 0 and tmp.suffix == ".pdf"
+                ):  # kept as PDF: plan follows the file
+                    plan.target_path = str(
+                        Path(str(plan.target_path)).with_suffix(".pdf")
+                    )
+                    work = self._work(item_id, ".pdf")
+            elif item.media_type == MediaType.audiobook:
                 rc, err = await self._build_book(item, plan, tmp)
             elif plan.needs_transcode and self._is_video_reencode(item):
                 rc, err = await self._convert_video(item, source, tmp)  # smart bitrate
@@ -675,6 +720,24 @@ class PipelineOrchestrator:
             self._emit("execute", item_id, "success")
             self._record_execute(True)
         return True
+
+    async def _build_ebook(self, item, source: Path, out: Path):
+        """R-EBOOK-1: EPUB 3 via ebook-convert; scanned-image PDFs stay PDF and are flagged."""
+        await ebook.extract_cover(source, out.with_name("cover.jpg"))
+        rc, err = await ebook.to_epub(source, out)
+        if (
+            rc == 0
+            and source.suffix.lower() == ".pdf"
+            and (
+                await asyncio.to_thread(ebook.epub_text_length, out)
+                < ebook.MIN_PDF_TEXT
+            )
+        ):
+            self._emit("ebook.scanned_pdf", item.id, "flagged", "kept_as_pdf")
+            await asyncio.to_thread(out.unlink)
+            out = out.with_suffix(".pdf")
+            await asyncio.to_thread(shutil.copyfile, source, out)
+        return rc, err, out
 
     async def _build_book(self, item, plan, out: Path) -> tuple[int, str]:
         """R-BOOK-1/2/3/5: concat the files in order, embed chapters, AAC M4B, tags + cover."""
@@ -755,13 +818,16 @@ class PipelineOrchestrator:
                 if item.media_type == MediaType.audiobook
                 else None
             )
-            checks, digest, reason = await verify_output(
-                str(item.source_path),
-                str(work),
-                is_audio_only(item),
-                book["duration"] if book else None,
-                len(book["chapters"]) if book else None,
-            )
+            if item.media_type == MediaType.ebook:
+                checks, digest, reason = await verify_ebook(str(work))
+            else:
+                checks, digest, reason = await verify_output(
+                    str(item.source_path),
+                    str(work),
+                    is_audio_only(item),
+                    book["duration"] if book else None,
+                    len(book["chapters"]) if book else None,
+                )
             if reason is None and self._video_reencoded(item, plan):
                 reason = await self._vmaf_check(
                     str(item.source_path), str(work), checks
@@ -812,6 +878,8 @@ class PipelineOrchestrator:
             if record is None:
                 raise RuntimeError("verified item has no passing VerificationRecord")
             sha = str(record.output_sha256)
+            if item.media_type == MediaType.ebook:
+                return await self._publish_ebook(session, item, plan, work)
             if dest.exists():
                 if await asyncio.to_thread(sha256_file, str(dest)) != sha:
                     await self._quarantine(
@@ -826,6 +894,24 @@ class PipelineOrchestrator:
             item.state = FileState.published
             await session.commit()
             self._emit("publish", item_id, "success", str(dest))
+        return True
+
+    async def _publish_ebook(self, session, item, plan, work: Path) -> bool:
+        """R-EBOOK-3: calibredb add; Calibre owns the layout. A duplicate is skipped, not an error."""
+        meta = json.loads(str(item.enrichment_data))["ebook"]
+        cover = work.with_name("cover.jpg")
+        async with self._calibre_lock:
+            book_id, err = await ebook.calibredb_add(
+                self.cfg.ebooks_root, work, meta, cover if cover.exists() else None
+            )
+        if err:
+            await self._quarantine(session, item, "calibre_add_failed", err, work)
+            return True
+        detail = f"calibre id {book_id}" if book_id else "duplicate skipped by calibre"
+        plan.execution_log = f"{plan.execution_log}\n{detail}".strip()
+        item.state = FileState.published
+        await session.commit()
+        self._emit("publish", item.id, "success" if book_id else "skipped", detail)
         return True
 
     async def _archive_members(self, session, lead) -> None:

@@ -105,6 +105,7 @@ def make_config(base: Path, **overrides) -> PipelineConfig:
         movies_root=base / "lib" / "Movies",
         tv_root=base / "lib" / "TV",
         audiobooks_root=base / "lib" / "Audiobooks",
+        ebooks_root=base / "lib" / "Books",
         **overrides,
     )
     for d in (

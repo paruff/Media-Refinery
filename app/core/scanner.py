@@ -6,6 +6,7 @@ from pathlib import Path
 
 from sqlalchemy.future import select
 
+from app.media.ebook import is_ebook
 from app.models.media import FileState, MediaItem
 
 
@@ -42,6 +43,11 @@ class ScannerService:
             if not await asyncio.to_thread(os.path.exists, path):
                 item.state = FileState.error
                 item.error_log = "File not found."
+                await session.commit()
+                return
+            if is_ebook(path):  # no streams to probe; Calibre reads these (R-EBOOK-2)
+                item.container = Path(path).suffix.lstrip(".").lower()
+                item.state = FileState.scanned
                 await session.commit()
                 return
             try:
