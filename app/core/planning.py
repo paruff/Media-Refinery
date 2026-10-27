@@ -61,10 +61,10 @@ def _music(item: MediaItem, root: str) -> PlanSpec:
     )
     track = tags.get("track_number") or meta.get("track_number")
     prefix = f"{int(track):02d} - " if str(track or "").isdigit() else ""
-    if (
-        int(tags.get("disc_total") or 1) > 1
-    ):  # R-MUSIC-4: disc prefix only for multi-disc
-        prefix = f"{tags.get('disc_number') or 1}-{prefix}"
+    # R-MUSIC-4: disc prefix only for multi-disc; identified tags win, embedded tags are the fallback
+    disc_total = int(tags.get("disc_total") or meta.get("disc_total") or 1)
+    if disc_total > 1:
+        prefix = f"{tags.get('disc_number') or meta.get('disc_number') or 1}-{prefix}"
     path = confine(root, artist, album_dir, f"{prefix}{title}.{ext}")
     return PlanSpec(str(path), args, needs_transcode=args[-1] == "flac")
 
