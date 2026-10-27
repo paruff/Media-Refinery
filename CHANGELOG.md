@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1]
+- Fix: `scripts/smoke.sh` cleanup removes container-owned files as root (v0.2.0 Release run failed there; v0.2.0 was never published)
+
 ## [0.2.0]
 - Release (G12): multi-stage non-root image (ffmpeg, chromaprint, flac, Calibre CLI, epubcheck) with `/ready` healthcheck, `user: PUID:PGID` compose example for all five libraries, `scripts/smoke.sh` compose smoke test, tag-triggered GHCR publish gated on smoke + Trivy (0 critical)
 - Server handoff (G11): optional Plex / Jellyfin / Audiobookshelf / Music Assistant rescan after PUBLISH (`PLEX_URL`, `JELLYFIN_URL`, `ABS_URL`, `MUSIC_ASSISTANT_URL`, … see `.env.example`); a failing server only logs a warning
