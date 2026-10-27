@@ -15,6 +15,7 @@ REASONS = {
     "duration": "duration_mismatch",
     "flac": "flac_test_failed",
     "chapters": "chapter_count_mismatch",
+    "epubcheck": "epubcheck_failed",
 }
 
 
@@ -81,6 +82,22 @@ async def verify_output(
         checks.append(await _flac_test(output))
     if expected_chapters is not None:  # R-BOOK-2
         checks.append(await _chapter_check(output, expected_chapters))
+    digest = await asyncio.to_thread(sha256_file, output)
+    checks.append(Check("sha256", True, digest))
+    failed = next((c for c in checks if not c.passed), None)
+    return [asdict(c) for c in checks], digest, REASONS[failed.name] if failed else None
+
+
+async def verify_ebook(output: str):
+    """EPUBs must pass epubcheck (skipped, with a note, where it is not installed)."""
+    from pathlib import Path
+
+    from app.media.ebook import epubcheck
+
+    checks = []
+    if output.endswith(".epub"):
+        ok, detail = await epubcheck(Path(output))
+        checks.append(Check("epubcheck", ok is not False, detail))
     digest = await asyncio.to_thread(sha256_file, output)
     checks.append(Check("sha256", True, digest))
     failed = next((c for c in checks if not c.passed), None)

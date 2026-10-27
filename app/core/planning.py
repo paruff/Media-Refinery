@@ -79,6 +79,14 @@ def _audiobook(item: MediaItem, root: str) -> PlanSpec:
     return PlanSpec(str(confine(root, *parts)), args, needs_transcode="aac" in args)
 
 
+def _ebook(item: MediaItem, root: str) -> PlanSpec:
+    """R-EBOOK-3: Calibre owns the layout; this path is only the nominal Author/Title/Title.ext."""
+    book = _enrichment(item)["ebook"]
+    title, ext = book["title"], book["format"]
+    path = confine(root, book["authors"][0], title, f"{title}.{ext}")
+    return PlanSpec(str(path), [], needs_transcode=book["convert"])
+
+
 H264_PROFILES = {"baseline", "constrained baseline", "main", "high"}
 HEVC_PROFILES = {"main", "main 10"}
 TEXT_SUBS = {"subrip", "srt", "ass", "ssa", "mov_text", "webvtt", "text"}
@@ -207,6 +215,8 @@ def build_plan(
         return _music(item, roots["music"])
     if item.media_type == MediaType.audiobook:
         return _audiobook(item, roots["audiobook"])
+    if item.media_type == MediaType.ebook:
+        return _ebook(item, roots["ebook"])
     if item.media_type in (MediaType.movie, MediaType.series):
         return _video(item, roots, streams or [])
     raise ValueError(f"cannot plan media type {item.media_type}")

@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     MOVIES_ROOT: str = str(_ROOT / "output" / "Movies")
     TV_ROOT: str = str(_ROOT / "output" / "TV")
     AUDIOBOOKS_ROOT: str = str(_ROOT / "output" / "Audiobooks")
+    CALIBRE_LIBRARY: str = str(_ROOT / "output" / "Books")  # R-EBOOK-3
+    EBOOK_FETCH_METADATA: bool = True  # R-EBOOK-2: fetch-ebook-metadata, non-fatal
     WORK_DIR: str = str(_ROOT / "work")
     ARCHIVE_DIR: str = str(_ROOT / "archive")
     QUARANTINE_DIR: str = str(_ROOT / "quarantine")
@@ -26,7 +28,7 @@ class Settings(BaseSettings):
     TVDB_API_KEY: str = ""  # TV enrichment
     ACOUSTID_API_KEY: str = ""  # music identification; empty = embedded tags only
     ACOUSTID_MIN_SCORE: float = 0.85  # below this a music plan needs manual approval
-    # Opt-in approval rules: media types ("music", "movie", "series", "audiobook") that skip review.
+    # Opt-in approval rules: media types ("music", "movie", "series", "audiobook", "ebook") that skip review.
     AUTO_APPROVE_TYPES: list[str] = []
 
     class Config:

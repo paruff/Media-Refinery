@@ -62,6 +62,8 @@ jobs:
     env:
       DATABASE_URL: "sqlite+aiosqlite:///:memory:"
       REQUIRE_FFMPEG: "1"
+      REQUIRE_CALIBRE: "1"
+      QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,10 +74,10 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
           cache-dependency-glob: "requirements*.txt"
-      - name: System tools (ffmpeg, chromaprint, flac)
+      - name: System tools (ffmpeg, chromaprint, flac, calibre, epubcheck)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools flac
+          sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools flac calibre epubcheck
           ffmpeg -version | head -1
       - name: Install Python dependencies
         run: |
