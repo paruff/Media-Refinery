@@ -21,6 +21,14 @@ from app.core.throttle import AdaptiveLimiter
 from app.core.tools import probe_duration, run_tool
 from app.core.trace import Status, TraceWriter
 from app.core.verify import sha256_file, verify_output
+from app.media.audiobook import (
+    book_dir,
+    concat_list,
+    describe_book,
+    ffmetadata,
+    natural_key,
+    tag_m4b,
+)
 from app.media.video.convert import convert_video
 from app.media.video.health import health_check, repair_remux
 from app.models.media import (
@@ -59,6 +67,7 @@ class PipelineConfig:
     music_root: Path
     movies_root: Path
     tv_root: Path
+    audiobooks_root: Path
     dry_run: bool = False
     auto_approve_types: frozenset[str] = field(default_factory=frozenset)
     ffmpeg_timeout: float = 6 * 3600
@@ -77,6 +86,7 @@ class PipelineConfig:
             music_root=Path(settings.MUSIC_ROOT),
             movies_root=Path(settings.MOVIES_ROOT),
             tv_root=Path(settings.TV_ROOT),
+            audiobooks_root=Path(settings.AUDIOBOOKS_ROOT),
             trace_path=Path(settings.LOG_DIR) / "trace.jsonl",
             dry_run=settings.DRY_RUN,
             auto_approve_types=frozenset(settings.AUTO_APPROVE_TYPES),
@@ -88,6 +98,7 @@ class PipelineConfig:
             "music": str(self.music_root),
             "movie": str(self.movies_root),
             "series": str(self.tv_root),
+            "audiobook": str(self.audiobooks_root),
         }
 
     def root_for(self, media_type) -> Path:
@@ -95,6 +106,7 @@ class PipelineConfig:
             MediaType.music: self.music_root,
             MediaType.movie: self.movies_root,
             MediaType.series: self.tv_root,
+            MediaType.audiobook: self.audiobooks_root,
         }[MediaType(media_type)]
 
 
@@ -386,7 +398,10 @@ class PipelineOrchestrator:
 
     async def _album_pending(self, session, item) -> bool:
         """Album-as-unit: hold until every sibling in the same folder has been classified."""
-        folder = Path(str(item.source_path)).parent
+        unit = self._unit
+        if item.media_type == MediaType.audiobook:  # a book spans disc subfolders
+            unit = lambda p: book_dir(p, self.cfg.input_dir)  # noqa: E731
+        folder = unit(str(item.source_path))
         rows = await session.execute(
             select(MediaItem.source_path).where(
                 MediaItem.state.in_(
@@ -394,7 +409,44 @@ class PipelineOrchestrator:
                 )
             )
         )
-        return any(Path(p).parent == folder for (p,) in rows)
+        return any(unit(p) == folder for (p,) in rows)
+
+    @staticmethod
+    def _unit(path) -> Path:
+        return Path(str(path)).parent
+
+    async def _plan_book(self, session, item) -> bool | None:
+        """R-BOOK-5: the first file (natural order) carries the whole book; the rest follow it.
+        Returns a stage result when this item is done for now, None to plan the book."""
+        if await self._album_pending(session, item):
+            return False
+        unit = book_dir(str(item.source_path), self.cfg.input_dir)
+        rows = await session.execute(
+            select(MediaItem).where(MediaItem.media_type == MediaType.audiobook)
+        )
+        members = sorted(
+            (
+                m
+                for m in rows.scalars()
+                if book_dir(str(m.source_path), self.cfg.input_dir) == unit
+            ),
+            key=lambda m: natural_key(str(m.source_path)),
+        )
+        lead = members[0]
+        if lead.id != item.id:
+            if lead.state in (FileState.error, FileState.quarantined):
+                item.state = FileState.quarantined
+                item.error_log = f"book_failed: {lead.id}"
+                await session.commit()
+                return True
+            return False
+        meta = json.loads(str(item.enrichment_data or "{}"))
+        meta["book"] = await describe_book(
+            [Path(str(m.source_path)) for m in members], unit.name
+        )
+        meta["book"]["members"] = [m.id for m in members[1:]]
+        item.enrichment_data = json.dumps(meta)
+        return None
 
     async def _replaygain(self, session, item, meta) -> None:
         """R-MUSIC-2: track gain from the item, album gain from the folder played as one."""
@@ -436,6 +488,10 @@ class PipelineOrchestrator:
         async with self.session_factory() as session:
             item = await session.get(MediaItem, item_id)
             review = ""
+            if item.media_type == MediaType.audiobook:
+                done = await self._plan_book(session, item)
+                if done is not None:
+                    return done
             if item.media_type == MediaType.music:
                 if await self._album_pending(session, item):
                     return False
@@ -595,7 +651,9 @@ class PipelineOrchestrator:
                         return True
                     source = repaired
             self._emit("execute", item_id, "started")
-            if plan.needs_transcode and self._is_video_reencode(item):
+            if item.media_type == MediaType.audiobook:
+                rc, err = await self._build_book(item, plan, tmp)
+            elif plan.needs_transcode and self._is_video_reencode(item):
                 rc, err = await self._convert_video(item, source, tmp)  # smart bitrate
             else:
                 rc, _, err = await self._run_ffmpeg(
@@ -617,6 +675,35 @@ class PipelineOrchestrator:
             self._emit("execute", item_id, "success")
             self._record_execute(True)
         return True
+
+    async def _build_book(self, item, plan, out: Path) -> tuple[int, str]:
+        """R-BOOK-1/2/3/5: concat the files in order, embed chapters, AAC M4B, tags + cover."""
+        book = json.loads(str(item.enrichment_data))["book"]
+        listing, chapters = out.with_name("files.txt"), out.with_name("chapters.ffmeta")
+        listing.write_text(concat_list(book["files"]))
+        chapters.write_text(ffmetadata(book["chapters"]))
+        rc, _, err = await run_tool(
+            [
+                *("ffmpeg", "-nostdin", "-y", "-v", "error"),
+                *("-f", "concat", "-safe", "0", "-i", str(listing)),
+                *("-i", str(chapters), "-map", "0:a", "-map_metadata", "1"),
+                *("-map_chapters", "1", *(plan.ffmpeg_args or [])),
+                *("-f", "ipod", str(out)),
+            ],
+            self.cfg.ffmpeg_timeout,
+        )
+        if rc != 0:
+            return rc, err
+        cover = next(
+            filter(
+                None, [await asyncio.to_thread(local_cover, f) for f in book["files"]]
+            ),
+            None,
+        )
+        if cover is None:
+            self._emit("cover", item.id, "skipped", "no usable cover (>=500px)")
+        await asyncio.to_thread(tag_m4b, out, book, cover)
+        return 0, ""
 
     async def _tag_music(self, item, source: Path, out: Path) -> tuple[int, str]:
         """R-MUSIC-2/3: write the tag map and the embedded front cover into the output."""
@@ -663,8 +750,17 @@ class PipelineOrchestrator:
                 item.state, plan.plan_status = FileState.approved, PlanStatus.approved
                 await session.commit()
                 return True
+            book = (
+                json.loads(str(item.enrichment_data))["book"]
+                if item.media_type == MediaType.audiobook
+                else None
+            )
             checks, digest, reason = await verify_output(
-                str(item.source_path), str(work), is_audio_only(item)
+                str(item.source_path),
+                str(work),
+                is_audio_only(item),
+                book["duration"] if book else None,
+                len(book["chapters"]) if book else None,
             )
             if reason is None and self._video_reencoded(item, plan):
                 reason = await self._vmaf_check(
@@ -732,6 +828,22 @@ class PipelineOrchestrator:
             self._emit("publish", item_id, "success", str(dest))
         return True
 
+    async def _archive_members(self, session, lead) -> None:
+        """The other files of a merged book are archived with the lead, never deleted."""
+        book = json.loads(str(lead.enrichment_data))["book"]
+        for member_id in book["members"]:
+            member = await session.get(MediaItem, member_id)
+            await asyncio.to_thread(
+                archive_original,
+                Path(str(member.source_path)),
+                self.cfg.input_dir,
+                self.cfg.archive_dir,
+                self.run_id,
+            )
+            member.state = FileState.validated
+            member.error_log = f"merged into {lead.id}"
+            member.updated_at = _now()
+
     async def _archive(self, item_id) -> bool:
         """After VERIFY passed and the file is published, move (never delete) the original."""
         async with self.session_factory() as session:
@@ -749,6 +861,8 @@ class PipelineOrchestrator:
                 plan.execution_log = (
                     f"{plan.execution_log}\narchived: {archived}".strip()
                 )
+            if item.media_type == MediaType.audiobook:
+                await self._archive_members(session, item)
             shutil.rmtree(self.cfg.work_dir / item_id, ignore_errors=True)
             plan.plan_status = PlanStatus.completed
             item.state = FileState.validated

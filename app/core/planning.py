@@ -1,4 +1,4 @@
-"""PLAN stage: target path (R-MUSIC-4, R-VIDEO-4/5) and codec args per item."""
+"""PLAN stage: target path (R-MUSIC-4, R-BOOK-4, R-VIDEO-4/5) and codec args per item."""
 
 import json
 import re
@@ -67,6 +67,16 @@ def _music(item: MediaItem, root: str) -> PlanSpec:
         prefix = f"{tags.get('disc_number') or 1}-{prefix}"
     path = confine(root, artist, album_dir, f"{prefix}{title}.{ext}")
     return PlanSpec(str(path), args, needs_transcode=args[-1] == "flac")
+
+
+def _audiobook(item: MediaItem, root: str) -> PlanSpec:
+    """R-BOOK-4: {Author}/{Series}/{Sequence} - {Title}/{Title}.m4b, series omitted when none."""
+    book = _enrichment(item)["book"]
+    title, series, sequence = book["title"], book.get("series"), book.get("sequence")
+    folder = f"{sequence} - {title}" if series and sequence else title
+    parts = [book["author"], *([series] if series else []), folder, f"{title}.m4b"]
+    args = book["ffmpeg_args"]
+    return PlanSpec(str(confine(root, *parts)), args, needs_transcode="aac" in args)
 
 
 H264_PROFILES = {"baseline", "constrained baseline", "main", "high"}
@@ -195,6 +205,8 @@ def build_plan(
     """roots: {"music", "movie", "series"} -> library root. Raises on unsupported types."""
     if item.media_type == MediaType.music:
         return _music(item, roots["music"])
+    if item.media_type == MediaType.audiobook:
+        return _audiobook(item, roots["audiobook"])
     if item.media_type in (MediaType.movie, MediaType.series):
         return _video(item, roots, streams or [])
     raise ValueError(f"cannot plan media type {item.media_type}")

@@ -104,9 +104,16 @@ def make_config(base: Path, **overrides) -> PipelineConfig:
         music_root=base / "lib" / "Music",
         movies_root=base / "lib" / "Movies",
         tv_root=base / "lib" / "TV",
+        audiobooks_root=base / "lib" / "Audiobooks",
         **overrides,
     )
-    for d in (cfg.input_dir, cfg.music_root, cfg.movies_root, cfg.tv_root):
+    for d in (
+        cfg.input_dir,
+        cfg.music_root,
+        cfg.movies_root,
+        cfg.tv_root,
+        cfg.audiobooks_root,
+    ):
         d.mkdir(parents=True, exist_ok=True)
     return cfg
 

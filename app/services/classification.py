@@ -38,7 +38,8 @@ SCENE_TAGS = [
 ]
 SCENE_TAGS_RE = re.compile(r"\\b(?:" + "|".join(SCENE_TAGS) + r")\\b", re.IGNORECASE)
 YEAR_RE = re.compile(r"(19|20)\\d{2}")
-AUDIO_EXTS = {"flac", "mp3", "wav", "m4a"}
+AUDIO_EXTS = {"flac", "mp3", "wav", "m4a", "m4b"}
+AUDIOBOOK_GENRES = {"audiobook", "audiobooks", "audio book", "spoken word", "speech"}
 
 logger = logging.getLogger("media_refinery.classification")
 
@@ -97,10 +98,12 @@ class ClassificationService:
                 media_type = "unknown"
         # Audio classification
         if ext in AUDIO_EXTS:
-            media_type = "music"
+            media_type = "audiobook" if ext == "m4b" else "music"
             try:
                 audio = MutagenFile(item.source_path, easy=True)
                 tags = audio.tags or {}
+                if str(tags.get("genre", [""])[0]).lower() in AUDIOBOOK_GENRES:
+                    media_type = "audiobook"  # R-BOOK-1: classify by genre or .m4b
                 enrichment_data = {
                     "artist": tags.get("artist", [None])[0],
                     "album": tags.get("album", [None])[0],
