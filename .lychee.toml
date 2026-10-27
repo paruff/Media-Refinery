@@ -1,0 +1,2 @@
+# Private: needs a GitHub login, 404s anonymously (verified with gh project view).
+exclude = ["^https://github.com/users/paruff/projects/10$"]
