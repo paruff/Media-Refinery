@@ -59,6 +59,15 @@ STAGE_ORDER = (
     FileState.verified,
     FileState.published,
 )
+# music items whose source file / album state still matter to their siblings
+MUSIC_IN_FLIGHT = (
+    FileState.enriched,
+    FileState.planned,
+    FileState.approved,
+    FileState.executing,
+    FileState.executed,
+    FileState.verified,
+)
 ACTIONABLE = (
     FileState.pending,
     FileState.scanned,
@@ -572,15 +581,7 @@ class PipelineOrchestrator:
         folder = Path(str(item.source_path)).parent
         async with self._album_lock:
             if folder not in self._album_gain:
-                rows = await session.execute(
-                    select(MediaItem.source_path).where(
-                        MediaItem.media_type == MediaType.music,
-                        MediaItem.state == FileState.enriched,
-                    )
-                )
-                # ponytail: folder = album; a late arrival reuses the first measurement
-                siblings = sorted(Path(p) for (p,) in rows if Path(p).parent == folder)
-                self._album_gain[folder] = await measure(siblings)
+                self._album_gain[folder] = await self._album_replaygain(session, folder)
         album = self._album_gain[folder]
         if track and album:
             tags.update(
@@ -591,6 +592,46 @@ class PipelineOrchestrator:
             )
         else:
             self._emit("replaygain", item.id, "skipped", "ffmpeg could not measure")
+
+    async def _album_replaygain(self, session, folder: Path) -> tuple[str, str] | None:
+        """Album gain for a folder, stable across restarts: reuse what an in-flight sibling
+        already carries, else measure every in-flight sibling whose file is still there."""
+        rows = await session.execute(
+            select(MediaItem.source_path, MediaItem.enrichment_data).where(
+                MediaItem.media_type == MediaType.music,
+                MediaItem.state.in_(MUSIC_IN_FLIGHT),
+            )
+        )
+        siblings = [(Path(p), d) for p, d in rows if Path(p).parent == folder]
+        for _, data in siblings:
+            tags = json.loads(str(data or "{}")).get("music", {}).get("tags", {})
+            if tags.get("replaygain_album_gain"):
+                return tags["replaygain_album_gain"], tags["replaygain_album_peak"]
+        files = sorted(p for p, _ in siblings if p.exists())
+        return await measure(files)
+
+    async def _check_album_consistency(self, session, item) -> None:
+        """Tracks of one folder matched to different MusicBrainz releases would publish into
+        split album folders: send the whole folder to review."""
+        folder = Path(str(item.source_path)).parent
+        rows = await session.execute(
+            select(MediaItem).where(
+                MediaItem.media_type == MediaType.music,
+                MediaItem.state.in_((FileState.enriched, FileState.planned)),
+            )
+        )
+        album = [m for m in rows.scalars() if Path(str(m.source_path)).parent == folder]
+        releases = {
+            json.loads(str(m.enrichment_data or "{}"))
+            .get("music", {})
+            .get("tags", {})
+            .get("musicbrainz_albumid")
+            for m in album
+        } - {None}
+        if len(releases) > 1:
+            for m in album:
+                self._flag_review(m, "split_release")
+            self._emit("review", item.id, "degraded", "split_release")
 
     async def _probe_streams(self, source: str) -> list[dict]:
         rc, out, _ = await run_tool(
@@ -612,6 +653,7 @@ class PipelineOrchestrator:
             if item.media_type == MediaType.music:
                 if await self._album_pending(session, item):
                     return False
+                await self._check_album_consistency(session, item)
                 meta = json.loads(str(item.enrichment_data or "{}"))
                 await self._replaygain(session, item, meta)
                 item.enrichment_data = json.dumps(meta)

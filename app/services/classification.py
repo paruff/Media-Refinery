@@ -44,6 +44,16 @@ AUDIOBOOK_GENRES = {"audiobook", "audiobooks", "audio book", "spoken word", "spe
 logger = logging.getLogger("media_refinery.classification")
 
 
+def parse_disc(disc, total=None) -> tuple[int | None, int | None]:
+    """(disc number, disc total) from embedded tags like "2/3", or "2" + a DISCTOTAL tag."""
+    number, _, of = str(disc or "").partition("/")
+    number, of = number.strip(), (of or str(total or "")).strip()
+    return (
+        int(number) if number.isdigit() else None,
+        int(of) if of.isdigit() else None,
+    )
+
+
 class ClassificationService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -114,6 +124,12 @@ class ClassificationService:
                     "track_title": tags.get("title", [None])[0],
                     "track_number": None,
                 }
+                disc, disc_total = parse_disc(
+                    (tags.get("discnumber") or [None])[0],
+                    (tags.get("disctotal") or tags.get("totaldiscs") or [None])[0],
+                )
+                if disc:
+                    enrichment_data.update(disc_number=disc, disc_total=disc_total)
                 # Track number
                 track_num = tags.get("tracknumber", [None])[0]
                 if track_num:
