@@ -400,6 +400,10 @@ class PipelineOrchestrator:
                 item.media_type = (
                     MediaType.music if is_audio_only(item) else MediaType.movie
                 )
+            if item.media_type == MediaType.series:
+                data = json.loads(str(item.enrichment_data or "{}"))
+                if data.get("season_number") is None or not data.get("episode_number"):
+                    self._flag_review(item, "season_or_episode_unknown")
             if self.enricher and item.media_type in (MediaType.movie, MediaType.series):
                 await self._enrich(item)
             if item.media_type == MediaType.music:
@@ -442,6 +446,8 @@ class PipelineOrchestrator:
             if match:
                 item.tmdb_id, item.canonical_title = match.tmdb_id, match.title
                 item.release_year = match.year or year
+                if not match.confident:
+                    self._flag_review(item, "ambiguous_match")
         else:
             match = await self.enricher.episode(
                 meta.get("series_title", ""),
@@ -454,6 +460,8 @@ class PipelineOrchestrator:
                 item.episode_title = match.episode_title
                 meta["tvdb_id"] = match.tvdb_id
                 item.enrichment_data = json.dumps(meta)
+                if not match.confident:
+                    self._flag_review(item, "ambiguous_match")
         self._emit(
             "enrich",
             item.id,
@@ -610,6 +618,9 @@ class PipelineOrchestrator:
                     score = meta["music"]["score"]
                     review = f"review_required: match score {score}"
                     self._emit("review", item_id, "degraded", review)
+            if flags := json.loads(str(item.enrichment_data or "{}")).get("review"):
+                review = f"review_required: {', '.join(flags)}"
+                self._emit("review", item_id, "degraded", review)
             streams = (
                 []
                 if is_audio_only(item)
@@ -664,7 +675,14 @@ class PipelineOrchestrator:
     @staticmethod
     def _needs_review(item) -> bool:
         meta = json.loads(str(item.enrichment_data or "{}"))
-        return bool(meta.get("music", {}).get("needs_review"))
+        return bool(meta.get("music", {}).get("needs_review") or meta.get("review"))
+
+    @staticmethod
+    def _flag_review(item, reason: str) -> None:
+        """Record why a human must look at this plan; blocks AUTO_APPROVE_TYPES."""
+        meta = json.loads(str(item.enrichment_data or "{}"))
+        meta["review"] = sorted({*meta.get("review", []), reason})
+        item.enrichment_data = json.dumps(meta)
 
     async def _dry_run_report(self, item_id) -> bool:
         """Plan + verify-preflight; the only writes are under work/dry-run/ (R-SAFE-4)."""
