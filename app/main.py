@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.api.auth import require_token
+from app.api.auth import check_bind_security, require_token
 from app.api.v1.items import router as items_router
 from app.api.v1.ops import router as ops_router
 from app.api.v1.ops import secured as ops_secured_router
@@ -45,6 +45,7 @@ def configure_logging() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
+    check_bind_security(settings.API_HOST, settings.API_TOKEN)
     await init_db()
     orchestrator = build_orchestrator(
         AsyncSessionLocal, PipelineConfig.from_settings(), logger=logger

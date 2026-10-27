@@ -1,6 +1,5 @@
 """G10 web UI: server-rendered Jinja2 views with htmx actions over the shared services."""
 
-import hmac
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
@@ -11,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import TOKEN_COOKIE, get_orchestrator, require_token
+from app.api.auth import TOKEN_COOKIE, get_orchestrator, require_token, token_matches
 from app.api.v1.items import get_item
 from app.core.config import settings
 from app.core.database import get_async_session
@@ -52,7 +51,7 @@ async def login_form(request: Request):
 
 @router.post("/login")
 async def login(request: Request, token: Annotated[str, Form()]):
-    if not settings.API_TOKEN or not hmac.compare_digest(token, settings.API_TOKEN):
+    if not token_matches(token, settings.API_TOKEN):
         return templates.TemplateResponse(
             request, "login.html", {"nav": None, "bad": True}, status_code=401
         )

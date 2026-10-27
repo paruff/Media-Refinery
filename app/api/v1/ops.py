@@ -1,6 +1,7 @@
 """Liveness/readiness, rescan, summary and Prometheus metrics."""
 
 import asyncio
+import logging
 import os
 import shutil
 from collections.abc import Sequence
@@ -18,6 +19,8 @@ from app.models.media import MediaItem
 from app.services.refinery import Refinery
 from app.services.reporting_service import ReportingService, SystemSummary
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()  # open: liveness/readiness probes
 secured = APIRouter()  # mounted behind the bearer-token dependency
 
@@ -31,12 +34,17 @@ def _writable(path: Path) -> bool:
 
 
 @router.get("/health", tags=["health"])
-async def health(session: Annotated[AsyncSession, Depends(get_async_session)]):
+async def health(
+    response: Response,
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+):
     try:
         await session.execute(text("SELECT 1"))
         return {"status": "ok", "database": "connected"}
-    except Exception as e:
-        return {"status": "error", "database": str(e)}
+    except Exception:
+        logger.exception("health check: database unavailable")
+        response.status_code = 503
+        return {"status": "error", "database": "unavailable"}
 
 
 @router.get("/ready", tags=["health"])
