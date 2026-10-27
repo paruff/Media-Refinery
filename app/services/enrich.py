@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.core.redact import http_error_summary
+
 logger = logging.getLogger("enrich")
 
 TMDB_URL = "https://api.themoviedb.org/3"
@@ -56,7 +58,9 @@ class VideoEnricher:
             resp.raise_for_status()
             best = next(iter(resp.json().get("results") or []), None)
         except (httpx.HTTPError, ValueError) as e:
-            logger.warning("TMDB lookup failed for %r: %s", title, e)
+            logger.warning(
+                "TMDB lookup failed for %r: %s", title, http_error_summary(e)
+            )
             return None
         if not best:
             return None
@@ -95,7 +99,7 @@ class VideoEnricher:
             )
             first = next(iter((data or {}).get("episodes") or []), None)
         except (httpx.HTTPError, ValueError, KeyError) as e:
-            logger.warning("TVDB lookup failed for %r: %s", show, e)
+            logger.warning("TVDB lookup failed for %r: %s", show, http_error_summary(e))
             return None
         return EpisodeMatch(
             series_id,

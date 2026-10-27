@@ -28,6 +28,9 @@ LOG_FILE_NAME = "rotation.log"
 
 def configure_logging() -> None:
     """Structured logging to stdout and a rotating file under settings.LOG_DIR."""
+    # httpx logs every request URL at INFO, and provider URLs carry API keys (R-SAFE-6)
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     log_dir = Path(settings.LOG_DIR)
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = str((log_dir / LOG_FILE_NAME).resolve())
