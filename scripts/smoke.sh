@@ -41,7 +41,6 @@ services:
       TVDB_API_KEY: ''
       ACOUSTID_API_KEY: ''
       ENABLED_TYPES: '["movie","series","music","audiobook","ebook"]'
-      AUTO_APPROVE_TYPES: '["movie","series","music","audiobook","ebook"]'
     ports: !override ["18000:8000"]
     volumes: !override
       - $ROOT/input:/input
@@ -57,6 +56,7 @@ docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" up -d --no-bu
 
 fail() { # label: show item states and recent logs, then exit
   curl -s -H "Authorization: Bearer $MR_API_TOKEN" http://localhost:18000/api/v1/items || true
+  docker compose -p $P exec -T media-refinery python -c "import sqlite3;print(sqlite3.connect('/data/media_refinery.sqlite').execute('select source_path,state,error_log from media_items where state not in (\"validated\",\"published\")').fetchall())" || true
   docker compose -p $P logs --tail 80
   echo "FAIL: $1"
   exit 1
@@ -71,12 +71,26 @@ wait_for() { # label, command that succeeds when done
   echo "ok: $1"
 }
 wait_for ready "curl -fs http://localhost:18000/ready"
-# README quickstart: doctor, then plan (writes nothing), then approve (AUTO_APPROVE_TYPES above)
+# README quickstart: doctor, then plan (writes nothing), then approve, exactly as in the README
 dc() { docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" exec -T media-refinery "$@"; }
 [ "$(dc printenv ABS_TOKEN)" = smoke-abs ] || fail "env passthrough"
 dc refinery doctor || fail "refinery doctor"
 dc refinery plan /input || fail "refinery plan"
-echo "ok: doctor, plan"
+# (6 items: the two audiobook chapters merge into one plan, leaving 5 to approve)
+# approve through the running server (the UI's Approve button); a second process writing the same
+# database races the pipeline (plan_conflict), so the CLI approve is for a stopped server only
+api() { curl -fs -H "Authorization: Bearer $MR_API_TOKEN" -H "Content-Type: application/json" "$@"; }
+planned() { api "http://localhost:18000/api/v1/items?state=planned" | grep -o '"id":"[^"]*"' | cut -d'"' -f4; }
+i=0
+until [ "$(planned | wc -l)" -ge 5 ]; do
+  i=$((i + 1))
+  if [ "$i" -gt 90 ]; then fail "5 items planned"; fi
+  sleep 2
+done
+for id in $(planned); do
+  api -X POST "http://localhost:18000/api/v1/items/$id/approve" >/dev/null || fail "approve $id"
+done
+echo "ok: doctor, plan, approve"
 published() { # library dir, then one or more extensions
   d=$1; shift
   for ext in "$@"; do find "$ROOT/output/$d" -type f -name "*.$ext" 2>/dev/null; done | grep -q .
