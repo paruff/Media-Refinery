@@ -23,6 +23,9 @@ def fixtures(tmp_path, monkeypatch):
     ):
         monkeypatch.setattr(settings, name, str(tmp_path / "lib" / name.lower()))
     monkeypatch.setattr(settings, "LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setattr(  # these tests plan a movie too; music-only is the shipped default
+        settings, "ENABLED_TYPES", ["music", "movie", "series", "audiobook", "ebook"]
+    )
     src = tmp_path / "fixtures"
     src.mkdir()
     make_mp3(src / "song.mp3", artist="A", album="B", title="C", date="2020", track="1")
