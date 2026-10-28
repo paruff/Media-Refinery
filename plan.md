@@ -169,6 +169,103 @@ G3/G4 can run in parallel; G6/G7/G8 can run in parallel once G2 lands.
 
 ---
 
+## Phase 2 — Make it trustworthy
+
+G0–G13 built the breadth (five media types, API, UI, release). The review of those goals
+([review-finding issues](https://github.com/paruff/Media-Refinery/issues?q=label%3Areview-finding))
+showed the product is wide but shallow, and that it has never met a realistic library.
+Phase 2 trades breadth for trust: prove one pipeline on messy data, then repeat the pattern.
+
+```text
+G14 review gate ─▶ G15 corpus + invariants ─▶ G16 lead pipeline (music) ─▶ G18 decompose orchestrator
+                                         └──▶ G17 provider contracts ──┘            │
+G19 positioning + onboarding (after G15/G16) ──────────────────────────────────────┴▶ G20 backlog + promotion
+```
+
+Same rules as above, plus: **one PR per goal, always based on `main`** (a stacked PR merged into
+its base branch never reaches `main`; this happened to #116).
+
+## G14 — Review gate for risky code
+
+**Why:** The G0-G13 review found bugs after merge (key leaks, a book-merging data bug, a dry-run hole). Safety-critical paths need a human before merge, not after.
+**Depends on:** nothing. Do this first; it is cheap.
+**Scope:** `CODEOWNERS` for `app/core/{publish,orchestrator,verify,paths}.py`, `app/api/auth.py`, `scripts/release_guard.sh`, `.github/workflows/`. Branch protection on `main`: PR required, CI checks required, code-owner review required on those paths. PR template asks "which `R-SAFE-*` does this touch?". CONTRIBUTING: one PR per goal, always based on `main` (no stacked PRs; #116 never reached `main`).
+**Done when:** `gh api repos/paruff/Media-Refinery/branches/main/protection` shows the required checks and code-owner review; a test PR touching `publish.py` requests the owner automatically; CONTRIBUTING states the no-stack rule.
+**Note:** branch protection is a repository setting, so a human applies it (the goal prepares the exact `gh api` call).
+
+```text
+/goal G14 from plan.md: add CODEOWNERS, a safety-invariant PR checklist and the no-stacked-PR rule, and prepare the branch-protection call — done when CODEOWNERS validates and the protection settings are applied and verifiable via gh api.
+```
+
+## G15 — Messy-library corpus, crash invariants, library dry-run report
+
+**Why:** Nothing has run against a realistic, messy library; NF-6 throughput is unmeasured; the zero-loss promise is argued, not proven.
+**Depends on:** G14 (review gate), but can start in parallel.
+**Scope:** (1) A generated "messy library" corpus (`tests/corpus/`, no real media in git): missing/contradictory tags, multi-disc, duplicate albums, odd filenames and unicode, mixed sample rates and VBR, truncated and zero-byte files, lossy next to lossless. (2) Crash-injection tests: kill the daemon at every saga/state step and assert the invariants: source never modified, no partial file in a library, a rerun converges to the same result, nothing duplicated. (3) `refinery plan <dir>` prints a library-level report (counts by outcome, items needing review, estimated disk and time) with zero writes. (4) Nightly job measures throughput (NF-6) on a 1k-file corpus.
+**Done when:** `make corpus-test` passes in the CI image; the crash-injection suite enumerates every step in `STAGE_ORDER` plus the publish saga and asserts all four invariants; a dry-run report on the 1k-file corpus completes in the time stated in the PR and is attached to the issue; throughput numbers are recorded in `docs/DEVELOPMENT.md`.
+
+```text
+/goal G15 from plan.md: build the generated messy-library corpus, crash-injection invariants and library-level dry-run report — done when make corpus-test passes in the CI image and measured throughput is recorded.
+```
+
+## G16 — Lead pipeline (music) boringly reliable
+
+**Why:** Five media types at "first cut" is breadth over depth. The product is trust: one lost or mangled file costs more than ten missing features. Make ONE pipeline boringly reliable, then repeat the pattern.
+**Depends on:** G15 (corpus + invariants).
+**Lead pipeline:** music (the best-specified contract, highest file volume). Change this line if you prefer movies; the goal is otherwise identical.
+**Scope:** Per-type enable flags (spec §8) with only the lead type on by default; other types documented as experimental and off. Close every open item for the lead type in #99, #95, #107, #108 or defer it in writing. Idempotent re-ingest (same file twice is a no-op; a moved file is not a new item). Verify lossy sources are never transcoded and tags/cover/ReplayGain survive, on the corpus.
+**Done when:** the music corpus suite is green with no unexpected quarantines; running the pipeline over its own output tree is a no-op (idempotence test); `ENABLED_TYPES` defaults to music and is documented; the music-related checklists in #99/#95/#107/#108 are fully ticked or have a written deferral.
+
+```text
+/goal G16 from plan.md: make the music pipeline reliable on the corpus with per-type enable flags — done when the music corpus suite is green, re-running over the output tree is a no-op, and the lead-type review checklists are closed or deferred in writing.
+```
+
+## G17 — External-service contract tests
+
+**Why:** TMDB, TVDB, MusicBrainz, AcoustID, Plex, Jellyfin, Audiobookshelf and Music Assistant are only mocked. Mocks encode our assumptions, not the providers' behaviour. Music Assistant's call was never verified.
+**Depends on:** none (feeds G16).
+**Scope:** Small recorded real responses per provider (kept under `tests/contracts/`, with a script to refresh them) parsed by the real code. A nightly workflow with a docker compose profile starting Jellyfin and Audiobookshelf (and Plex only if feasible) to prove the notify endpoints. Mark Music Assistant experimental until verified against a real instance.
+**Done when:** each provider has a recorded fixture and a test that parses it; the nightly contract workflow exists and is green or documents the skipped servers; the Music Assistant call is either verified or flagged experimental in docs.
+
+```text
+/goal G17 from plan.md: add recorded provider fixtures with parse tests and a nightly server-contract workflow — done when every provider has a fixture test and the nightly workflow is green or its skips are documented.
+```
+
+## G18 — Decompose the orchestrator
+
+**Why:** `app/core/orchestrator.py` is a god class (over 1,100 lines, per-media-type `if` ladders), breaking the repo's own 800-line rule and making every type hard to test alone.
+**Depends on:** G15/G16 (characterization tests must exist first; this refactor must change no behaviour).
+**Scope:** Extract per-media-type strategies (classify, enrich, plan, execute, verify, publish hooks) into `app/pipeline/types/{music,video,audiobook,ebook}.py`. The orchestrator becomes the stage driver only.
+**Done when:** `wc -l app/core/orchestrator.py` < 400; no `MediaType.` branching ladders remain in it (`grep -c "MediaType\." app/core/orchestrator.py` <= 5); the full suite, corpus and behave features are unchanged and green; ruff complexity limits (C901, PLR0915) are enabled and pass.
+
+```text
+/goal G18 from plan.md: split the orchestrator into a stage driver plus per-media-type strategies with no behaviour change — done when orchestrator.py is under 400 lines, complexity lint is on, and all tests and the corpus are unchanged.
+```
+
+## G19 — Positioning, onboarding, operability
+
+**Why:** "Who is this for and why not Tdarr/beets/Picard/Calibre?" is unanswered, and a new user has no safe first run.
+**Depends on:** G16 (what is supported), G15 (`refinery plan` report).
+**Scope:** README: who it is for, what it is not, how it differs from Tdarr, the *arr apps, beets, Picard and Calibre. First-run flow: `refinery doctor` (tools present, paths writable, keys set, servers reachable) then `refinery plan <library>` (no writes) then approve. Fix compose env passthrough so `.env` reaches the container (#106). Metrics: items by state/type, failures by quarantine reason, stage durations. UI summary shows quarantine reasons with a suggested action.
+**Done when:** a fresh clone reaches "published" via doctor, plan, approve in the README quickstart, proven by the compose smoke test; `/api/v1/metrics` exposes the three new series; #106 is closed.
+
+```text
+/goal G19 from plan.md: add positioning docs, refinery doctor, env passthrough and richer metrics — done when the README quickstart is proven by the smoke test and #106 is closed.
+```
+
+## G20 — Review backlog burn-down and promotion checklist
+
+**Why:** The G0-G13 reviews left ~70 unchecked minor/Important items, and four media types are parked. Decide deliberately instead of drifting.
+**Depends on:** G16 (the bar), G17.
+**Scope:** Burn down remaining review items in priority order: security first (#103 cookie flags/Host allow-list/login throttle, #102, #105), then correctness. Promotion checklist in `docs/`: a parked type (video, TV, audiobooks, ebooks) is switched on only when it meets the lead-type bar (corpus suite, idempotence, provider contracts, crash invariants). Promote one type at a time.
+**Done when:** every `review-finding` issue is closed or carries a written deferral; `docs/PROMOTION.md` exists; at least the second type has either been promoted by checklist or has an explicit "stays experimental because..." note.
+
+```text
+/goal G20 from plan.md: burn down the review-finding backlog and define the promotion checklist for parked media types — done when every review-finding issue is closed or deferred in writing and docs/PROMOTION.md exists.
+```
+
+---
+
 ## Tracking
 
 - Project: [Media Refinery](https://github.com/users/paruff/projects/10) (owner `paruff`) — Status: Backlog / Ready / In Progress / Human Review / Done.
@@ -184,3 +281,15 @@ G3/G4 can run in parallel; G6/G7/G8 can run in parallel once G2 lands.
 | G4 Absorb movies2vlib | #50 | G11 Server handoff | #57 |
 | G5 Movies & TV | #51 | G12 Release | #58 |
 | G6 Music | #52 | G13 Docs & archive | #59 |
+
+### Phase 2
+
+| Goal | Issue |
+|---|---|
+| G14 Review gate for risky code | #122 |
+| G15 Messy-library corpus, crash invariants, library dry-run report | #123 |
+| G16 Lead pipeline (music) boringly reliable | #124 |
+| G17 External-service contract tests | #125 |
+| G18 Decompose the orchestrator | #126 |
+| G19 Positioning, onboarding, operability | #127 |
+| G20 Review backlog burn-down and promotion checklist | #128 |
