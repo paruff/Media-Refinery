@@ -33,11 +33,15 @@ def main() -> None:
             ),
         )
         if key := os.environ.get("TMDB_API_KEY"):
+            # a v4 read-access token (JWT) is a bearer token; a v3 key is a query param
+            v4 = key.startswith("eyJ")
             save(
                 "tmdb_search_movie.json",
                 c.get(
                     "https://api.themoviedb.org/3/search/movie",
-                    params={"api_key": key, "query": "Dune", "year": 2021},
+                    params={"query": "Dune", "year": 2021}
+                    | ({} if v4 else {"api_key": key}),
+                    headers={"Authorization": f"Bearer {key}"} if v4 else {},
                 ),
             )
         if key := os.environ.get("TVDB_API_KEY"):
