@@ -1,0 +1,8 @@
+# Safety-critical paths: a code owner must approve before merge (see R-SAFE-* in spec.md).
+/app/core/publish.py       @paruff
+/app/core/orchestrator.py  @paruff
+/app/core/verify.py        @paruff
+/app/core/paths.py         @paruff
+/app/api/auth.py           @paruff
+/scripts/release_guard.sh  @paruff
+/.github/                  @paruff
