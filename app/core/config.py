@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     ABS_LIBRARY_ID: str = ""
     MUSIC_ASSISTANT_URL: str = ""
     MUSIC_ASSISTANT_TOKEN: str = ""
+    # container path prefix -> the path the media server sees, e.g. {"/output/Music": "/data/music"}
+    NOTIFY_PATH_MAP: dict[str, str] = {}
 
     class Config:
         env_file = ".env"

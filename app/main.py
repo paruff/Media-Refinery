@@ -63,6 +63,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         watcher.stop()
         orchestrator.running = False
+        await orchestrator.notifier.flush()
         worker.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await worker
