@@ -19,6 +19,7 @@ Status = Literal[
     "degraded",
     "dry_run",
     "inconclusive",
+    "flagged",
 ]
 
 

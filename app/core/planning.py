@@ -60,12 +60,12 @@ def _music(item: MediaItem, root: str) -> PlanSpec:
         or Path(str(item.source_path)).stem
     )
     track = tags.get("track_number") or meta.get("track_number")
-    prefix = f"{int(track):02d} - " if str(track or "").isdigit() else ""
+    prefix = f"{int(str(track)):02d} - " if str(track or "").isdigit() else ""
     # R-MUSIC-4: disc prefix only for multi-disc; identified tags win, embedded tags are the fallback
-    disc_total = int(tags.get("disc_total") or meta.get("disc_total") or 1)
+    disc_total = int(str(tags.get("disc_total") or meta.get("disc_total") or 1))
     if disc_total > 1:
         prefix = f"{tags.get('disc_number') or meta.get('disc_number') or 1}-{prefix}"
-    path = confine(root, artist, album_dir, f"{prefix}{title}.{ext}")
+    path = confine(root, str(artist), str(album_dir), f"{prefix}{title}.{ext}")
     return PlanSpec(str(path), args, needs_transcode=args[-1] == "flac")
 
 
@@ -191,10 +191,12 @@ def _video(item: MediaItem, roots: dict[str, str], streams: list[dict]) -> PlanS
         show_dir = f"{show} ({year})" if year else show
         if meta.get("tvdb_id"):
             show_dir += f" {{tvdb-{meta['tvdb_id']}}}"
-        name = f"{sanitize_component(show)} - {code}"
+        name = f"{sanitize_component(str(show))} - {code}"
         if item.episode_title:
             name += f" - {item.episode_title}"
-        path = confine(roots["series"], show_dir, f"Season {season:02d}", f"{name}.mkv")
+        path = confine(
+            roots["series"], str(show_dir), f"Season {season:02d}", f"{name}.mkv"
+        )
     else:
         title = (
             item.canonical_title
@@ -205,7 +207,9 @@ def _video(item: MediaItem, roots: dict[str, str], streams: list[dict]) -> PlanS
         label = f"{title} ({year})" if year else title
         folder = f"{label} {{tmdb-{item.tmdb_id}}}" if item.tmdb_id else label
         part = f" - part{int(meta['part'])}" if meta.get("part") else ""
-        path = confine(roots["movie"], folder, f"{sanitize_component(label)}{part}.mkv")
+        path = confine(
+            roots["movie"], str(folder), f"{sanitize_component(str(label))}{part}.mkv"
+        )
     return PlanSpec(str(path), args, needs_transcode)
 
 
