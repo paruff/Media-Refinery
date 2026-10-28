@@ -13,18 +13,56 @@ Media Refinery watches a drop folder and normalizes music, audiobooks, movies, T
 to one canonical, verified format per type, publishes them into your libraries and tells
 Plex, Jellyfin, Audiobookshelf or Music Assistant to rescan. Originals are never modified.
 
+## Who it is for
+
+Self-hosters with a messy pile of downloads and a Plex, Jellyfin, Audiobookshelf or Music Assistant
+server who want every file converted to one canonical, *verified* format and published into a clean
+library, with a human approving the plan first. **Music is the supported lead type**; movies, TV,
+audiobooks and ebooks are experimental and off until you list them in `ENABLED_TYPES`.
+
+## What it is not
+
+- Not a downloader or indexer manager: it never fetches media.
+- Not a media server or player.
+- Not an in-place tagger: sources are never modified; output goes to a new library.
+- Not a cluster transcoder: one worker, one host.
+
+## How it differs
+
+| Tool | What it does | Media Refinery |
+| --- | --- | --- |
+| Tdarr | Transcodes a library in place by rules, at scale | Plan-then-approve, verifies each output, never touches the original, publishes to a separate library |
+| Sonarr / Radarr / Lidarr | Find and download releases, then rename/import | Starts after download: normalizes whatever landed in the drop folder, any source |
+| beets | Tags and organizes music from a CLI | Also converts, verifies and notifies servers; web review UI instead of an interactive prompt |
+| MusicBrainz Picard | Interactive desktop tagger | Unattended pipeline with a review queue only for low-confidence matches |
+| Calibre | Ebook library manager and converter | Uses Calibre underneath for ebooks, alongside the other four types |
+
 ## Quickstart
 
 ```bash
 git clone https://github.com/paruff/Media-Refinery.git
 cd Media-Refinery
-cp .env.example .env     # set MR_API_TOKEN, PUID/PGID, folder paths
+cp .env.example .env     # set MR_API_TOKEN, PUID/PGID, folder paths, API keys
 docker compose up -d
+
+# 1. Preflight: tools present, paths writable, keys set, media servers reachable
+docker compose exec media-refinery refinery doctor
+# 2. Plan: reports what a run would do (counts, disk, time, items needing review); writes nothing
+docker compose exec media-refinery refinery plan /input
 ```
 
-Open <http://localhost:8000/ui>, drop files into the input folder and approve plans in the Review view.
+3. Approve: open <http://localhost:8000/ui>, check the Review view and approve, or run
+   `docker compose exec media-refinery refinery approve /input`. Approved items are converted,
+   verified and published; set `AUTO_APPROVE_TYPES` to skip review for a type you trust.
 
-CLI: `docker compose exec media-refinery refinery scan|plan|approve|run|verify|audit [--dry-run] PATH`.
+Values in `.env` (API keys, server URLs, `ENABLED_TYPES`, ...) reach the container; see
+[`.env.example`](.env.example). `scripts/smoke.sh` runs doctor, plan and publish against the real
+image in CI.
+
+Operating it: `/api/v1/metrics` exposes items by state/type, quarantined items by reason and
+per-stage durations; the UI Summary lists quarantine reasons with a suggested action.
+
+CLI: `refinery doctor|scan|plan|approve|run|verify|audit [--dry-run] PATH`.
 
 ## Documentation
 

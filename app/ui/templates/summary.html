@@ -15,6 +15,10 @@
 <table><caption class="sr">Items by media type</caption>
   <thead><tr><th scope="col">Type</th><th scope="col">Count</th></tr></thead>
   <tbody>{% for r in s.by_media_type %}<tr><td>{{ r.media_type }}</td><td>{{ r.count }}</td></tr>{% endfor %}</tbody></table>
+{% if s.quarantine_reasons %}<h2>Quarantined</h2>
+<table><caption class="sr">Quarantine reasons with a suggested action</caption>
+  <thead><tr><th scope="col">Reason</th><th scope="col">Count</th><th scope="col">Suggested action</th></tr></thead>
+  <tbody>{% for q in s.quarantine_reasons %}<tr><td>{{ q.reason }}</td><td>{{ q.count }}</td><td>{{ q.action }}</td></tr>{% endfor %}</tbody></table>{% endif %}
 {% if s.error_log %}<h2>Recent errors</h2><ul>{% for e in s.error_log %}<li><code>{{ e }}</code></li>{% endfor %}</ul>{% endif %}
 {% if s.warnings %}<h2>Warnings</h2><ul>{% for w in s.warnings %}<li><code>{{ w }}</code></li>{% endfor %}</ul>{% endif %}
 {% endblock %}

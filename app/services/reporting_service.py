@@ -1,4 +1,5 @@
 import logging
+from collections import Counter
 from collections.abc import Sequence
 from typing import Any
 
@@ -19,6 +20,28 @@ class MediaTypeCount(BaseModel):
     count: int
 
 
+# quarantine reason -> what the operator should do about it
+SUGGESTED_ACTION = {
+    "rejected": "Declined at review; restore the source if that was a mistake.",
+    "healthcheck_failed": "The source is damaged; re-acquire or repair it, then retry.",
+    "convert_failed": "Check the ffmpeg error in the item log; retry once the cause is fixed.",
+    "target_exists": "A different file already holds the target path; resolve the clash, then retry.",
+    "calibre_add_failed": "Run `refinery doctor`; check Calibre and the library path, then retry.",
+}
+DEFAULT_ACTION = "Read the item error log, fix the cause, then retry."
+
+
+def quarantine_reason(error_log: str | None) -> str:
+    """`_quarantine` stores "<reason>: <detail>"."""
+    return (error_log or "unknown").split(":", 1)[0]
+
+
+class QuarantineReason(BaseModel):
+    reason: str
+    count: int
+    action: str
+
+
 class SystemSummary(BaseModel):
     total: int
     by_state: list[StateCount]
@@ -27,6 +50,20 @@ class SystemSummary(BaseModel):
     error_log: list[str]
     warnings: list[str] = []
     storage_bytes: int = 0
+    quarantine_reasons: list[QuarantineReason] = []
+
+
+async def quarantine_counts(db: AsyncSession) -> dict[str, int]:
+    logs: Sequence[Any] = (
+        (
+            await db.execute(
+                select(MediaItem.error_log).where(MediaItem.state == "quarantined")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return dict(Counter(quarantine_reason(log) for log in logs))
 
 
 class ReportingService:
@@ -107,6 +144,12 @@ class ReportingService:
             error_log=error_log,
             warnings=warnings,
             storage_bytes=storage_bytes,
+            quarantine_reasons=[
+                QuarantineReason(
+                    reason=r, count=n, action=SUGGESTED_ACTION.get(r, DEFAULT_ACTION)
+                )
+                for r, n in (await quarantine_counts(self.db)).items()
+            ],
         )
 
     async def log_daily_digest(self):

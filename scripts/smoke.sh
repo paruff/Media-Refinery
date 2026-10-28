@@ -36,6 +36,7 @@ services:
   media-refinery:
     image: $IMAGE
     environment:
+      ENABLED_TYPES: '["movie","series","music","audiobook","ebook"]'
       AUTO_APPROVE_TYPES: '["movie","series","music","audiobook","ebook"]'
     ports: !override ["18000:8000"]
     volumes: !override
@@ -47,6 +48,7 @@ services:
       - $ROOT/data:/data
 EOF
 export MR_API_TOKEN=smoke-token
+export ACOUSTID_API_KEY=smoke-acoustid  # proves .env/shell values reach the container (#106)
 docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" up -d --no-build
 
 fail() { # label: show item states and recent logs, then exit
@@ -65,6 +67,12 @@ wait_for() { # label, command that succeeds when done
   echo "ok: $1"
 }
 wait_for ready "curl -fs http://localhost:18000/ready"
+# README quickstart: doctor, then plan (writes nothing), then approve (AUTO_APPROVE_TYPES above)
+dc() { docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" exec -T media-refinery "$@"; }
+[ "$(dc printenv ACOUSTID_API_KEY)" = smoke-acoustid ] || fail "env passthrough"
+dc refinery doctor || fail "refinery doctor"
+dc refinery plan /input || fail "refinery plan"
+echo "ok: doctor, plan"
 published() { # library dir, then one or more extensions
   d=$1; shift
   for ext in "$@"; do find "$ROOT/output/$d" -type f -name "*.$ext" 2>/dev/null; done | grep -q .
@@ -79,4 +87,6 @@ for lib in "Movies mkv mp4" "TV mkv mp4" "Music flac" "Audiobooks m4b" "Books ep
   done
   echo "ok: $1"
 done
+curl -fs -H "Authorization: Bearer $MR_API_TOKEN" http://localhost:18000/api/v1/metrics \
+  | grep -q media_refinery_stage_duration_seconds_count || fail "metrics"
 echo "smoke: all 5 media types processed"

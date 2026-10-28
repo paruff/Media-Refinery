@@ -5,10 +5,31 @@ services:
     container_name: media-refinery
     # Run as the owner of your library folders (`id -u` / `id -g`).
     user: "${PUID:-1000}:${PGID:-1000}"
+    # Explicit list: `.env` also holds host-side values (INPUT_DIR=./input ...) that would break
+    # container paths. A bare name is passed through only when set in `.env` or the shell.
     environment:
-      TZ: ${TZ:-UTC}
-      MR_API_HOST: 0.0.0.0  # published port; token below is then mandatory (R-API-1)
-      MR_API_TOKEN: ${MR_API_TOKEN:?set MR_API_TOKEN to expose the API}
+      - TZ=${TZ:-UTC}
+      - MR_API_HOST=0.0.0.0  # published port; token below is then mandatory (R-API-1)
+      - MR_API_TOKEN=${MR_API_TOKEN:?set MR_API_TOKEN to expose the API}
+      - ENABLED_TYPES
+      - AUTO_APPROVE_TYPES
+      - DRY_RUN
+      - TMDB_API_KEY
+      - TVDB_API_KEY
+      - ACOUSTID_API_KEY
+      - ACOUSTID_MIN_SCORE
+      - EBOOK_FETCH_METADATA
+      - PLEX_URL
+      - PLEX_TOKEN
+      - PLEX_SECTIONS
+      - JELLYFIN_URL
+      - JELLYFIN_API_KEY
+      - ABS_URL
+      - ABS_TOKEN
+      - ABS_LIBRARY_ID
+      - MUSIC_ASSISTANT_URL
+      - MUSIC_ASSISTANT_TOKEN
+      - NOTIFY_PATH_MAP
     volumes:
       - ${INPUT_DIR:-./input}:/input
       # /output holds all five libraries: Movies/ TV/ Music/ Audiobooks/ Books/ (Calibre)

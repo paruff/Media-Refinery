@@ -230,6 +230,29 @@
         "title": "PlanOut",
         "type": "object"
       },
+      "QuarantineReason": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "count",
+          "action"
+        ],
+        "title": "QuarantineReason",
+        "type": "object"
+      },
       "StateCount": {
         "properties": {
           "count": {
@@ -269,6 +292,14 @@
               "type": "string"
             },
             "title": "Error Log",
+            "type": "array"
+          },
+          "quarantine_reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/QuarantineReason"
+            },
+            "title": "Quarantine Reasons",
             "type": "array"
           },
           "storage_bytes": {

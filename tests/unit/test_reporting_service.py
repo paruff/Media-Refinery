@@ -27,6 +27,7 @@ def test_reporting_service_summary(monkeypatch):
         FakeResult(["Error 1", "Error 2", "Error 1"]),  # error_log
         FakeResult(["missing metadata warning"]),  # warnings
         FakeResult([(123456789,)]),  # storage_bytes
+        FakeResult([]),  # quarantine logs
     ]
     service = ReportingService(db)
 

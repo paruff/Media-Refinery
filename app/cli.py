@@ -166,6 +166,25 @@ def run(path: PathArg, dry_run: DryRun = False, type: Kind = None) -> None:
     _print_plan(_drive(dry_run, work))
 
 
+@app.command()
+def doctor() -> None:
+    """Preflight: tools present, paths writable, keys set, servers reachable. Exit 1 on failure."""
+    from app.core.config import settings
+    from app.services.doctor import run_checks
+
+    checks = asyncio.run(run_checks(settings))
+    mark = {
+        "ok": "[green]ok[/green]",
+        "warn": "[yellow]warn[/yellow]",
+        "fail": "[red]FAIL[/red]",
+    }
+    for c in checks:
+        console.print(f"{mark[c.status]:>20}  {c.name}: {c.detail}")
+    if any(c.status == "fail" for c in checks):
+        raise typer.Exit(1)
+    console.print("doctor: ready; next `refinery plan <library>`")
+
+
 def _report(rows: list[dict]) -> None:
     for row in rows:
         console.print_json(json.dumps(row))

@@ -81,6 +81,20 @@ async def test_health_ready_and_metrics(client):
     assert 'media_refinery_items{state="planned",type="music"} 1' in body
 
 
+async def test_metrics_quarantine_reasons_and_stage_durations(client):
+    await _seed(FileState.quarantined, "q.mp3")
+    async with app.state.factory() as s:
+        (await s.get(MediaItem, "q.mp3")).error_log = "convert_failed: boom"
+        await s.commit()
+    app.state.orchestrator.stage_seconds["approved"] = (1.5, 3)
+    body = (await client.get("/api/v1/metrics")).text
+    assert 'media_refinery_quarantined_items{reason="convert_failed"} 1' in body
+    assert 'media_refinery_stage_duration_seconds_sum{stage="approved"} 1.500' in body
+    assert 'media_refinery_stage_duration_seconds_count{stage="approved"} 3' in body
+    summary = (await client.get("/api/v1/summary")).json()
+    assert summary["quarantine_reasons"][0]["reason"] == "convert_failed"
+
+
 async def test_items_list_filter_and_detail(client):
     await _seed(name="a.mp3")
     await _seed(FileState.error, "b.mkv", MediaType.movie)

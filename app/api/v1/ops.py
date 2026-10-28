@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 import shutil
 from collections.abc import Sequence
 from pathlib import Path
@@ -16,21 +15,18 @@ from app.api.auth import get_orchestrator, json_only
 from app.core.database import get_async_session
 from app.core.orchestrator import PipelineOrchestrator
 from app.models.media import MediaItem
+from app.services.doctor import is_writable
 from app.services.refinery import Refinery
-from app.services.reporting_service import ReportingService, SystemSummary
+from app.services.reporting_service import (
+    ReportingService,
+    SystemSummary,
+    quarantine_counts,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()  # open: liveness/readiness probes
 secured = APIRouter()  # mounted behind the bearer-token dependency
-
-
-def _writable(path: Path) -> bool:
-    """True if `path` exists and is writable, or can be created under a writable parent."""
-    probe = path
-    while not probe.exists() and probe != probe.parent:
-        probe = probe.parent
-    return os.access(probe, os.W_OK)
 
 
 @router.get("/health", tags=["health"])
@@ -60,7 +56,7 @@ async def ready(
     except Exception:
         checks["database"] = False
     dirs = (*orch.cfg.roots.values(), orch.cfg.work_dir, orch.cfg.quarantine_dir)
-    writable = [await asyncio.to_thread(_writable, Path(str(d))) for d in dirs]
+    writable = [await asyncio.to_thread(is_writable, Path(str(d))) for d in dirs]
     checks["library_roots_writable"] = all(writable)
     ok = all(checks.values())
     if not ok:
@@ -80,7 +76,10 @@ async def summary(session: Annotated[AsyncSession, Depends(get_async_session)]):
 
 
 @secured.get("/metrics", response_class=Response, tags=["ops"])
-async def metrics(session: Annotated[AsyncSession, Depends(get_async_session)]):
+async def metrics(
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+    orch: Annotated[PipelineOrchestrator, Depends(get_orchestrator)],
+):
     rows: Sequence = (
         await session.execute(
             select(MediaItem.state, MediaItem.media_type, func.count()).group_by(
@@ -94,6 +93,24 @@ async def metrics(session: Annotated[AsyncSession, Depends(get_async_session)]):
         *(
             f'media_refinery_items{{state="{s.value}",type="{t.value}"}} {n}'
             for s, t, n in rows
+        ),
+        "# HELP media_refinery_quarantined_items Quarantined items by reason.",
+        "# TYPE media_refinery_quarantined_items gauge",
+        *(
+            f'media_refinery_quarantined_items{{reason="{r}"}} {n}'
+            for r, n in (await quarantine_counts(session)).items()
+        ),
+        "# HELP media_refinery_stage_duration_seconds_sum Time spent in each stage since start.",
+        "# TYPE media_refinery_stage_duration_seconds_sum counter",
+        *(
+            f'media_refinery_stage_duration_seconds_sum{{stage="{st}"}} {t:.3f}'
+            for st, (t, _) in orch.stage_seconds.items()
+        ),
+        "# HELP media_refinery_stage_duration_seconds_count Stage runs since start.",
+        "# TYPE media_refinery_stage_duration_seconds_count counter",
+        *(
+            f'media_refinery_stage_duration_seconds_count{{stage="{st}"}} {n}'
+            for st, (_, n) in orch.stage_seconds.items()
         ),
     ]
     return Response("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
