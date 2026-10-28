@@ -36,8 +36,10 @@ def sha256_file(path: str) -> str:
 
 
 async def _flac_test(output: str) -> Check:
-    if shutil.which("flac") is None:  # recorded, not failed (like VMAF without libvmaf)
-        return Check("flac", True, "unavailable")
+    if (
+        shutil.which("flac") is None
+    ):  # R-MUSIC requires flac -t; a skipped test is not a pass
+        return Check("flac", False, "flac is not installed")
     rc, _, err = await run_tool(["flac", "-t", "-s", output], 3600)
     return Check("flac", rc == 0, err.strip()[:500])
 
@@ -63,7 +65,7 @@ async def _chapter_check(output: str, expected: int) -> Check:
             for c in data.get("chapters", [])
         ]
         duration = float(data.get("format", {}).get("duration") or 0)
-    except ValueError, KeyError:
+    except (ValueError, KeyError):
         chapters, duration = [], 0.0
     found = len(chapters)
     ordered = all(a[1] <= b[0] + 0.01 and a[0] < a[1] for a, b in pairwise(chapters))
