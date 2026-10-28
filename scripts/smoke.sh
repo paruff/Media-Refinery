@@ -36,6 +36,10 @@ services:
   media-refinery:
     image: $IMAGE
     environment:
+      # hermetic: a developer's .env keys must not reach the providers
+      TMDB_API_KEY: ''
+      TVDB_API_KEY: ''
+      ACOUSTID_API_KEY: ''
       ENABLED_TYPES: '["movie","series","music","audiobook","ebook"]'
       AUTO_APPROVE_TYPES: '["movie","series","music","audiobook","ebook"]'
     ports: !override ["18000:8000"]
@@ -48,7 +52,7 @@ services:
       - $ROOT/data:/data
 EOF
 export MR_API_TOKEN=smoke-token
-export ACOUSTID_API_KEY=smoke-acoustid  # proves .env/shell values reach the container (#106)
+export ABS_TOKEN=smoke-abs  # proves .env/shell values reach the container (#106)
 docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" up -d --no-build
 
 fail() { # label: show item states and recent logs, then exit
@@ -69,7 +73,7 @@ wait_for() { # label, command that succeeds when done
 wait_for ready "curl -fs http://localhost:18000/ready"
 # README quickstart: doctor, then plan (writes nothing), then approve (AUTO_APPROVE_TYPES above)
 dc() { docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" exec -T media-refinery "$@"; }
-[ "$(dc printenv ACOUSTID_API_KEY)" = smoke-acoustid ] || fail "env passthrough"
+[ "$(dc printenv ABS_TOKEN)" = smoke-abs ] || fail "env passthrough"
 dc refinery doctor || fail "refinery doctor"
 dc refinery plan /input || fail "refinery plan"
 echo "ok: doctor, plan"
