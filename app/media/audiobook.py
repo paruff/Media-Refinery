@@ -105,6 +105,39 @@ def concat_list(files: list[str]) -> str:
     return "".join(f"file '{quote(f)}'\n" for f in files)
 
 
+def concat_inputs(book: dict, listing: str) -> tuple[list[str], int, list[str]]:
+    """(ffmpeg input args, number of inputs, audio map). Uniform files use the concat demuxer;
+    mixed codecs/rates/channels need the concat filter after resampling to one format."""
+    files = book["files"]
+    if not book.get("mixed"):
+        return ["-f", "concat", "-safe", "0", "-i", listing], 1, ["-map", "0:a"]
+    layout = "mono" if int(book.get("channels") or 2) == 1 else "stereo"
+    rate = int(book.get("sample_rate") or 44100)
+    legs = "".join(
+        f"[{i}:a:0]aresample={rate},aformat=sample_fmts=fltp:channel_layouts={layout}[a{i}];"
+        for i in range(len(files))
+    )
+    joined = "".join(f"[a{i}]" for i in range(len(files)))
+    graph = f"{legs}{joined}concat=n={len(files)}:v=0:a=1[out]"
+    inputs = [arg for f in files for arg in ("-i", f)]
+    return [*inputs, "-filter_complex", graph], len(files), ["-map", "[out]"]
+
+
+def part_gaps(files: list[Path]) -> bool:
+    """True when numbered parts (01, 02, 04 ...) skip a number within a folder."""
+    by_folder: dict[Path, list[int]] = {}
+    for f in files:
+        match = re.search(r"\d+", f.stem)
+        if match is None:
+            return False  # not a numbered set: nothing to check
+        by_folder.setdefault(f.parent, []).append(int(match.group(0)))
+    return any(
+        len(set(nums)) > 1
+        and sorted(set(nums)) != list(range(min(nums), max(nums) + 1))
+        for nums in by_folder.values()
+    )
+
+
 def audio_args(streams: list[dict]) -> list[str]:
     """R-BOOK-1: copy when every file is the same AAC, else AAC-LC capped per channel count
     and never above the source bitrate."""
@@ -192,7 +225,14 @@ async def describe_book(files: list[Path], fallback_title: str) -> dict:
             starts.append((name or f.stem, at))
             at += d
         chapters = _close(starts, total)
+    signatures = {
+        (s.get("codec_name"), s.get("sample_rate"), s.get("channels")) for s in streams
+    }
     return {
+        "mixed": len(signatures) > 1,
+        "sample_rate": int(streams[0].get("sample_rate") or 44100),
+        "channels": min(int(streams[0].get("channels") or 2), 2),
+        "gaps": part_gaps(files),
         "files": [str(f) for f in files],
         "title": title,
         "author": _first(tags, "artist", "album_artist") or "Unknown Author",

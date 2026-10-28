@@ -25,6 +25,7 @@ from app.core.verify import sha256_file, verify_ebook, verify_output
 from app.media import ebook
 from app.media.audiobook import (
     book_dir,
+    concat_inputs,
     concat_list,
     describe_book,
     ffmetadata,
@@ -386,7 +387,7 @@ class PipelineOrchestrator:
         return True
 
     async def _classify(self, item_id) -> bool:
-        from app.services.classification import ClassificationService
+        from app.services.classification import ClassificationService, audiobook_by_rule
 
         async with self.session_factory() as session:
             item = await session.get(MediaItem, item_id)
@@ -401,6 +402,12 @@ class PipelineOrchestrator:
                 item.media_type = (
                     MediaType.music if is_audio_only(item) else MediaType.movie
                 )
+            if item.media_type == MediaType.music and audiobook_by_rule(
+                str(item.source_path),
+                await probe_duration(str(item.source_path)),
+                self.cfg.input_dir,
+            ):
+                item.media_type = MediaType.audiobook  # R-PIPE-4
             if item.media_type == MediaType.series:
                 data = json.loads(str(item.enrichment_data or "{}"))
                 if data.get("season_number") is None or not data.get("episode_number"):
@@ -563,6 +570,8 @@ class PipelineOrchestrator:
         )
         meta["book"]["members"] = [m.id for m in members[1:]]
         item.enrichment_data = json.dumps(meta)
+        if meta["book"]["gaps"]:
+            self._flag_review(item, "missing_parts")
         return None
 
     async def _replaygain(self, session, item, meta) -> None:
@@ -841,12 +850,12 @@ class PipelineOrchestrator:
         listing, chapters = out.with_name("files.txt"), out.with_name("chapters.ffmeta")
         listing.write_text(concat_list(book["files"]))
         chapters.write_text(ffmetadata(book["chapters"]))
+        inputs, n, audio_map = concat_inputs(book, str(listing))
         rc, _, err = await run_tool(
             [
-                *("ffmpeg", "-nostdin", "-y", "-v", "error"),
-                *("-f", "concat", "-safe", "0", "-i", str(listing)),
-                *("-i", str(chapters), "-map", "0:a", "-map_metadata", "1"),
-                *("-map_chapters", "1", *(plan.ffmpeg_args or [])),
+                *("ffmpeg", "-nostdin", "-y", "-v", "error", *inputs),
+                *("-i", str(chapters), *audio_map, "-map_metadata", str(n)),
+                *("-map_chapters", str(n), *(plan.ffmpeg_args or [])),
                 *("-f", "ipod", str(out)),
             ],
             self.cfg.ffmpeg_timeout,
