@@ -44,6 +44,19 @@ AUDIOBOOK_GENRES = {"audiobook", "audiobooks", "audio book", "spoken word", "spe
 logger = logging.getLogger("media_refinery.classification")
 
 
+AUDIOBOOK_FOLDERS = {"audiobook", "audiobooks"}
+AUDIOBOOK_SECONDS = 3600
+
+
+def audiobook_by_rule(path: str, duration: float | None, input_dir=None) -> bool:
+    """R-PIPE-4: audio in an `audiobooks/` folder, or running an hour or more, is an audiobook."""
+    parts = [p.lower() for p in path.split("/")[:-1]]
+    if input_dir is not None:  # only folders below the drop folder count
+        base = str(input_dir).rstrip("/")
+        parts = [p.lower() for p in path.removeprefix(base).split("/")[:-1]]
+    return bool(AUDIOBOOK_FOLDERS & set(parts)) or (duration or 0) >= AUDIOBOOK_SECONDS
+
+
 class ClassificationService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -106,7 +119,7 @@ class ClassificationService:
             try:
                 audio = MutagenFile(item.source_path, easy=True)
                 tags = audio.tags or {}
-                if str(tags.get("genre", [""])[0]).lower() in AUDIOBOOK_GENRES:
+                if str((tags.get("genre") or [""])[0]).lower() in AUDIOBOOK_GENRES:
                     media_type = "audiobook"  # R-BOOK-1: classify by genre or .m4b
                 enrichment_data = {
                     "artist": tags.get("artist", [None])[0],
