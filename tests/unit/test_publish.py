@@ -62,3 +62,48 @@ def test_quarantine_by_reason(tmp_path):
     f.write_bytes(b"x")
     dest = quarantine_file(f, tmp_path / "q", "decode_failed", "id1")
     assert dest == tmp_path / "q" / "decode_failed" / "id1-x.mkv" and dest.exists()
+
+
+def test_archive_cross_volume_is_checksummed_and_leaves_no_partial(
+    tmp_path, monkeypatch
+):
+    inp, arc = tmp_path / "in", tmp_path / "arc"
+    inp.mkdir()
+    f = inp / "a.mp3"
+    f.write_bytes(b"original")
+    real_replace = os.replace
+
+    def replace(src, dst):
+        if src == f:
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+        real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", replace)
+    dest = archive_original(f, inp, arc, "run1")
+    assert dest.read_bytes() == b"original" and not f.exists()
+    assert not list(arc.rglob(".*.tmp"))
+
+
+def test_archive_crash_mid_copy_keeps_original_and_no_final_file(tmp_path, monkeypatch):
+    import app.core.publish as publish
+
+    inp, arc = tmp_path / "in", tmp_path / "arc"
+    inp.mkdir()
+    f = inp / "a.mp3"
+    f.write_bytes(b"original")
+    real_replace = os.replace
+
+    def replace(src, dst):
+        if src == f:
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+        real_replace(src, dst)
+
+    def bad_copy(src, dst):
+        dst.write_bytes(b"part")  # truncated copy
+
+    monkeypatch.setattr(os, "replace", replace)
+    monkeypatch.setattr(publish, "_fsync_copy", bad_copy)
+    with pytest.raises(OSError, match="checksum mismatch"):
+        archive_original(f, inp, arc, "run1")
+    assert f.read_bytes() == b"original"
+    assert not [p for p in arc.rglob("*") if p.is_file()]

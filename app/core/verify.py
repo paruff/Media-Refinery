@@ -88,9 +88,22 @@ async def verify_output(
 ):
     """Return (checks as dicts, output sha256, quarantine reason or None)."""
     rc, _, err = await run_tool(
-        ["ffmpeg", "-nostdin", "-v", "error", "-i", output, "-f", "null", "-"], 3600
+        [
+            "ffmpeg",
+            "-nostdin",
+            "-v",
+            "error",
+            "-xerror",
+            "-i",
+            output,
+            "-f",
+            "null",
+            "-",
+        ],
+        3600,
     )
-    checks = [Check("decode", rc == 0 and not err.strip(), err.strip()[:500])]
+    # -xerror makes a real decode error exit non-zero; stderr warnings alone are not a failure
+    checks = [Check("decode", rc == 0, err.strip()[:500])]
     src_dur = expected_duration or await probe_duration(source)
     out_dur = await probe_duration(output)
     tolerance = AUDIO_TOLERANCE if is_audio else VIDEO_TOLERANCE

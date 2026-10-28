@@ -277,3 +277,110 @@ async def test_failing_server_only_warns_item_still_validated(env, caplog):
     assert {i.state for i in await _items(factory)} == {FileState.validated}
     assert [r.url.path for r in seen] == ["/library/sections/1/refresh"]
     assert "plex rescan failed" in caplog.text
+
+
+def _twin_mp3(cfg, name, freq):
+    return make_mp3(
+        cfg.input_dir / name, freq=freq, artist="X", album="Y", title="Z"
+    )  # same tags, same target, different content
+
+
+async def test_second_item_with_same_target_is_quarantined_plan_conflict(env):
+    cfg, factory = env
+    _twin_mp3(cfg, "a.mp3", 440)
+    _twin_mp3(cfg, "b.mp3", 880)
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    states = sorted(i.state.value for i in await _items(factory))
+    assert states == ["planned", "quarantined"]
+    quarantined = next(i for i in await _items(factory) if i.state != FileState.planned)
+    assert quarantined.error_log.startswith("plan_conflict")
+
+
+async def test_failed_plan_does_not_block_a_new_item_with_same_target(env):
+    cfg, factory = env
+    _twin_mp3(cfg, "a.mp3", 440)
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    await _approve_all(orch, factory)
+
+    async def garbage(source, args, out):
+        out.write_bytes(b"not media at all")
+        return 0, "", ""
+
+    orch._run_ffmpeg = garbage  # type: ignore[method-assign]
+    await orch.run_until_idle()  # first item fails and its plan is marked failed
+    _twin_mp3(cfg, "b.mp3", 880)
+    await import_input(cfg, factory)
+    await PipelineOrchestrator(factory, cfg).run_until_idle()
+    planned = [i for i in await _items(factory) if i.state == FileState.planned]
+    assert len(planned) == 1, [i.error_log for i in await _items(factory)]
+
+
+async def test_different_file_at_target_is_quarantined_target_exists(env):
+    cfg, factory = env
+    _twin_mp3(cfg, "a.mp3", 440)
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    await _approve_all(orch, factory)
+    squatter = cfg.music_root / "X" / "Y" / "Z.mp3"
+    squatter.parent.mkdir(parents=True)
+    squatter.write_bytes(b"someone else's file")
+    await orch.run_until_idle()
+    (item,) = await _items(factory)
+    assert item.state == FileState.quarantined and item.error_log.startswith(
+        "target_exists"
+    )
+    assert squatter.read_bytes() == b"someone else's file"
+
+
+async def test_crash_after_file_landed_resumes_to_validated(env, monkeypatch):
+    """Saga resume: PUBLISH moved the file but the process died before the state commit."""
+    import app.core.orchestrator as orchestrator
+
+    cfg, factory = env
+    _twin_mp3(cfg, "a.mp3", 440)
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    await _approve_all(orch, factory)
+    real = orchestrator.publish_file
+
+    async def land_then_die(*args):
+        await real(*args)
+        raise Crash
+
+    monkeypatch.setattr(orchestrator, "publish_file", land_then_die)
+    with pytest.raises(Crash):
+        await orch.run_until_idle()
+    monkeypatch.setattr(orchestrator, "publish_file", real)
+    restarted = PipelineOrchestrator(factory, cfg)
+    await restarted.recover()
+    await restarted.run_until_idle()
+    (item,) = await _items(factory)
+    assert item.state == FileState.validated, item.error_log
+
+
+async def test_missing_work_file_at_publish_is_reexecuted(env):
+    cfg, factory = env
+    _twin_mp3(cfg, "a.mp3", 440)
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    await _approve_all(orch, factory)
+    real, lost = orch._publish, []
+
+    async def drop_work_once(item_id):
+        if not lost:
+            lost.append(1)
+            for f in cfg.work_dir.rglob("out.*"):
+                f.unlink()
+        return await real(item_id)
+
+    orch._publish = drop_work_once  # type: ignore[method-assign]
+    await orch.run_until_idle()
+    (item,) = await _items(factory)
+    assert item.state == FileState.validated, item.error_log

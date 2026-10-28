@@ -12,6 +12,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 from sqlalchemy import select
 
@@ -696,11 +697,17 @@ class PipelineOrchestrator:
                 await session.commit()
                 return True
             clash = await session.execute(
-                select(NormalizationPlan.id).where(
+                select(NormalizationPlan).where(
                     NormalizationPlan.target_path == spec.target_path
                 )
             )
-            if clash.first():
+            held = clash.scalars().all()
+            # a failed plan keeps its history but releases the target (unique)
+            for old in held:
+                if old.plan_status == PlanStatus.failed:
+                    old.target_path = f"{old.target_path}#failed-{old.id}"
+            await session.flush()
+            if any(p.plan_status != PlanStatus.failed for p in held):
                 item.state, item.error_log = (
                     FileState.quarantined,
                     f"plan_conflict: {spec.target_path}",
@@ -712,6 +719,7 @@ class PipelineOrchestrator:
                     media_item_id=item.id,
                     target_path=spec.target_path,
                     ffmpeg_args=spec.ffmpeg_args,
+                    # item ids are the sha256 of the content (watcher.content_hash)
                     original_hash=str(item.id),
                     needs_transcode=spec.needs_transcode,
                     needs_rename=True,
@@ -798,8 +806,8 @@ class PipelineOrchestrator:
         return not is_audio_only(item) and item.video_codec not in VIDEO_COPY_CODECS
 
     async def _convert_video(self, item, source: Path, out: Path) -> tuple[int, str]:
-        def on_event(event: str, status: Status, detail: str) -> None:
-            self._emit(event, item.id, status, detail)
+        def on_event(event: str, status: str, detail: str) -> None:
+            self._emit(event, item.id, cast(Status, status), detail)
 
         try:
             await asyncio.to_thread(
@@ -1053,6 +1061,13 @@ class PipelineOrchestrator:
                     )
                     return True
                 # resumed after a crash that landed the file but not the state
+            elif not work.exists():
+                # work file lost (cleaned up, crash): redo the conversion instead of erroring
+                self.logger.warning("work file missing for %s; re-executing", item_id)
+                item.state = FileState.approved
+                item.updated_at = _now()
+                await session.commit()
+                return True
             else:
                 await publish_file(session, str(plan.id), work, dest, sha)
             if item.media_type == MediaType.music:

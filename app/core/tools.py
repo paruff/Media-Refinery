@@ -34,6 +34,11 @@ async def run_tool(args: list[str], limit: float = DEFAULT_TIMEOUT):
                 proc.kill()
             await proc.wait()
         return -1, "", f"timed out after {limit}s: {args[0]}"
+    except asyncio.CancelledError:  # shutdown: never leave the child (ffmpeg) running
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        await asyncio.shield(proc.wait())
+        raise
     return (
         proc.returncode,
         stdout.decode(errors="replace"),

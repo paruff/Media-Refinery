@@ -25,7 +25,9 @@ def _unique(path: Path) -> Path:
     return candidate
 
 
-def _move_into_place(work_file: Path, dest: Path, tmp: Path, sha: str) -> None:
+def _move_into_place(
+    work_file: Path, dest: Path, tmp: Path, sha: str | None = None
+) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
         try:
@@ -34,7 +36,7 @@ def _move_into_place(work_file: Path, dest: Path, tmp: Path, sha: str) -> None:
             if e.errno != errno.EXDEV:  # separate bind mounts: same st_dev, still EXDEV
                 raise
             _fsync_copy(work_file, tmp)
-            if sha256_file(str(tmp)) != sha:
+            if sha256_file(str(tmp)) != (sha or sha256_file(str(work_file))):
                 raise OSError("checksum mismatch after copy") from e
             os.replace(tmp, dest)
             work_file.unlink()
@@ -77,8 +79,8 @@ def archive_original(
     except ValueError:
         rel = Path(source.name)
     dest = _unique(archive_dir / run_id / rel)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(source), str(dest))
+    tmp = dest.with_name(f".{dest.name}.tmp")
+    _move_into_place(source, dest, tmp)  # checksummed across volumes
     return dest
 
 
