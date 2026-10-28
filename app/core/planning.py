@@ -178,8 +178,10 @@ def _video(item: MediaItem, roots: dict[str, str], streams: list[dict]) -> PlanS
     year = _year(item.release_year or item.guessed_year or meta.get("year"))
     if item.media_type == MediaType.series:
         show = item.canonical_series_name or meta.get("series_title") or "Unknown Show"
+        # an unknown season (None) goes to Season 01 for review; only an explicit 0 is Specials
+        season_number = meta.get("season_number")
         season, episode = (
-            int(meta.get("season_number") or 0),
+            1 if season_number is None else int(season_number),
             int(meta.get("episode_number") or 0),
         )
         end = int(meta.get("episode_end") or episode)

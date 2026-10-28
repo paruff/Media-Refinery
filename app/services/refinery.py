@@ -28,7 +28,8 @@ def build_orchestrator(session_factory, cfg: PipelineConfig, logger=None):
     """Orchestrator wired with whichever enrichers have API keys configured."""
     enricher = (
         VideoEnricher(settings.TMDB_API_KEY, settings.TVDB_API_KEY)
-        if settings.TMDB_API_KEY and settings.TVDB_API_KEY
+        if settings.TMDB_API_KEY
+        or settings.TVDB_API_KEY  # each lookup no-ops without its key
         else None
     )
     identifier = (

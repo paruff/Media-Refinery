@@ -87,8 +87,12 @@ class ClassificationService:
                 enrichment_data = {
                     "series_title": title,
                     "year": guess.get("year"),
+                    # unknown stays None (reviewed); 0 only for an explicit S00 / special marker
                     "season_number": guess.get(
-                        "season", 0 if guess.get("episode") else None
+                        "season",
+                        0
+                        if guess.get("episode_details") in ("Special", "OVA")
+                        else None,
                     ),
                     "episode_number": min(episodes) if episodes[0] else None,
                     "episode_end": max(episodes) if episodes[0] else None,

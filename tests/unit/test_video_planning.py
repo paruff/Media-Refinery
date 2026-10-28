@@ -94,3 +94,16 @@ def test_enricher_degrades_to_none_on_provider_errors():
 def test_enricher_unknown_movie_returns_none():
     enricher = _enricher(lambda r: httpx.Response(200, json={"results": []}))
     assert asyncio.run(enricher.movie("Nope", None)) is None
+
+
+def test_unknown_season_is_placed_in_season_01_not_specials():
+    item = MediaItem(
+        id="i",
+        source_path="/in/x.mkv",
+        media_type=MediaType.series,
+        video_codec="h264",
+        canonical_series_name="Show",
+        enrichment_data='{"season_number": null, "episode_number": 5}',
+    )
+    path = build_plan(item, ROOTS, [_v(), _a("aac", 2)]).target_path
+    assert "/Season 01/Show - S01E05" in path
