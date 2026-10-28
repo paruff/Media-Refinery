@@ -43,8 +43,7 @@ lint:
 	@which flake8 >/dev/null 2>&1 && flake8 app/ tests/ || echo "flake8 not installed; skipping lint"
 
 fmt:
-	@which $(VENV)/bin/black >/dev/null 2>&1 && $(VENV)/bin/black app/ tests/ || echo "black not installed; skipping format"
-	@which $(VENV)/bin/isort >/dev/null 2>&1 && $(VENV)/bin/isort app/ tests/ || echo "isort not installed; skipping import sort"
+	@which $(VENV)/bin/ruff >/dev/null 2>&1 && $(VENV)/bin/ruff check --select I --fix app/ tests/ && $(VENV)/bin/ruff format app/ tests/ || echo "ruff not installed in the venv; skipping format"
 
 type-check:
 	@which $(VENV)/bin/mypy >/dev/null 2>&1 && $(VENV)/bin/mypy app/ || echo "mypy not installed; skipping type check"
@@ -104,7 +103,7 @@ help:
 	@echo "  features       Run BDD/feature tests (behave)"
 	@echo "  run            Run the main application"
 	@echo "  lint           Run flake8 lint checks"
-	@echo "  fmt            Run black and isort formatting"
+	@echo "  fmt            Run ruff (import sort + format)"
 	@echo "  type-check     Run mypy type checks"
 	@echo "  coverage       Run test coverage report"
 	@echo "  clean          Remove caches, venv, and coverage files"
