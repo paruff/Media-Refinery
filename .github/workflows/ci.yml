@@ -98,12 +98,14 @@ jobs:
         run: uv run --no-sync behave tests/features
       - name: Messy-library corpus and crash-injection invariants
         run: uv run --no-sync pytest tests/corpus -m corpus -p no:cacheprovider --timeout=900 -ra
-      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        if: always()
+      - name: Offline contract fixtures, acceptance and regression suites
+        run: >-
+          uv run --no-sync pytest tests/contracts/test_fixtures.py tests/acceptance
+          tests/regression -p no:cacheprovider --timeout=300 -ra
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+          name: coverage
+          path: coverage.xml
       - name: Keep logs on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -148,9 +150,51 @@ jobs:
           cache-from: type=gha,scope=image
           cache-to: type=gha,scope=image,mode=max
 
+  smoke:
+    name: Compose smoke (all media types, doctor, plan, approve)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # Always runs, never skipped by path: the smoke test exercises the image, compose file,
+      # README quickstart flow and scripts/smoke.sh together, so any of them can break it.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: media-refinery:ci
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max
+      - name: Compose smoke on that image
+        run: scripts/smoke.sh media-refinery:ci
+
+  gate:
+    name: CI gate
+    # One stable required check: it fails if any verification job failed, was cancelled or was
+    # skipped, so a new job cannot be silently forgotten in branch protection.
+    if: always()
+    needs: [hooks, test, docker-build, smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every verification job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | python3 -c '
+          import json, sys
+          bad = {k: v["result"] for k, v in json.load(sys.stdin).items() if v["result"] != "success"}
+          sys.exit(f"not green: {bad}" if bad else 0)'
+
   docker-canary:
     name: Publish canary image (main only)
-    needs: [hooks, test, docker-build]
+    needs: [gate]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 30

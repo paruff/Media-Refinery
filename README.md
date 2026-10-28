@@ -3,10 +3,10 @@
 
 
 [![CI](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml/badge.svg)](https://github.com/paruff/Media-Refinery/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/paruff/Media-Refinery/branch/main/graph/badge.svg)](https://codecov.io/gh/paruff/Media-Refinery)
+[![Coverage ≥80% enforced](https://img.shields.io/badge/coverage-%E2%89%A580%25%20enforced-brightgreen.svg)](docs/VERIFICATION.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 
 Media Refinery watches a drop folder and normalizes music, audiobooks, movies, TV and ebooks
@@ -69,5 +69,5 @@ CLI: `refinery doctor|scan|plan|approve|run|verify|audit [--dry-run] PATH`.
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Development](docs/DEVELOPMENT.md)
-- [Contributing](docs/CONTRIBUTING.md) · [Maintainers](docs/MAINTAINERS_GUIDE.md) · [Product vision](docs/PRODUCT_VISION.md)
+- [Verification](docs/VERIFICATION.md) · [Contributing](docs/CONTRIBUTING.md) · [Maintainers](docs/MAINTAINERS_GUIDE.md) · [Product vision](docs/PRODUCT_VISION.md)
 - [Intent](intent.md) · [Spec](spec.md) · [Plan](plan.md) · [Design](DESIGN.md) · [Security](SECURITY.md)

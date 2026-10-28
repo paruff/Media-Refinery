@@ -7,11 +7,7 @@ gh api -X PUT "repos/$REPO/branches/main/protection" --input - <<'JSON'
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": [
-      "Lint, format, types, security hooks",
-      "Tests (py3.14, real ffmpeg)",
-      "Docker image builds"
-    ]
+    "contexts": ["CI gate"]
   },
   "enforce_admins": false,
   "required_pull_request_reviews": {
