@@ -1,0 +1,16 @@
+# Real media servers for `make contract-servers` (nightly). Plex needs a claimed account: skipped.
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:10.10.7
+    ports: ["8096:8096"]
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8096/health"]
+      interval: 5s
+      retries: 30
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:2.17.7
+    ports: ["13378:80"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/healthcheck"]
+      interval: 5s
+      retries: 30
