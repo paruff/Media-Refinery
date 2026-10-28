@@ -1,7 +1,8 @@
 """Re-record provider fixtures from the real services: python -m tests.contracts.refresh.
 
 Needs TMDB_API_KEY, TVDB_API_KEY, ACOUSTID_API_KEY in the environment; MusicBrainz needs none.
-Review the diff before committing: recordings must stay small and hold no secrets.
+Trim recordings to the fields the parsers read (a few results; no overviews, aliases or image
+URLs; codespell scans these files). Review the diff before committing: recordings must stay small and hold no secrets.
 """
 
 import os
