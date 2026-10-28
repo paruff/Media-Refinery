@@ -429,7 +429,7 @@ class PipelineOrchestrator:
         if self.cfg.ebook_fetch:
             fetched = await ebook.fetch_meta(meta)
             self._emit("enrich", item.id, "success" if fetched else "skipped")
-            meta.update(fetched)
+            meta = ebook.merge_meta(meta, fetched)  # embedded values win
         ext = source.suffix.lstrip(".").lower()
         meta["title"] = meta.get("title") or source.stem
         meta["authors"] = meta.get("authors") or ["Unknown"]
@@ -619,6 +619,8 @@ class PipelineOrchestrator:
                     score = meta["music"]["score"]
                     review = f"review_required: match score {score}"
                     self._emit("review", item_id, "degraded", review)
+            if item.media_type == MediaType.ebook:
+                await self._flag_ebook_duplicate(item)
             if flags := json.loads(str(item.enrichment_data or "{}")).get("review"):
                 review = f"review_required: {', '.join(flags)}"
                 self._emit("review", item_id, "degraded", review)
@@ -661,6 +663,16 @@ class PipelineOrchestrator:
             item.state = FileState.planned
             await session.commit()
         return True
+
+    async def _flag_ebook_duplicate(self, item) -> None:
+        """R-PIPE-7: a book already in Calibre is a plan decision: approve keeps both, reject skips."""
+        meta = json.loads(str(item.enrichment_data or "{}"))
+        dup = await ebook.find_duplicate(self.cfg.ebooks_root, meta.get("ebook", {}))
+        if dup is None:
+            return
+        meta["ebook"].update(allow_duplicate=True, duplicate_of=dup)
+        item.enrichment_data = json.dumps(meta)
+        self._flag_review(item, "duplicate_ebook")
 
     async def _gate(self, item_id) -> bool:
         """APPROVE gate: dry-run reports; opt-in rules approve; otherwise wait for a human."""
@@ -1001,6 +1013,11 @@ class PipelineOrchestrator:
             book_id, err = await ebook.calibredb_add(
                 self.cfg.ebooks_root, work, meta, cover if cover.exists() else None
             )
+        if err.startswith(
+            ebook.BUSY_PREFIX
+        ):  # held by another Calibre program: retry next pass
+            self._emit("publish", item.id, "skipped", err)
+            return False
         if err:
             await self._quarantine(session, item, "calibre_add_failed", err, work)
             return True
