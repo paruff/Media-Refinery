@@ -47,3 +47,26 @@ def test_repair_returns_remuxed_file_only_when_it_is_healthy(tmp_path):
     ):
         assert repair_remux(P, tmp_path) is None
     assert not out.exists()
+
+
+def test_remux_repair_keeps_every_stream():
+    with (
+        patch("app.media.video.health.run", return_value=done()) as run,
+        patch("app.media.video.health.health_check", return_value=(True, "")),
+    ):
+        repair_remux(P, Path("/tmp/w"))
+    args = [str(a) for a in run.call_args[0][0]]
+    assert args[args.index("-map") + 1] == "0"  # extra audio/subtitle tracks survive
+    assert "-ignore_unknown" in args
+
+
+def test_decode_scan_timeout_is_inconclusive_not_corrupt():
+    with patch("app.media.video.health.run", side_effect=[done(), None]):
+        assert health_check(P) == (False, "healthcheck_timeout")
+
+
+def test_decode_timeout_scales_with_duration():
+    probe = subprocess.CompletedProcess([], 0, "7200.5\n", "")
+    with patch("app.media.video.health.run", side_effect=[probe, done()]) as run:
+        health_check(P)
+    assert run.call_args_list[1].kwargs["timeout"] >= 3 * 7200

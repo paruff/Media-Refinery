@@ -55,7 +55,7 @@ def _command(
         ]  # R-VIDEO-1 High profile
     # movies2vlib track rule: explicit maps, AAC + E-AC3 (+ copied Atmos), subtitles kept
     tracks = (
-        ["-map", "0:v", "-map", "0:s?", *video, *audio, "-c:s", "copy"]
+        ["-map", "0:V", "-map", "0:s?", *video, *audio, "-c:s", "copy"]
         if audio
         else [*video, "-c:a", "aac", "-b:a", "192k"]
     )
