@@ -14,6 +14,8 @@ from app.models.media import (
     MediaType,
     NormalizationPlan,
 )
+from app.pipeline import plan as plan_stage
+from app.pipeline.types.ebook import EbookStrategy
 from tests.pipeline_helpers import make_config, make_session_factory
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
@@ -87,7 +89,7 @@ async def test_busy_library_leaves_the_item_for_a_later_pass_instead_of_quaranti
     work = tmp_path / "work.epub"
     work.write_bytes(b"x")
     with patch(
-        "app.core.orchestrator.ebook.calibredb_add",
+        "app.media.ebook.calibredb_add",
         AsyncMock(return_value=(None, f"{ebook.BUSY_PREFIX} {BUSY}")),
     ):
         async with factory() as s:
@@ -95,7 +97,7 @@ async def test_busy_library_leaves_the_item_for_a_later_pass_instead_of_quaranti
             plan = (
                 await s.execute(__import__("sqlalchemy").select(NormalizationPlan))
             ).scalar_one()
-            assert await orch._publish_ebook(s, item, plan, work) is False
+            assert await EbookStrategy().publish(orch, s, item, plan, work) is False
             assert item.state == FileState.verified
     await engine.dispose()
 
@@ -156,8 +158,8 @@ async def test_duplicate_ebook_is_flagged_for_review_at_planning(tmp_path):
             await s.delete(plan)
         await s.commit()
     orch = PipelineOrchestrator(factory, cfg)
-    with patch("app.core.orchestrator.ebook.find_duplicate", AsyncMock(return_value=7)):
-        await orch._plan_stage("b")
+    with patch("app.media.ebook.find_duplicate", AsyncMock(return_value=7)):
+        await plan_stage.run(orch, "b")
     async with factory() as s:
         item = await s.get(MediaItem, "b")
         meta = json.loads(item.enrichment_data)
