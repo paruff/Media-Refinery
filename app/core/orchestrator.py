@@ -230,9 +230,14 @@ class PipelineOrchestrator:
         return sum(moved)
 
     async def run_until_idle(self, max_passes: int = 100, **filters) -> None:
-        for _ in range(max_passes):
-            if not await self.run_once(**filters):
-                return
+        try:
+            for _ in range(max_passes):
+                if not await self.run_once(**filters):
+                    return
+        finally:
+            await (
+                self.notifier.flush()
+            )  # nothing left to wait for: send the queued rescans
 
     # ---- crash resume (R-PIPE-1) -----------------------------------------
     async def recover(self) -> None:
@@ -1011,8 +1016,15 @@ class PipelineOrchestrator:
             item.state = FileState.published
             await session.commit()
             self._emit("publish", item_id, "success", str(dest))
-        await self.notifier.published(str(item.media_type), dest)  # non-fatal
+        self._notify(str(item.media_type), dest)  # non-fatal, coalesced
         return True
+
+    def _notify(self, media_type: str, dest: Path) -> None:
+        """Queue the server rescan; a notifier problem must never fail a published item."""
+        try:
+            self.notifier.schedule(media_type, dest)
+        except Exception:
+            self.logger.warning("notify scheduling failed for %s", dest, exc_info=True)
 
     async def _publish_ebook(self, session, item, plan, work: Path) -> bool:
         """R-EBOOK-3: calibredb add; Calibre owns the layout. A duplicate is skipped, not an error."""
