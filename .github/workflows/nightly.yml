@@ -26,3 +26,18 @@ jobs:
         with:
           name: throughput
           path: throughput.json
+  contracts:
+    name: Provider fixtures and real Jellyfin/Audiobookshelf
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Recorded provider fixtures
+        run: make contract-test
+      # Plex needs a claimed account and Music Assistant is unverified: both skipped, see tests/contracts/README.md
+      - name: Notify calls against real Jellyfin and Audiobookshelf
+        run: make contract-servers

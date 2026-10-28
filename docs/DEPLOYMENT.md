@@ -37,7 +37,7 @@ passed into the container. To set any other option, add it under `environment:` 
 - `TMDB_API_KEY`, `TVDB_API_KEY`, `ACOUSTID_API_KEY`, `ACOUSTID_MIN_SCORE`
 - `ENABLED_TYPES` (JSON list, default `["music"]`): only these types are processed. Music is the supported lead pipeline; `movie`, `series`, `audiobook` and `ebook` are **experimental and off by default**. Files of a disabled type stay untouched in the input folder.
 - `AUTO_APPROVE_TYPES` (`music`, `movie`, `series`, `audiobook`, `ebook`), `DRY_RUN`
-- Server rescan, each optional: `PLEX_URL`/`PLEX_TOKEN`/`PLEX_SECTIONS`, `JELLYFIN_URL`/`JELLYFIN_API_KEY`, `ABS_URL`/`ABS_TOKEN`/`ABS_LIBRARY_ID`, `MUSIC_ASSISTANT_URL`/`MUSIC_ASSISTANT_TOKEN`, and `NOTIFY_PATH_MAP` (JSON, container path to the path the server sees, e.g. `{"/output/Music":"/data/music"}`; Plex and Jellyfin scan by their own paths)
+- Server rescan (Jellyfin/Audiobookshelf proved nightly, Plex untested in CI, **Music Assistant experimental**: the `music/sync` call is unverified against a real instance), each optional: `PLEX_URL`/`PLEX_TOKEN`/`PLEX_SECTIONS`, `JELLYFIN_URL`/`JELLYFIN_API_KEY`, `ABS_URL`/`ABS_TOKEN`/`ABS_LIBRARY_ID`, `MUSIC_ASSISTANT_URL`/`MUSIC_ASSISTANT_TOKEN`, and `NOTIFY_PATH_MAP` (JSON, container path to the path the server sees, e.g. `{"/output/Music":"/data/music"}`; Plex and Jellyfin scan by their own paths)
 
 All names are defined in `app/core/config.py`. The Celery/Redis distributed mode is not supported.
 

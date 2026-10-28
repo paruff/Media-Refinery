@@ -12,7 +12,7 @@ test-report: check-venv
 
 # Python-centric Makefile for Media-Refinery
 
-.PHONY: ui-test docker-test compose-check venv hooks hooks-update deps-lock precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
+.PHONY: contract-test contract-servers ui-test docker-test compose-check venv hooks hooks-update deps-lock precom test unit integration features run lint fmt type-check coverage clean container container-build container-up container-down help check-venv
 
 VENV?=.venv
 PYTHON?=$(VENV)/bin/python
@@ -155,7 +155,7 @@ docker-test: ## run the CI test job inside the image (real ffmpeg; no local inst
 	  'cp -r /src /w && cd /w && rm -rf .venv && pip install -q --no-deps --require-hashes -r requirements-dev.txt \
 	  && playwright install --with-deps chromium >/dev/null \
 	  && mkdir -p input staging output data \
-	  && pytest tests/unit tests/integration -n auto -p no:cacheprovider --timeout=120 -ra --cov=app --cov-report=term --cov-fail-under=$${COV_MIN:-80}; \
+	  && pytest tests/unit tests/integration tests/contracts -n auto -p no:cacheprovider --timeout=120 -ra --cov=app --cov-report=term --cov-fail-under=$${COV_MIN:-80}; \
 	  rc=$$?; behave tests/features || rc=1; exit $$rc'
 
 corpus-test: ## G15 messy-library corpus, crash injection and plan report inside the image
@@ -163,6 +163,18 @@ corpus-test: ## G15 messy-library corpus, crash injection and plan report inside
 	docker run --rm --user root -v "$$PWD":/src:ro -e DATABASE_URL=sqlite+aiosqlite:///:memory: -e REQUIRE_FFMPEG=1 media-refinery:ci sh -c \
 	  'cp -r /src /w && cd /w && rm -rf .venv && pip install -q --no-deps --require-hashes -r requirements-dev.txt \
 	  && mkdir -p input staging output data && pytest tests/corpus -m corpus -p no:cacheprovider --timeout=900 -ra'
+
+contract-test: ## G17 recorded provider fixtures parsed by the real code, inside the image
+	docker build -t media-refinery:ci .
+	docker run --rm --user root -v "$$PWD":/src:ro media-refinery:ci sh -c \
+	  'cp -r /src /w && cd /w && rm -rf .venv && pip install -q --no-deps --require-hashes -r requirements-dev.txt \
+	  && pytest tests/contracts -p no:cacheprovider -ra'
+
+contract-servers: ## G17 real Jellyfin + Audiobookshelf answer the notify calls (nightly)
+	docker compose -f tests/contracts/compose.yml up -d --wait
+	docker build -t media-refinery:ci .
+	docker run --rm --network host --user root -v "$$PWD":/src:ro -e DATABASE_URL=sqlite+aiosqlite:///:memory: media-refinery:ci sh -c \
+	  'cp -r /src /w && cd /w && rm -rf .venv && pip install -q --no-deps --require-hashes -r requirements-dev.txt && python -m tests.contracts.servers'; rc=$$?; docker compose -f tests/contracts/compose.yml down -v; exit $$rc
 
 corpus-bench: ## G15 NF-6: scan+plan a generated 1k-file library, prints JSON
 	@docker build -q -t media-refinery:ci . >/dev/null
