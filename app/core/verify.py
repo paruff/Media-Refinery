@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 from dataclasses import asdict, dataclass
+from itertools import pairwise
 
 from app.core.tools import probe_duration, run_tool
 
@@ -45,13 +46,37 @@ async def _flac_test(output: str) -> Check:
 
 async def _chapter_check(output: str, expected: int) -> Check:
     rc, out, _ = await run_tool(
-        ["ffprobe", "-v", "error", "-show_chapters", "-of", "json", output], 120
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_chapters",
+            "-show_format",
+            "-of",
+            "json",
+            output,
+        ],
+        120,
     )
     try:
-        found = len(json.loads(out).get("chapters", [])) if rc == 0 else 0
-    except ValueError:
-        found = 0
-    return Check("chapters", found >= 1 and found == expected, f"{found}/{expected}")
+        data = json.loads(out) if rc == 0 else {}
+        chapters = [
+            (float(c["start_time"]), float(c["end_time"]))
+            for c in data.get("chapters", [])
+        ]
+        duration = float(data.get("format", {}).get("duration") or 0)
+    except ValueError, KeyError:
+        chapters, duration = [], 0.0
+    found = len(chapters)
+    ordered = all(a[1] <= b[0] + 0.01 and a[0] < a[1] for a, b in pairwise(chapters))
+    in_bounds = not chapters or chapters[-1][1] <= duration + AUDIO_TOLERANCE
+    ok = found >= 1 and found == expected and ordered and in_bounds
+    detail = (
+        f"{found}/{expected}"
+        + ("" if ordered else " out of order")
+        + ("" if in_bounds else " past end")
+    )
+    return Check("chapters", ok, detail)
 
 
 async def verify_output(

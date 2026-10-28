@@ -17,7 +17,7 @@ Feature: Audiobooks for Audiobookshelf
 
   Scenario: Chapters are merged in natural sort order
     Given an audiobook workspace
-    And a generated book "Ordered" of 3 MP3 chapters named "2.mp3", "10.mp3", "1.mp3"
+    And a generated book "Ordered" of 3 MP3 chapters named "9.mp3", "10.mp3", "8.mp3"
     When the pipeline runs until idle
     Then the chapter titles in order are "Chapter One", "Chapter Two", "Chapter Three"
 
