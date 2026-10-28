@@ -27,13 +27,46 @@ tests/unit         fast, isolated
 tests/integration  real ffmpeg on tiny generated fixtures
 tests/e2e          full pipeline per media type
 tests/features     behave (Gherkin) happy paths
+tests/corpus       generated messy library, crash injection, throughput (make corpus-test)
 ```
 
 - Fixtures are generated (`ffmpeg -f lavfi`); never commit real media.
 - Coverage floor is 80 % on `app/`.
 - Never weaken an `R-SAFE-*` rule to make a test pass.
 
+### Messy-library corpus and crash injection (G15)
+
+`make corpus-test` (inside the CI image) runs `tests/corpus`:
+
+- `generate.py` builds the corpus: missing and contradictory tags, multi-disc, duplicate albums,
+  unicode and odd filenames, mixed sample rates and VBR, truncated, zero-byte and garbage files,
+  lossy next to lossless. `bulk()` pads it to any size. Nothing is committed.
+- `test_crash_invariants.py` kills the daemon before and after every DB commit, file move,
+  ffmpeg call, archive and quarantine step (this covers every `STAGE_ORDER` state and the
+  publish saga), restarts, and asserts: the source is held exactly once in input or archive,
+  no partial file ever sits in a library, the run converges to the clean-run result, nothing is
+  duplicated, and a second restart changes nothing.
+- `test_messy_library.py` runs the whole pipeline over the corpus: no source lost, nothing
+  broken published, every library file decodes, a rerun is a no-op.
+
+`refinery plan <dir>` prints the library-level report (counts by outcome, items needing review
+or not planned, estimated disk and time) and never writes outside `work/dry-run/`.
+
+Known gaps the corpus surfaced, left for G16: byte-identical duplicates are marked `error`
+rather than being a plan decision (R-PIPE-7), and a 1 s track makes `fpcalc` exit 2, which is
+logged as an error but handled.
+
 ## Performance
+
+NF-6 throughput (`make corpus-bench`: scan + plan, dry run, no transcode), measured on a
+1,000-file generated corpus in the CI image on a 2018 Intel MacBook Pro (colima VM, 4 CPUs,
+8 GiB), 2026-10-28:
+
+| files | ingest | plan | total | files/s | 10k tracks (extrapolated) |
+|------:|-------:|-----:|------:|--------:|--------------------------:|
+| 1,000 | 9.8 s  | 180.8 s | 190.6 s | 5.25 | about 32 min (target: under 60 min) |
+
+The nightly workflow re-measures this and uploads `throughput.json`.
 
 - Concurrency is bounded per stage; the adaptive throttle halves workers after consecutive failures.
 - Keep `/work` on fast storage and on the same filesystem as `/output`.

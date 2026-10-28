@@ -44,10 +44,10 @@ FFPROBE_MKV_H264_DTS = {
 def patch_create_subprocess_exec(mocker, request):
     """
     Globally patch asyncio.create_subprocess_exec to intercept all subprocess calls.
-    Skip this mock for integration tests (they need real FFmpeg).
+    Skip this mock for integration and corpus tests (they need real FFmpeg).
     """
     # Skip mocking for integration tests
-    if "integration" in str(request.fspath):
+    if any(d in str(request.fspath) for d in ("integration", "corpus")):
         yield
         return
 

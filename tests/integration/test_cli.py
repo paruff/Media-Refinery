@@ -54,5 +54,14 @@ def test_type_filter_limits_items(fixtures):
         app, ["plan", "--dry-run", "--type", "music", str(fixtures)]
     )
     assert result.exit_code == 0, result.output
-    assert "song.mp3" in result.output
-    assert result.output.count("planned") == 1  # the movie is classified, not planned
+    assert "copy/tag: 1" in result.output  # the song is planned
+    assert "enriched: 1" in result.output  # the movie is classified but out of scope
+
+
+def test_plan_reports_library_and_writes_nothing(fixtures, tmp_path):
+    before = {p: p.stat().st_mtime for p in fixtures.iterdir()}
+    result = CliRunner().invoke(app, ["plan", str(fixtures)])  # no --dry-run needed
+    assert result.exit_code == 0, result.output
+    assert "2 items" in result.output and "estimated disk" in result.output
+    assert {p: p.stat().st_mtime for p in fixtures.iterdir()} == before
+    assert not (tmp_path / "lib").exists() or not any((tmp_path / "lib").rglob("*.*"))

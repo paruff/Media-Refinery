@@ -114,9 +114,31 @@ def scan(path: PathArg, dry_run: DryRun = False, type: Kind = None) -> None:
 
 
 @app.command()
-def plan(path: PathArg, dry_run: DryRun = False, type: Kind = None) -> None:
-    """Scan, then build and show the normalisation plan for each item."""
-    _stage(path, FileState.planned, type, dry_run)
+def plan(path: PathArg, dry_run: DryRun = True, type: Kind = None) -> None:
+    """Library-level report of what a run would do. Always a dry run: nothing is written
+    outside work/dry-run/."""
+
+    async def work(service: Refinery):
+        ids = await service.ingest(path)
+        await service.advance(ids, FileState.planned, _types(type))
+        return await service.library_report(ids)
+
+    r = _drive(True, work)  # `dry_run` is accepted for compatibility; plan never writes
+    console.print(f"{r['total']} items")
+    for outcome, n in r["outcomes"].items():
+        console.print(f"  {outcome}: {n}")
+    console.print(
+        f"estimated disk {r['est_disk_bytes'] / 1e6:.1f} MB, "
+        f"time {r['est_seconds'] / 60:.1f} min (rough, single worker)"
+    )
+    for label, key in (
+        ("needs review", "needs_review"),
+        ("not planned", "not_planned"),
+    ):
+        if r[key]:
+            console.print(f"[yellow]{label} ({len(r[key])}):[/yellow]")
+            for line in r[key]:
+                console.print(f"  {line}")
 
 
 @app.command()

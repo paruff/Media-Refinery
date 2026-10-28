@@ -1,0 +1,28 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  corpus:
+    name: Messy-library corpus and NF-6 throughput
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Corpus, crash-injection and plan-report tests
+        run: make corpus-test
+      - name: Throughput on a 1k-file corpus (NF-6)
+        run: make corpus-bench | tee throughput.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: throughput
+          path: throughput.json

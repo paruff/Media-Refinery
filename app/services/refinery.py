@@ -44,6 +44,12 @@ def build_orchestrator(session_factory, cfg: PipelineConfig, logger=None):
     )
 
 
+# rough rates behind library_report's estimates (single worker)
+PER_ITEM_S = 0.5
+COPY_BYTES_PER_S = 100e6
+TRANSCODE_BYTES_PER_S = 2e6
+
+
 def _files_under(path: Path) -> list[Path]:
     return [path] if path.is_file() else sorted(path.rglob("*"))
 
@@ -120,6 +126,49 @@ class Refinery:
                 }
                 for item, plan in result.all()
             ]
+
+    async def library_report(self, ids) -> dict:
+        """Library-level summary of a plan: counts by outcome, review list, disk/time estimate.
+
+        Estimates are rough (size-based, fixed rates), meant to size a run, not to promise it.
+        """
+        async with self.factory() as session:
+            result = await session.execute(
+                select(MediaItem, NormalizationPlan)
+                .outerjoin(
+                    NormalizationPlan, NormalizationPlan.media_item_id == MediaItem.id
+                )
+                .where(MediaItem.id.in_(list(ids)))
+                .order_by(MediaItem.source_path)
+            )
+            rows = result.all()
+        outcomes: dict[str, int] = {}
+        review, failed = [], []
+        disk = seconds = 0
+        for item, plan in rows:
+            if item.state == FileState.planned and plan is not None:
+                outcome = "transcode" if plan.needs_transcode else "copy/tag"
+                size = int(item.size or 0)
+                disk += size
+                rate = (
+                    TRANSCODE_BYTES_PER_S if plan.needs_transcode else COPY_BYTES_PER_S
+                )
+                seconds += PER_ITEM_S + size / rate
+                if self.orch._needs_review(item):
+                    review.append(str(item.source_path))
+            else:
+                outcome = item.state.value
+                if item.error_log:
+                    failed.append(f"{item.source_path}: {item.error_log}")
+            outcomes[outcome] = outcomes.get(outcome, 0) + 1
+        return {
+            "total": len(rows),
+            "outcomes": dict(sorted(outcomes.items())),
+            "needs_review": review,
+            "not_planned": failed,
+            "est_disk_bytes": disk,
+            "est_seconds": round(seconds),
+        }
 
     async def run(self, path: Path, types=None) -> list[str]:
         """scan → plan → (approve unless dry-run, minus items needing review) → publish."""
