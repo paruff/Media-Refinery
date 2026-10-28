@@ -14,6 +14,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools flac calibre epubcheck \
     && rm -rf /var/lib/apt/lists/*
 
+LABEL org.opencontainers.image.title="Media Refinery" \
+      org.opencontainers.image.description="Self-hosted, non-destructive media normalizer for music, audiobooks, movies, TV and ebooks" \
+      org.opencontainers.image.source="https://github.com/paruff/Media-Refinery" \
+      org.opencontainers.image.licenses="MIT"
+
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1
