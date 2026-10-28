@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0-rc1]
+- Release candidate: first run of the hardened release workflow (one multi-arch image, smoke + Trivy on that digest, promoted by digest, provenance + SBOM, tag guard). Pre-releases never move `:latest`.
+- Security: provider API keys and fingerprints no longer reach logs; non-ASCII tokens return 401; `/health` no longer leaks and returns 503; the API refuses to start on a non-loopback host without `MR_API_TOKEN`; UI gets a strict CSP and security headers.
+- Safety: dry-run never acts past planning; migration for `verification_records` / `saga_file_move_log`.
+- Correctness: audiobooks are one book per folder (not per author), mixed-format merges, part-gap and chapter-bound checks; music album ReplayGain/release/disc handling; confident TMDB/TVDB matching with review; ebook duplicate review and busy-library retry; coalesced server rescans with `NOTIFY_PATH_MAP`; video remux keeps all streams.
+
 ## [0.2.1]
 - Fix: `scripts/smoke.sh` cleanup removes container-owned files as root (v0.2.0 Release run failed there; v0.2.0 was never published)
 

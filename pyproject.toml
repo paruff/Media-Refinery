@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "media_refinery"
-version = "0.2.1"
+version = "0.3.0-rc1"
 description = "Media Refinery: A Python-based media processing pipeline."
 readme = "README.md"
 requires-python = ">=3.14"
