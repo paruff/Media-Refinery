@@ -10,7 +10,8 @@ gh api -X PUT "repos/$REPO/branches/main/protection" --input - <<'JSON'
     "contexts": [
       "Lint, format, types, security hooks",
       "Tests (py3.14, real ffmpeg)",
-      "Docker image builds"
+      "Docker image builds",
+      "Compose smoke (all media types, doctor, plan, approve)"
     ]
   },
   "enforce_admins": false,

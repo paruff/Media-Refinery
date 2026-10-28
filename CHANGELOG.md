@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- CI: the compose smoke test (all five media types via doctor, plan, approve) now runs on every PR and push to main, and gates the canary image; it is a required check in `scripts/protect_main.sh`
 - Onboarding (G19): README positioning (who it is for, what it is not, vs Tdarr/*arr/beets/Picard/Calibre), `refinery doctor` preflight, compose now passes `.env` API keys/server URLs/`ENABLED_TYPES` into the container (#106), `Settings` ignores unknown `.env` keys, `/api/v1/metrics` adds `media_refinery_quarantined_items` and `media_refinery_stage_duration_seconds_{sum,count}`, UI Summary shows quarantine reasons with a suggested action; smoke test now runs doctor and plan
 - Corpus and crash safety (G15): generated messy-library corpus, crash injection at every commit/move/ffmpeg/archive/quarantine point with source-held-once, no-partial-file, convergence and no-duplicate invariants (`make corpus-test`), `refinery plan` library report (always a dry run), nightly NF-6 throughput (`make corpus-bench`)
 - Fix: a crash between classification and enrichment left a music item `enriched` without its metadata, failing planning with `KeyError`; classification now leaves the item `scanned` until enrichment is committed
