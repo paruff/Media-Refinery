@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Stage 1: hash-locked Python deps into a venv (no compilers or pip in the runtime image).
-FROM python:3.14-slim AS builder
+FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS builder
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 RUN python -m venv /opt/venv
 WORKDIR /build
@@ -8,7 +8,7 @@ COPY requirements.txt .
 RUN /opt/venv/bin/pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Stage 2: runtime with every media tool the pipeline shells out to.
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools flac calibre epubcheck \
