@@ -51,9 +51,11 @@ docker compose exec media-refinery refinery doctor
 docker compose exec media-refinery refinery plan /input
 ```
 
-3. Approve: open <http://localhost:8000/ui>, check the Review view and approve, or run
-   `docker compose exec media-refinery refinery approve /input`. Approved items are converted,
-   verified and published; set `AUTO_APPROVE_TYPES` to skip review for a type you trust.
+3. Approve: open <http://localhost:8000/ui>, check the Review view and approve (or
+   `POST /api/v1/items/{id}/approve`). Approved items are converted, verified and published; set
+   `AUTO_APPROVE_TYPES` to skip review for a type you trust. `refinery approve` is for use while the
+   server is stopped (`docker compose run --rm media-refinery refinery approve /input`): a second
+   process writing the same database races the running pipeline.
 
 Values in `.env` (API keys, server URLs, `ENABLED_TYPES`, ...) reach the container; see
 [`.env.example`](.env.example). `scripts/smoke.sh` runs doctor, plan and publish against the real
