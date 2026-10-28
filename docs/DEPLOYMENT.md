@@ -58,3 +58,18 @@ includes `compose-check`.
 - **Compose refuses to start:** `MR_API_TOKEN` is unset.
 - **Nothing happens to a file:** it is still inside the stability window, or a plan is waiting for approval in the UI.
 - **Music held for review:** AcoustID score below `ACOUSTID_MIN_SCORE`, or `ACOUSTID_API_KEY` not set in the container environment.
+
+## Hardware and platforms
+
+The published image is multi-arch (`linux/amd64`, `linux/arm64`): Apple Silicon (M-series Mac mini),
+Raspberry Pi 5 and x86 servers all pull the native build. Video encoding picks the first working
+encoder from VideoToolbox, NVENC, VAAPI, else software `libx264`/`libx265`.
+
+| Host | What runs | Hardware encode |
+|---|---|---|
+| Linux + Intel/AMD GPU | container | VAAPI: add `docker-compose.hwaccel.yml` |
+| Linux + NVIDIA | container | NVENC: NVIDIA Container Toolkit + `gpus: all` |
+| macOS (Apple Silicon or Intel) | container, in Docker's Linux VM | none: software on ARM64 NEON / x86; give Docker Desktop/OrbStack enough CPUs |
+| macOS, VideoToolbox wanted | run natively (`pip install .` + Homebrew `ffmpeg`), not in Docker | VideoToolbox |
+
+Encodes run two at a time; give Docker enough CPU cores for that.

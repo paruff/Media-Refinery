@@ -1,0 +1,10 @@
+# Optional hardware video encoding on a Linux host (Intel/AMD VAAPI).
+#   docker compose -f docker-compose.yml -f docker-compose.hwaccel.yml up -d
+# Without it the pipeline uses libx264/libx265 in software. NVIDIA: install the NVIDIA
+# Container Toolkit and add `gpus: all` here. macOS: Docker runs a Linux VM with no GPU.
+services:
+  media-refinery:
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-105}"  # `getent group render | cut -d: -f3`
