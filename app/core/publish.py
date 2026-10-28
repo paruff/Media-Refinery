@@ -93,3 +93,6 @@ def quarantine_file(
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(path), str(dest))
     return dest
+
+
+# CODEOWNERS probe (G14); do not merge
