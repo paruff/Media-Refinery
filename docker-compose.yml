@@ -39,5 +39,5 @@ services:
       - ${QUARANTINE_DIR:-./quarantine}:/quarantine
       - ${DATA_DIR:-./data}:/data
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # loopback only; put TLS/a reverse proxy in front to expose
     restart: unless-stopped

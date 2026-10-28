@@ -147,3 +147,12 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "integration" in str(item.fspath):
             item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_throttle():
+    from app.ui.routes import _failed_logins
+
+    _failed_logins.clear()
+    yield
+    _failed_logins.clear()

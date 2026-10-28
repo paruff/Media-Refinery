@@ -9,6 +9,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.auth import check_bind_security, require_token
 from app.api.v1.items import router as items_router
@@ -88,6 +89,8 @@ async def security_headers(request: Request, call_next):
         response.headers["Content-Security-Policy"] = UI_CSP
     return response
 
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
 app.include_router(
     ops_router, include_in_schema=False
