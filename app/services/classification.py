@@ -43,8 +43,10 @@ AUDIOBOOK_GENRES = {"audiobook", "audiobooks", "audio book", "spoken word", "spe
 
 logger = logging.getLogger("media_refinery.classification")
 
+AUDIOBOOK_FOLDERS = {"audiobook", "audiobooks"}
+AUDIOBOOK_SECONDS = 3600
 
-<<<<<<< HEAD
+
 def parse_disc(disc, total=None) -> tuple[int | None, int | None]:
     """(disc number, disc total) from embedded tags like "2/3", or "2" + a DISCTOTAL tag."""
     number, _, of = str(disc or "").partition("/")
@@ -53,9 +55,6 @@ def parse_disc(disc, total=None) -> tuple[int | None, int | None]:
         int(number) if number.isdigit() else None,
         int(of) if of.isdigit() else None,
     )
-=======
-AUDIOBOOK_FOLDERS = {"audiobook", "audiobooks"}
-AUDIOBOOK_SECONDS = 3600
 
 
 def audiobook_by_rule(path: str, duration: float | None, input_dir=None) -> bool:
@@ -65,7 +64,6 @@ def audiobook_by_rule(path: str, duration: float | None, input_dir=None) -> bool
         base = str(input_dir).rstrip("/")
         parts = [p.lower() for p in path.removeprefix(base).split("/")[:-1]]
     return bool(AUDIOBOOK_FOLDERS & set(parts)) or (duration or 0) >= AUDIOBOOK_SECONDS
->>>>>>> origin/main
 
 
 class ClassificationService:

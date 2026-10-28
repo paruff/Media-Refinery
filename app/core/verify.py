@@ -65,7 +65,7 @@ async def _chapter_check(output: str, expected: int) -> Check:
             for c in data.get("chapters", [])
         ]
         duration = float(data.get("format", {}).get("duration") or 0)
-    except ValueError, KeyError:
+    except (ValueError, KeyError):
         chapters, duration = [], 0.0
     found = len(chapters)
     ordered = all(a[1] <= b[0] + 0.01 and a[0] < a[1] for a, b in pairwise(chapters))

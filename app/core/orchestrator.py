@@ -1,6 +1,8 @@
 """Drives every MediaItem through spec §4: scan → classify → plan → approve →
 execute → verify → publish → archive. State is committed before side effects (R-PIPE-1)."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging

@@ -211,7 +211,7 @@ class SmartMode:
                 bitrate = int(bitrate_str)
                 self.logger.debug(f"Using stream bitrate: {bitrate} bps")
                 return bitrate
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 pass
 
         # Try format bitrate
@@ -222,7 +222,7 @@ class SmartMode:
                     bitrate = int(bitrate_str)
                     self.logger.debug(f"Using format bitrate: {bitrate} bps")
                     return bitrate
-                except ValueError, TypeError:
+                except (ValueError, TypeError):
                     pass
 
         # Fallback to safe SD default
