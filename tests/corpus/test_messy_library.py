@@ -130,3 +130,75 @@ async def test_music_only_leaves_other_types_and_is_idempotent(tmp_path):
     await PipelineOrchestrator(factory, cfg).run_until_idle()
     assert _digests(cfg.music_root) == out
     await engine.dispose()
+
+
+async def _audio_md5(path: Path) -> str:
+    _, out, _ = await run_tool(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", str(path), "-map", "0:a", "-c", "copy", "-f", "md5", "-"],
+        60,
+    )  # fmt: skip
+    return out.strip()
+
+
+async def test_lossy_not_transcoded_and_tags_cover_replaygain_survive(tmp_path):
+    """G16: a tagged mp3 with a cover is published with the identical audio stream, its
+    tags and cover intact and ReplayGain added; ingesting the same file twice is a no-op."""
+    import io
+    import shutil
+
+    from mutagen.id3 import APIC, ID3
+    from mutagen.mp3 import MP3
+    from PIL import Image
+
+    from tests.corpus.generate import tone
+
+    cfg = make_config(tmp_path, enabled_types=frozenset({"music"}))
+    engine, factory = await make_session_factory(tmp_path)
+    src = tone(
+        cfg.input_dir / "Album/01.mp3", freq=350, artist="Artist Z", album="Album Z",
+        title="Zed", track="1", date="2020",
+    )  # fmt: skip
+    buf = io.BytesIO()
+    Image.new("RGB", (600, 600), "red").save(buf, "JPEG")
+    tags = ID3(src)
+    tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="", data=buf.getvalue()))
+    tags.save(src)
+    audio_before = await _audio_md5(src)
+
+    async def run():
+        await import_input(cfg, factory)
+        orch = PipelineOrchestrator(factory, cfg)
+        await orch.run_until_idle()
+        async with factory() as s:
+            ids = (
+                (
+                    await s.execute(
+                        select(MediaItem.id).where(MediaItem.state == FileState.planned)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        for i in ids:
+            await orch.approve(str(i))
+        await orch.run_until_idle()
+
+    await run()
+    out = list(cfg.music_root.rglob("*.mp3"))
+    assert len(out) == 1, out
+    pub = out[0]
+    assert await _audio_md5(pub) == audio_before, "lossy audio was transcoded"
+    f = MP3(pub)
+    id3 = ID3(pub)
+    assert str(id3["TPE1"]) == "Artist Z" and str(id3["TALB"]) == "Album Z"
+    assert any(k.startswith("APIC") for k in id3), "cover lost"
+    assert any("replaygain" in k.lower() for k in (f.tags.keys() if f.tags else [])), (
+        list(f.tags or [])
+    )
+
+    # the same file dropped in again is a no-op
+    before = _digests(cfg.music_root)
+    shutil.copyfile(next(cfg.archive_dir.rglob("*.mp3")), cfg.input_dir / "again.mp3")
+    await run()
+    assert _digests(cfg.music_root) == before
+    await engine.dispose()
