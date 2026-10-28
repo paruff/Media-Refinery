@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import logging
+import os
 import subprocess
 import time
 from collections.abc import Callable
@@ -20,7 +21,10 @@ logger = logging.getLogger("music_id")
 ACOUSTID_URL = "https://api.acoustid.org/v2"
 MB_URL = "https://musicbrainz.org/ws/2"
 CAA_URL = "https://coverartarchive.org"
-USER_AGENT = "Media-Refinery/1.0 (https://github.com/paruff/Media-Refinery)"
+USER_AGENT = os.environ.get(
+    "MUSICBRAINZ_USER_AGENT",
+    "Media-Refinery/1.0 (https://github.com/paruff/Media-Refinery)",
+)
 MIN_COVER_PX, MAX_COVER_BYTES = 500, 2 * 1024 * 1024  # R-MUSIC-3
 FPCALC_TIMEOUT = 120  # seconds (R-SAFE-5)
 COVER_NAME = "cover.jpg"
@@ -50,7 +54,7 @@ def jpeg_cover(data: bytes | None) -> bytes | None:
     try:
         img = Image.open(io.BytesIO(data))
         img.load()
-    except OSError, ValueError:
+    except OSError, ValueError, Image.DecompressionBombError:
         return None
     img = img.convert("RGB")
     for scale in (1.0, 0.75, 0.5):

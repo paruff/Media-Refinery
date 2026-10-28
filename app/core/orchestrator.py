@@ -98,6 +98,10 @@ class PipelineConfig:
     ebook_fetch: bool = False
     dry_run: bool = False
     auto_approve_types: frozenset[str] = field(default_factory=frozenset)
+    # types processed; a disabled type's files stay untouched in the input folder (G16)
+    enabled_types: frozenset[str] = frozenset(
+        {"music", "movie", "series", "audiobook", "ebook"}
+    )
     ffmpeg_timeout: float = 6 * 3600
     max_concurrent_execute: int = 2  # CPU-heavy stage bounded separately (R-PIPE-5)
     max_concurrent_io: int = 5
@@ -120,6 +124,7 @@ class PipelineConfig:
             trace_path=Path(settings.LOG_DIR) / "trace.jsonl",
             dry_run=settings.DRY_RUN,
             auto_approve_types=frozenset(settings.AUTO_APPROVE_TYPES),
+            enabled_types=frozenset(settings.ENABLED_TYPES),
         )
 
     @property
@@ -237,6 +242,7 @@ class PipelineOrchestrator:
             if STAGE_ORDER.index(s) < stop
             and (only is None or i in only)
             and (not types or t == MediaType.unknown or t.value in types)
+            and (t == MediaType.unknown or t.value in self.cfg.enabled_types)
         ]
         moved = await asyncio.gather(*(self._guarded(i, s) for i, s in todo))
         return sum(moved)
@@ -409,6 +415,8 @@ class PipelineOrchestrator:
         async with self.session_factory() as session:
             item = await session.get(MediaItem, item_id)
             if ebook.is_ebook(str(item.source_path)):
+                if "ebook" not in self.cfg.enabled_types:
+                    return await self._park_disabled(session, item, MediaType.ebook)
                 await self._classify_ebook(session, item)
                 return True
             # stay `scanned` until identify/enrich ran: a crash in between must redo them
@@ -428,6 +436,8 @@ class PipelineOrchestrator:
                 self.cfg.input_dir,
             ):
                 item.media_type = MediaType.audiobook  # R-PIPE-4
+            if MediaType(item.media_type).value not in self.cfg.enabled_types:
+                return await self._park_disabled(session, item, item.media_type)
             if item.media_type == MediaType.series:
                 data = json.loads(str(item.enrichment_data or "{}"))
                 if data.get("season_number") is None or not data.get("episode_number"):
@@ -439,6 +449,12 @@ class PipelineOrchestrator:
             item.state = FileState.enriched
             await session.commit()
         return True
+
+    async def _park_disabled(self, session, item, media_type) -> bool:
+        """G16: a disabled type keeps its type but stays `scanned`, source untouched."""
+        item.media_type = media_type
+        await session.commit()
+        return False
 
     async def _classify_ebook(self, session, item) -> None:
         """R-EBOOK-4 DRM -> quarantine/drm, never processed; R-EBOOK-2 metadata."""

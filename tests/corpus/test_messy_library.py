@@ -92,3 +92,41 @@ async def test_messy_library_converges_without_loss_or_junk(tmp_path):
     await PipelineOrchestrator(factory, cfg).run_until_idle()
     assert _digests(cfg.music_root) + _digests(cfg.movies_root) == before
     await engine.dispose()
+
+
+async def test_music_only_leaves_other_types_and_is_idempotent(tmp_path):
+    """G16: ENABLED_TYPES={music} never touches the movie; re-ingesting the output tree
+    (a moved/renamed copy of already-published files) adds nothing."""
+    cfg = make_config(tmp_path, enabled_types=frozenset({"music"}))
+    engine, factory = await make_session_factory(tmp_path)
+    made = messy(cfg.input_dir)
+    movie = made["movie"][0]
+    movie_digest = hashlib.sha256(movie.read_bytes()).hexdigest()
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    async with factory() as s:
+        for i in (
+            await s.execute(
+                select(MediaItem).where(MediaItem.state == FileState.planned)
+            )
+        ).scalars():
+            await orch.approve(str(i.id))
+    await orch.run_until_idle()
+
+    assert (
+        movie.is_file()
+        and hashlib.sha256(movie.read_bytes()).hexdigest() == movie_digest
+    )
+    assert not any(cfg.movies_root.rglob("*.mkv"))
+    out = _digests(cfg.music_root)
+    assert out
+
+    # feed the library back in as input: nothing new may be published
+    import shutil
+
+    shutil.copytree(cfg.music_root, cfg.input_dir / "reingest")
+    await import_input(cfg, factory)
+    await PipelineOrchestrator(factory, cfg).run_until_idle()
+    assert _digests(cfg.music_root) == out
+    await engine.dispose()
