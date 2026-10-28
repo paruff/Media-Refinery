@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import shutil
+import time
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -100,6 +101,7 @@ class PipelineOrchestrator:
             datetime.now(UTC).strftime("%Y%m%dT%H%M%S-") + uuid.uuid4().hex[:6]
         )
         self.running = False
+        self.stage_seconds: dict[str, tuple[float, int]] = {}  # stage -> (total, runs)
         self._io = asyncio.Semaphore(config.max_concurrent_io)
         self._exec = AdaptiveLimiter(
             config.max_concurrent_execute, config.throttle_after_failures
@@ -249,6 +251,7 @@ class PipelineOrchestrator:
     async def _guarded(self, item_id, state) -> bool:
         sem = self._exec if state == FileState.approved else self._io
         async with sem:
+            start = time.monotonic()
             try:
                 return await self._advance(item_id, state)
             except Exception as e:
@@ -257,6 +260,12 @@ class PipelineOrchestrator:
                     self._record_execute(False)
                 await self._mark(item_id, FileState.error, str(e))
                 return True
+            finally:
+                total, count = self.stage_seconds.get(state.value, (0.0, 0))
+                self.stage_seconds[state.value] = (
+                    total + time.monotonic() - start,
+                    count + 1,
+                )
 
     async def _advance(self, item_id, state) -> bool:
         handlers: dict[FileState, Callable[[str], Awaitable[bool]]] = {

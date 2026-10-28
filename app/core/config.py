@@ -58,6 +58,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"  # .env also feeds compose (PUID, DATA_DIR, ...)
 
 
 settings = Settings()  # type: ignore[call-arg]  # API_* are env-only aliases

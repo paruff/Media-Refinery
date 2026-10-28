@@ -27,6 +27,9 @@ WORKDIR /app
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini run_refinery.py ./
+# `refinery` CLI (docker compose exec media-refinery refinery doctor)
+RUN printf '#!/bin/sh\ncd /app && exec python -m app.cli "$@"\n' > /usr/local/bin/refinery \
+    && chmod +x /usr/local/bin/refinery
 
 # Run as any uid:gid with `user:` (compose: PUID/PGID); the default is 1000:1000.
 RUN mkdir -p /input /output /work /archive /quarantine /data \
