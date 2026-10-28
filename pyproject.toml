@@ -53,6 +53,7 @@ select = [
 	"T20",      # stray print()
 	"LOG",      # logging misuse
 	"PIE", "PGH", "PLE", "PLW", "TID", "FLY",
+	"C901", "PLR0915",  # complexity: default limits (10 branches, 50 statements) (G18)
 ]
 ignore = [
 	"E501",     # line length is the formatter's job
@@ -67,6 +68,18 @@ extend-immutable-calls = ["fastapi.Depends"]
 known-first-party = ["app"]
 
 [tool.ruff.lint.per-file-ignores]
+# pre-G18 hot spots, outside the orchestrator: split them, then drop the entry
+"examples/audio_format_detection_example.py" = ["PLR0915"]
+"app/core/scanner.py" = ["C901", "PLR0915"]
+"app/services/auditor.py" = ["C901"]
+"app/services/classification.py" = ["C901", "PLR0915"]
+"app/services/execution_service.py" = ["PLR0915"]
+"app/services/musicbrainz.py" = ["C901", "PLR0915"]
+"app/services/tagging_service.py" = ["C901"]
+"app/services/tmdb.py" = ["C901", "PLR0915"]
+"tests/corpus/test_crash_invariants.py" = ["C901"]
+"tests/features/steps/fingerprinting_steps.py" = ["C901"]
+"tests/unit/test_ffmpeg_transcoding.py" = ["C901"]
 "tests/**" = ["S101", "S105", "S106", "S108", "S311", "S607", "ASYNC", "T20", "PLW0603"]
 "features/**" = ["S101", "T20", "F811"]
 "scripts/**" = ["T20", "S607"]

@@ -339,7 +339,7 @@ async def test_different_file_at_target_is_quarantined_target_exists(env):
 
 async def test_crash_after_file_landed_resumes_to_validated(env, monkeypatch):
     """Saga resume: PUBLISH moved the file but the process died before the state commit."""
-    import app.core.orchestrator as orchestrator
+    import app.pipeline.publish as orchestrator
 
     cfg, factory = env
     _twin_mp3(cfg, "a.mp3", 440)

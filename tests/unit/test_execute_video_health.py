@@ -13,6 +13,8 @@ from app.models.media import (
     MediaType,
     NormalizationPlan,
 )
+from app.pipeline import execute
+from app.pipeline.types.video import VideoStrategy
 from tests.pipeline_helpers import make_config, make_session_factory
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
@@ -50,10 +52,10 @@ async def test_corrupt_files_do_not_halve_the_worker_pool(tmp_path):
     orch = PipelineOrchestrator(factory, cfg)
     with (
         patch(
-            "app.core.orchestrator.health_check",
+            "app.pipeline.execute.health_check",
             return_value=(False, "ffmpeg_decode_errors"),
         ),
-        patch("app.core.orchestrator.repair_remux", return_value=None),
+        patch("app.pipeline.execute.repair_remux", return_value=None),
     ):
         for n in ("a.mkv", "b.mkv", "c.mkv"):
             if n != "a.mkv":
@@ -76,7 +78,7 @@ async def test_corrupt_files_do_not_halve_the_worker_pool(tmp_path):
                         )
                     )
                     await s.commit()
-            await orch._execute(n)
+            await execute.run(orch, n)
     async with factory() as s:
         assert (await s.get(MediaItem, "a.mkv")).state == FileState.quarantined
     assert orch._exec.limit == 4
@@ -93,13 +95,13 @@ async def test_inconclusive_health_check_proceeds_to_conversion(tmp_path):
 
     with (
         patch(
-            "app.core.orchestrator.health_check",
+            "app.pipeline.execute.health_check",
             return_value=(False, "healthcheck_timeout"),
         ),
-        patch("app.core.orchestrator.repair_remux") as repair,
+        patch("app.pipeline.execute.repair_remux") as repair,
         patch.object(orch, "_run_ffmpeg", AsyncMock(side_effect=fake_ffmpeg)) as ff,
     ):
-        await orch._execute("m.mkv")
+        await execute.run(orch, "m.mkv")
     repair.assert_not_called()
     ff.assert_awaited_once()
     async with factory() as s:
@@ -113,8 +115,9 @@ async def test_convert_failure_keeps_ffmpeg_stderr(tmp_path):
     boom = subprocess.CalledProcessError(
         1, ["ffmpeg"], stderr="Invalid data found when processing input"
     )
-    with patch("app.core.orchestrator.convert_video", side_effect=boom):
-        rc, err = await orch._convert_video(
+    with patch("app.pipeline.types.video.convert_video", side_effect=boom):
+        rc, err = await VideoStrategy.convert(
+            orch,
             MediaItem(id="x", source_path="/in/x.avi"),
             Path("/in/x.avi"),
             tmp_path / "o.mkv",

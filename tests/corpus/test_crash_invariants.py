@@ -13,6 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.core.orchestrator as orchestrator
 import app.core.publish as publish
+import app.pipeline.publish as pipeline_publish
+import app.pipeline.types.audiobook as audiobook
+import app.pipeline.types.ebook as ebook_type
 from app.core.orchestrator import STAGE_ORDER, PipelineOrchestrator
 from app.models.media import FileState, MediaItem, VerificationRecord
 from tests.pipeline_helpers import (
@@ -76,8 +79,15 @@ class Injector:
             "_move_into_place",
             self.wrap_sync("move", publish._move_into_place),
         )
-        for fn in ("archive_original", "quarantine_file"):
-            mp.setattr(orchestrator, fn, self.wrap_sync(fn, getattr(orchestrator, fn)))
+        # one wrapper per function, installed in every module that imported it
+        homes = {
+            "archive_original": (pipeline_publish, audiobook),
+            "quarantine_file": (orchestrator, ebook_type),
+        }
+        for fn, modules in homes.items():
+            wrapped = self.wrap_sync(fn, getattr(modules[0], fn))
+            for module in modules:
+                mp.setattr(module, fn, wrapped)
         mp.setattr(
             PipelineOrchestrator,
             "_run_ffmpeg",

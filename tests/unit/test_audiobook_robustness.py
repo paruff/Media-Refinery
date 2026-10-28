@@ -10,6 +10,7 @@ from app.core import verify
 from app.core.orchestrator import PipelineOrchestrator
 from app.media.audiobook import concat_inputs, part_gaps
 from app.models.media import FileState, MediaItem, MediaType
+from app.pipeline import classify
 from app.services.classification import audiobook_by_rule
 from tests.pipeline_helpers import make_config, make_session_factory
 
@@ -120,8 +121,8 @@ async def test_long_untagged_audio_is_classified_as_an_audiobook(tmp_path):
         )
         await s.commit()
     orch = PipelineOrchestrator(factory, cfg)
-    with patch("app.core.orchestrator.probe_duration", AsyncMock(return_value=7200.0)):
-        await orch._classify("i")
+    with patch("app.pipeline.classify.probe_duration", AsyncMock(return_value=7200.0)):
+        await classify.run(orch, "i")
     async with factory() as s:
         assert (await s.get(MediaItem, "i")).media_type == MediaType.audiobook
     await engine.dispose()

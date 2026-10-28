@@ -9,6 +9,7 @@ from app.core import verify
 from app.core.orchestrator import PipelineOrchestrator
 from app.core.planning import build_plan
 from app.models.media import FileState, MediaItem, MediaType
+from app.pipeline.types.music import MusicStrategy
 from app.services.classification import parse_disc
 from tests.pipeline_helpers import make_config, make_session_factory
 
@@ -49,11 +50,11 @@ async def test_album_gain_is_reused_from_an_already_planned_sibling(tmp_path):
         music("b", FileState.enriched),
     )
     measure = AsyncMock(return_value=("-3.00 dB", "0.5"))
-    with patch("app.core.orchestrator.measure", measure):
+    with patch("app.pipeline.types.music.measure", measure):
         async with factory() as s:
             b = await s.get(MediaItem, "b")
             meta = json.loads(b.enrichment_data)
-            await orch._replaygain(s, b, meta)
+            await MusicStrategy().replaygain(orch, s, b, meta)
     assert meta["music"]["tags"]["replaygain_album_gain"] == "-7.00 dB"
     assert measure.await_count == 1  # the track only; no album re-measure on a subset
     await engine.dispose()
@@ -66,11 +67,11 @@ async def test_published_siblings_from_an_earlier_import_are_not_reused(tmp_path
         music("b", FileState.enriched),
     )
     measure = AsyncMock(return_value=("-3.00 dB", "0.5"))
-    with patch("app.core.orchestrator.measure", measure):
+    with patch("app.pipeline.types.music.measure", measure):
         async with factory() as s:
             b = await s.get(MediaItem, "b")
             meta = json.loads(b.enrichment_data)
-            await orch._replaygain(s, b, meta)
+            await MusicStrategy().replaygain(orch, s, b, meta)
     assert meta["music"]["tags"]["replaygain_album_gain"] == "-3.00 dB"
     await engine.dispose()
 
@@ -89,7 +90,9 @@ async def test_tracks_matched_to_different_releases_are_all_flagged(tmp_path):
         ),
     )
     async with factory() as s:
-        await orch._check_album_consistency(s, await s.get(MediaItem, "a"))
+        await MusicStrategy.check_album_consistency(
+            orch, s, await s.get(MediaItem, "a")
+        )
         await s.commit()
         flags = {
             i: json.loads((await s.get(MediaItem, i)).enrichment_data).get("review")
@@ -106,7 +109,9 @@ async def test_consistent_release_is_not_flagged(tmp_path):
         music("b", FileState.enriched, tags={"musicbrainz_albumid": "rel-1"}),
     )
     async with factory() as s:
-        await orch._check_album_consistency(s, await s.get(MediaItem, "a"))
+        await MusicStrategy.check_album_consistency(
+            orch, s, await s.get(MediaItem, "a")
+        )
         assert "review" not in json.loads((await s.get(MediaItem, "b")).enrichment_data)
     await engine.dispose()
 
