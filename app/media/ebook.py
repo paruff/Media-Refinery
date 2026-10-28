@@ -1,6 +1,7 @@
 """Ebooks (R-EBOOK-1..4): DRM detection, Calibre metadata/convert, epubcheck, calibredb add."""
 
 import asyncio
+import json
 import re
 import shutil
 import struct
@@ -146,17 +147,43 @@ JAR = Path(
 async def epubcheck(path: Path) -> tuple[bool | None, str]:
     """True/False, or None when epubcheck is not installed."""
     for cmd in (["epubcheck"], ["java", "-jar", str(JAR)]):
-        try:
-            rc, out, err = await run_tool([*cmd, str(path)], CALIBRE_TIMEOUT)
-        except OSError:  # missing, or a launcher-less jar that cannot be exec'd
+        rc, out, err = await run_tool([*cmd, str(path)], CALIBRE_TIMEOUT)
+        if rc == 127:  # missing, or a launcher-less jar that cannot be exec'd
             continue
         return rc == 0, (err or out).strip()[:500]
     return None, "epubcheck not installed"
 
 
+def merge_meta(embedded: dict, fetched: dict) -> dict:
+    """Fetched metadata fills gaps; a non-empty embedded value is never overwritten."""
+    return {**fetched, **{k: v for k, v in embedded.items() if v}}
+
+
+async def find_duplicate(library: Path, meta: dict) -> int | None:
+    """R-PIPE-7: Calibre id of a book already in the library (by ISBN, else exact title+author)."""
+    if meta.get("isbn"):
+        query = f"identifier:isbn:{meta['isbn']}"
+    elif meta.get("title") and meta.get("authors"):
+        query = f'title:"={meta["title"]}" and authors:"={meta["authors"][0]}"'
+    else:
+        return None
+    rc, out, _ = await run_tool(
+        ["calibredb", "list", "--with-library", str(library), "--for-machine",
+         "--fields", "id", "--search", query],
+        CALIBRE_TIMEOUT,
+    )  # fmt: skip
+    try:
+        rows = json.loads(out) if rc == 0 else []
+    except ValueError:
+        return None
+    return int(rows[0]["id"]) if rows else None
+
+
 def add_args(library: Path, book: Path, meta: dict, cover: Path | None) -> list[str]:
     """R-EBOOK-3: calibredb owns the library layout; we only hand it the book + metadata."""
     args = ["calibredb", "add", "--with-library", str(library), str(book)]
+    if meta.get("allow_duplicate"):  # a human approved keeping both (R-PIPE-7)
+        args.append("--duplicates")
     if meta.get("title"):
         args += ["--title", meta["title"]]
     if meta.get("authors"):
@@ -171,10 +198,35 @@ def add_args(library: Path, book: Path, meta: dict, cover: Path | None) -> list[
     return args
 
 
-async def calibredb_add(library: Path, book: Path, meta: dict, cover: Path | None):
-    """Return (book id or None when Calibre skipped a duplicate, error text)."""
-    rc, out, err = await run_tool(add_args(library, book, meta, cover), CALIBRE_TIMEOUT)
-    if rc != 0:
-        return None, (err or out).strip()[:500]
-    found = re.search(r"Added book ids: (\d+)", out)
-    return (int(found.group(1)) if found else None), ""
+BUSY_PREFIX = "busy:"
+BUSY_RE = re.compile(
+    r"another calibre program|database is locked|library .* in use", re.I
+)
+BUSY_RETRIES = (
+    5,
+    15,
+    45,
+)  # seconds between attempts while the library is held elsewhere
+
+
+async def calibredb_add(
+    library: Path, book: Path, meta: dict, cover: Path | None, sleep=asyncio.sleep
+):
+    """Return (book id or None when Calibre skipped a duplicate, error text).
+
+    A library held by the Calibre GUI/content server is retried with backoff and then reported
+    as `busy:` so the caller can try again later instead of quarantining a good book."""
+    for wait in (*BUSY_RETRIES, None):
+        rc, out, err = await run_tool(
+            add_args(library, book, meta, cover), CALIBRE_TIMEOUT
+        )
+        if rc == 0:
+            found = re.search(r"Added book ids: (\d+)", out)
+            return (int(found.group(1)) if found else None), ""
+        text = (err or out).strip()
+        if not BUSY_RE.search(text):
+            return None, text[:500]
+        if wait is None:
+            return None, f"{BUSY_PREFIX} {text}"[:500]
+        await sleep(wait)
+    raise AssertionError("unreachable")  # pragma: no cover
