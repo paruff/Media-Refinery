@@ -411,7 +411,10 @@ class PipelineOrchestrator:
             if ebook.is_ebook(str(item.source_path)):
                 await self._classify_ebook(session, item)
                 return True
-            await ClassificationService(session).classify_file(item_id)  # type: ignore[arg-type]
+            # stay `scanned` until identify/enrich ran: a crash in between must redo them
+            await ClassificationService(session).classify_file(  # type: ignore[arg-type]
+                item_id, state=FileState.scanned.value
+            )
             await session.refresh(item)
             if (
                 item.media_type == MediaType.unknown

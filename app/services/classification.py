@@ -70,7 +70,7 @@ class ClassificationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def classify_file(self, media_id: int):
+    async def classify_file(self, media_id: int, state: str = "enriched"):
         # Fetch media item
         result = await self.db.execute(
             select(MediaItem).where(MediaItem.id == media_id)
@@ -167,7 +167,7 @@ class ClassificationService:
             .values(
                 media_type=media_type,
                 enrichment_data=json.dumps(enrichment_data),
-                state="enriched",
+                state=state,
             )
         )
         await self.db.commit()

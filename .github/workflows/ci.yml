@@ -96,6 +96,8 @@ jobs:
           --cov=app --cov-report=term --cov-report=xml --cov-fail-under=80
       - name: BDD features
         run: uv run --no-sync behave tests/features
+      - name: Messy-library corpus and crash-injection invariants
+        run: uv run --no-sync pytest tests/corpus -m corpus -p no:cacheprovider --timeout=900 -ra
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         if: always()
         with:
