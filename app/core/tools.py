@@ -60,5 +60,5 @@ async def probe_duration(path: str, limit: float = 120) -> float | None:
         return None
     try:
         return float(json.loads(out)["format"]["duration"])
-    except (KeyError, ValueError, TypeError):
+    except KeyError, ValueError, TypeError:
         return None

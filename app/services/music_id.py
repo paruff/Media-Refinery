@@ -50,7 +50,7 @@ def jpeg_cover(data: bytes | None) -> bytes | None:
     try:
         img = Image.open(io.BytesIO(data))
         img.load()
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
     img = img.convert("RGB")
     for scale in (1.0, 0.75, 0.5):
