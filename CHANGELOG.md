@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Corpus and crash safety (G15): generated messy-library corpus, crash injection at every commit/move/ffmpeg/archive/quarantine point with source-held-once, no-partial-file, convergence and no-duplicate invariants (`make corpus-test`), `refinery plan` library report (always a dry run), nightly NF-6 throughput (`make corpus-bench`)
+- Fix: a crash between classification and enrichment left a music item `enriched` without its metadata, failing planning with `KeyError`; classification now leaves the item `scanned` until enrichment is committed
 
 ## [0.2.1]
 - Fix: `scripts/smoke.sh` cleanup removes container-owned files as root (v0.2.0 Release run failed there; v0.2.0 was never published)
