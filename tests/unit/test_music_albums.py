@@ -221,3 +221,37 @@ def test_unsupported_audio_is_routed_to_review(stream, flagged):
     from app.pipeline.types.music import unsupported_audio
 
     assert bool(unsupported_audio(stream)) is flagged
+
+
+@pytest.mark.parametrize(
+    "stream,flagged",
+    [({"codec_name": "flac", "bits_per_raw_sample": "32"}, True),
+     ({"codec_name": "flac", "bits_per_raw_sample": "24"}, False)],
+)  # fmt: skip
+async def test_prepare_plan_flags_unsupported_probe_result(tmp_path, stream, flagged):
+    orch, factory, engine = await _orch(tmp_path, music("a", FileState.enriched))
+    with (
+        patch("app.pipeline.types.music.probe_audio", AsyncMock(return_value=stream)),
+        patch("app.pipeline.types.music.measure", AsyncMock(return_value=None)),
+    ):
+        async with factory() as s:
+            a = await s.get(MediaItem, "a")
+            await MusicStrategy().prepare_plan(orch, s, a)
+            review = json.loads(a.enrichment_data).get("review")
+    assert bool(review) is flagged
+    await engine.dispose()
+
+
+async def test_rate_limited_identify_is_reviewed_not_called_no_match(tmp_path):
+    from app.services.music_id import ProviderUnavailable
+
+    ident = AsyncMock()
+    ident.identify.side_effect = ProviderUnavailable("429")
+    orch, factory, engine = await _orch(tmp_path, music("a", FileState.scanned))
+    orch.identifier = ident
+    async with factory() as s:
+        a = await s.get(MediaItem, "a")
+        await MusicStrategy().enrich(orch, a)
+        meta = json.loads(a.enrichment_data)["music"]
+    assert meta["needs_review"] and meta["unavailable"]
+    await engine.dispose()
