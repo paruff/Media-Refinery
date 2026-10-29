@@ -231,12 +231,13 @@ async def set_extra_fields(library: Path, book_id: int, meta: dict) -> None:
         "publisher": meta.get("publisher"),
         "pubdate": _pubdate(meta.get("published", "")),
     }
+    pairs = [f"{name}:{value}" for name, value in fields.items() if value]
+    if not pairs:
+        return
     args = ["calibredb", "set_metadata", "--with-library", str(library), str(book_id)]
-    for name, value in fields.items():
-        if value:
-            args += ["--field", f"{name}:{value}"]
-    if len(args) > 5:
-        await run_tool(args, CALIBRE_TIMEOUT)
+    for pair in pairs:
+        args += ["--field", pair]
+    await run_tool(args, CALIBRE_TIMEOUT)
 
 
 BUSY_PREFIX = "busy:"

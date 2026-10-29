@@ -90,12 +90,12 @@ class EbookStrategy(MediaStrategy):
         cover = work.with_name("cover.jpg")
         async with o._calibre_lock:
             # two new copies of one book planned in the same pass both missed PLAN's check
-            dup = (
+            dup_id = (
                 None
                 if meta.get("allow_duplicate")
                 else await ebook.find_duplicate(o.cfg.ebooks_root, meta)
             )
-            if dup is not None:
+            if dup_id is not None:
                 book_id, err = None, ""
             else:
                 book_id, err = await ebook.calibredb_add(
@@ -109,8 +109,8 @@ class EbookStrategy(MediaStrategy):
             return True
         if book_id:
             await ebook.set_extra_fields(o.cfg.ebooks_root, book_id, meta)
-        if dup is not None:
-            detail = f"duplicate of calibre id {dup}, skipped"
+        if dup_id is not None:
+            detail = f"duplicate of calibre id {dup_id}, skipped"
         else:
             detail = (
                 f"calibre id {book_id}" if book_id else "duplicate skipped by calibre"

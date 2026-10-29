@@ -22,7 +22,7 @@ off. Promote **one type at a time**, by passing every gate below, then change th
 |------|--------|-----|
 | music | promoted (lead) | meets all gates (G16) |
 | audiobooks | stays experimental | no corpus or crash-invariant coverage; open Important items in #100 (chapter-start/duration verification, late-part and gap detection R-PIPE-6) |
-| ebooks | promoted (beta) | meets all gates (P1): `tests/corpus/test_ebook_corpus.py`, ebook crash sweep, `fetch_ebook_metadata.txt` fixture, #101 closed; needs calibre + epubcheck (in the image) |
+| ebooks | promoted (beta) | meets all gates (P1): `tests/corpus/test_ebook_corpus.py`, ebook crash sweep, `fetch_ebook_metadata.txt` fixture, #101 minors done; needs calibre + epubcheck (in the image) |
 | movies / TV | stays experimental | no corpus coverage; TMDB/TVDB contracts not recorded; minors in #97/#98 open |
 
 Next candidate: audiobooks (corpus suite, crash invariants and its Important items in #100).
