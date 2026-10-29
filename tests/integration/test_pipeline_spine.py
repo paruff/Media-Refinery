@@ -387,3 +387,21 @@ async def test_missing_work_file_at_publish_is_reexecuted(env):
     await orch.run_until_idle()
     (item,) = await _items(factory)
     assert item.state == FileState.validated, item.error_log
+
+
+async def test_concurrent_target_race_is_plan_conflict_not_error(env, monkeypatch):
+    from app.pipeline import plan
+
+    cfg, factory = env
+    _twin_mp3(cfg, "a.mp3", 440)
+    _twin_mp3(cfg, "b.mp3", 880)
+    await import_input(cfg, factory)
+
+    async def blind(session, target_path):  # both workers pass the pre-check
+        return []
+
+    monkeypatch.setattr(plan, "_held", blind)
+    await PipelineOrchestrator(factory, cfg).run_until_idle()
+    states = sorted(i.state.value for i in await _items(factory))
+    assert states == ["planned", "quarantined"]
+    assert any("plan_conflict" in (i.error_log or "") for i in await _items(factory))

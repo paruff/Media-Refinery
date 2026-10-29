@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.planning import IMAGE_SUBS, build_plan, is_audio_only
 from app.core.tools import run_tool
@@ -101,5 +102,15 @@ async def run(o, item_id) -> bool:
             )
         )
         item.state = FileState.planned
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError:
+            # a concurrent worker took the target between our check and insert
+            await session.rollback()
+            item = await session.get(MediaItem, item_id, populate_existing=True)
+            item.state, item.error_log = (
+                FileState.quarantined,
+                f"plan_conflict: {spec.target_path}",
+            )
+            await session.commit()
     return True
