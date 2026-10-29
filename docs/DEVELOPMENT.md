@@ -26,7 +26,7 @@ integration, behave, corpus, contract fixtures, acceptance, regression) with rea
 `make ci` = `make precom` + `make docker-test` + `make compose-check`.
 
 The `# noqa` count may only shrink (`tests/unit/test_noqa_ratchet.py`): lower `BASELINE` when you
-remove one. Requirements drift: `make deps-lock` re-locks everything; review the diff.
+remove one. Requirements: `make deps-lock` re-locks everything; review the diff (no automated drift check yet, deferred on #146: `--upgrade` makes a naive compile-and-diff always red).
 
 ## Security scans: ignoring a finding
 

@@ -14,7 +14,7 @@ that one applies to.
    (a test or command output in the PR), not just claims it.
 2. Read the full diff, then **trace each changed function's callers** (`grep -rn`); a fix
    in one caller that leaves siblings broken is a finding.
-3. Run locally: `make ci` (ruff, mypy, pytest, behave). For pipeline/IO changes also run
+3. Run locally: `make ci` (pre-commit hooks, then `make docker-test`: all CI suites in the image). For pipeline/IO changes also run
    the relevant feature with real ffmpeg on generated fixtures.
 4. Walk the three checklists below in order: **Safety & correctness → Security → Bugs**.
 5. Report findings in the format at the end. No finding without a concrete failure
@@ -92,5 +92,5 @@ End the review with: `Verdict: APPROVE | REQUEST CHANGES` and the commands you r
 - `/code-review` (Claude Code) for diff review; point it at this file.
 - `/security-review` for any change touching subprocess, paths, API auth, or secrets.
 - Local gate: `make hooks` once, then every commit runs the same SHA-pinned hooks as CI (`.pre-commit-config.yaml`: ruff lint+format, mypy, bandit, gitleaks, yamllint, actionlint, zizmor, hadolint, markdownlint, codespell, conventional-commit message). `make precom` runs them on all files.
-- CI (`ci.yml`) runs those hooks, pytest with coverage, behave and a Docker build; `security.yml` runs full-history gitleaks plus pip-audit/Trivy (report-only until G0).
+- CI (`ci.yml`) runs those hooks, pytest with coverage, behave and a Docker build; `security.yml` runs full-history gitleaks plus pip-audit/Trivy (blocking; see docs/DEVELOPMENT.md for the ignore path).
 - Reviewers: a new `# noqa`, `# nosec`, hook `exclude`, or lowered `--cov-fail-under` needs a reason and a goal tag (e.g. `TODO(G1)`); the existing baseline noqa comments must only shrink.
