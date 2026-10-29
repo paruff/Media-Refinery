@@ -29,4 +29,4 @@ echo "input files:  $(find "$LIB" -type f | wc -l)  bytes: $(du -sk "$LIB" | cut
 echo "output files: $(find "$ROOT/output" -type f | wc -l)"
 echo "quarantined:  $(find "$ROOT/quarantine" -type f | wc -l)"
 find "$ROOT/quarantine" -mindepth 1 -maxdepth 2 -type d | sed "s|$ROOT/||"
-echo "scratch (inspect, then delete with sudo-less docker rm): $ROOT"
+echo "scratch (root-owned; inspect, then: docker run --rm --user root -v $ROOT:/r $IMAGE rm -rf /r/*): $ROOT"
