@@ -1,4 +1,3 @@
-requirements: check-venv
 test: check-venv unit integration features
 unit: check-venv
 integration: check-venv
@@ -55,7 +54,8 @@ type-check:
 tdd: precom unit
 
 # `ci` runs the full precommit suite and all tests
-ci: precom test compose-check
+# docker-test is authoritative: real ffmpeg + the 80% coverage floor (local runs skip ffmpeg tests)
+ci: precom docker-test compose-check
 
 # `check` runs lint and type checks
 check: lint type-check
@@ -119,8 +119,9 @@ venv: ## create .venv from the hash-locked requirements (uv)
 	uv pip install --python $(VENV)/bin/python -r requirements.txt
 	uv pip install --python $(VENV)/bin/python --no-deps --require-hashes -r requirements-dev.txt
 
-check-venv:
-	@test -x "$(VENV)/bin/python" || { echo "[ERROR] $(VENV) missing - run: make venv"; exit 1; }
+check-venv: $(PYTHON)
+$(PYTHON):
+	$(MAKE) venv
 
 .PHONY: compose-check
 compose-check: ## docker compose config -q (falls back to the official compose image if no plugin)

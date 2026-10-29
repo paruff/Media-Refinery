@@ -1,7 +1,7 @@
 name: Security
 
 # Vulnerability databases change daily, so these scans are NOT part of the
-# deterministic CI gate. Secret scanning blocks; dependency/image scans report.
+# deterministic CI gate, but every scan here blocks: a red run means fix or pin, not ignore.
 on:
   push:
     branches: [main]
@@ -39,8 +39,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-    # Reporting only until G0 (#46) trims and upgrades requirements.txt.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -51,12 +49,10 @@ jobs:
           python-version: "3.14.8"
           enable-cache: false
       - name: pip-audit
-        continue-on-error: true
         run: >-
           uvx --from pip-audit==2.10.1 pip-audit
           -r requirements.txt --no-deps --disable-pip --progress-spinner off
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        continue-on-error: true
         with:
           version: v0.76.1
           scan-type: fs
