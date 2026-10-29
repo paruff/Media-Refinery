@@ -27,13 +27,15 @@ from app.pipeline.types.music import album_pending
 from app.services.music_id import local_cover
 
 
-def _is_late(item, lead, members) -> bool:
+def _is_late(item: MediaItem, lead: MediaItem, members: list[MediaItem]) -> bool:
     """True when a file turns up after its book was planned (it is not in the lead's member
     list) or built (some other file of the folder is already validated)."""
+    # built: another file of the folder is already validated, so this one missed the merge
     if any(m.state == FileState.validated and m.id != item.id for m in members):
-        return item.state != FileState.validated
+        return bool(item.state != FileState.validated)
     if lead.id == item.id:
         return False
+    # planned: the lead's snapshot of members does not include this file
     book = load_meta(lead).get("book")
     return book is not None and item.id not in book["members"]
 
