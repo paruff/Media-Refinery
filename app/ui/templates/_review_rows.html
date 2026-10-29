@@ -10,9 +10,12 @@
   </td>
   <td>
     <div class="diff">
-      <div><h3>Before</h3><code>{{ i.source_path }}</code></div>
+      <div><h3>Before</h3><code>{{ i.source_path }}</code>
+        <div class="muted">{{ [i.container, i.video_codec, i.audio_codec] | select | join(" · ") or "no probe data" }}</div></div>
       <div><h3>After <span aria-hidden="true">→</span></h3><code class="changed">{{ p.target_path }}</code>
-        <div class="muted">{{ "transcode" if p.needs_transcode else "copy / remux" }}</div></div>
+        <div class="muted">{{ ((["transcode"] if p.needs_transcode else ["copy / remux"])
+          + (["rename"] if p.needs_rename else []) + (["retag"] if p.needs_tagging else [])
+          + (["convert subtitles"] if p.needs_subtitle_conversion else [])) | join(", ") }}</div></div>
     </div>
   </td>
   <td>
