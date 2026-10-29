@@ -182,7 +182,7 @@ imagehash==4.3.2 \
     --hash=sha256:02b0f965f8c77cd813f61d7d39031ea27d4780e7ebcad56c6cd6a709acc06e5f \
     --hash=sha256:e54a79805afb82a34acde4746a16540503a9636fd1ffb31d8e099b29bbbf8156
     # via -r requirements.in
-jinja2==3.1.6 \
+jinja2==2.4.1 \
     --hash=sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d \
     --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
     # via -r requirements.in
