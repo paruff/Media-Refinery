@@ -104,7 +104,11 @@ async def verify_output(
     )
     # -xerror makes a real decode error exit non-zero; stderr warnings alone are not a failure
     checks = [Check("decode", rc == 0, err.strip()[:500])]
-    src_dur = expected_duration or await probe_duration(source)
+    src_dur = (  # a zero sum must fail the duration check, not fall back to the first source
+        expected_duration
+        if expected_duration is not None
+        else await probe_duration(source)
+    )
     out_dur = await probe_duration(output)
     tolerance = AUDIO_TOLERANCE if is_audio else VIDEO_TOLERANCE
     if src_dur is None or out_dur is None:
