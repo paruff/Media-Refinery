@@ -202,3 +202,21 @@ async def test_embedded_artist_is_used_when_there_is_no_album_artist_tag():
     )
     await MusicStrategy().enrich(type("O", (), {"identifier": None})(), item)
     assert "/Music/Solo/LP/" in build_plan(item, ROOTS, []).target_path
+
+
+@pytest.mark.parametrize(
+    "stream,flagged",
+    [
+        ({"codec_name": "flac", "bits_per_raw_sample": "16"}, False),
+        ({"codec_name": "flac", "bits_per_raw_sample": "24"}, False),
+        ({"codec_name": "mp3", "bits_per_raw_sample": "N/A"}, False),
+        ({"codec_name": "flac", "bits_per_raw_sample": "32"}, True),
+        ({"codec_name": "pcm_u8", "bits_per_raw_sample": "8"}, True),
+        ({"codec_name": "dsd_lsbf_planar"}, True),
+        ({}, False),
+    ],
+)
+def test_unsupported_audio_is_routed_to_review(stream, flagged):
+    from app.pipeline.types.music import unsupported_audio
+
+    assert bool(unsupported_audio(stream)) is flagged

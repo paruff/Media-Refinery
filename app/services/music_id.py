@@ -7,7 +7,7 @@ import logging
 import os
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import httpx
@@ -15,6 +15,7 @@ import mutagen
 from PIL import Image
 
 from app.core.redact import http_error_summary
+from app.services.enrich import MAX_ATTEMPTS, MAX_BACKOFF, RETRY_STATUS
 
 logger = logging.getLogger("music_id")
 
@@ -28,6 +29,12 @@ USER_AGENT = os.environ.get(
 MIN_COVER_PX, MAX_COVER_BYTES = 500, 2 * 1024 * 1024  # R-MUSIC-3
 FPCALC_TIMEOUT = 120  # seconds (R-SAFE-5)
 COVER_NAME = "cover.jpg"
+ACOUSTID_INTERVAL = 1 / 3  # AcoustID allows 3 requests per second
+MAX_CACHED_RELEASES = 64
+
+
+class ProviderUnavailable(Exception):
+    """Rate limited or failing after retries: not the same as 'no match'."""
 
 
 def fpcalc(path: str) -> tuple[int, str] | None:
@@ -95,14 +102,37 @@ def local_cover(path: str | Path) -> bytes | None:
     return jpeg_cover(embedded_cover(path))
 
 
+def _decode(data: bytes) -> Image.Image | None:
+    try:
+        img = Image.open(io.BytesIO(data))
+        img.load()
+        return img
+    except OSError, ValueError, Image.DecompressionBombError:
+        return None
+
+
+def is_jpeg(data: bytes | None) -> bool:
+    return data is not None and data[:2] == b"\xff\xd8"
+
+
 def write_album_cover(track: Path) -> bool:
-    """cover.jpg next to a published track, taken from the picture embedded in it."""
+    """cover.jpg next to a published track, taken from the picture embedded in it.
+    An existing cover is replaced only by one at least as large, or when it can't be decoded."""
     target = track.parent / COVER_NAME
     data = embedded_cover(track)
     if data is None:
         return target.exists()
-    if target.exists() and target.read_bytes() == data:
-        return True  # a stale cover.jpg is replaced by the published track's art
+    if target.exists():
+        if target.read_bytes() == data:
+            return True
+        old = _decode(target.read_bytes())
+        new = _decode(data)
+        if old is not None and (new is None or min(new.size) < min(old.size)):
+            return True
+    if not is_jpeg(data):  # cover.jpg must be a JPEG whatever the track carried
+        data = jpeg_cover(data, min_px=1)
+        if data is None:
+            return target.exists()
     tmp = target.with_name(f".{COVER_NAME}.tmp")
     tmp.write_bytes(data)
     tmp.replace(target)
@@ -113,8 +143,24 @@ def _credit(credits: list[dict]) -> str:
     return "".join(c["name"] + c.get("joinphrase", "") for c in credits)
 
 
+class _Pacer:
+    """Spaces calls at least `interval` seconds apart."""
+
+    def __init__(self, interval: float, sleep: Callable[[float], Awaitable[None]]):
+        self.interval, self._sleep = interval, sleep
+        self._lock = asyncio.Lock()
+        self._last = 0.0
+
+    async def wait(self) -> None:
+        async with self._lock:
+            if (gap := self._last + self.interval - time.monotonic()) > 0:
+                await self._sleep(gap)
+            self._last = time.monotonic()
+
+
 class MusicIdentifier:
-    """Never raises: a provider failure or an empty answer yields None (item goes to Review)."""
+    """A provider error or an empty answer yields None (item goes to Review); a provider that
+    stays rate limited / down after retries raises ProviderUnavailable."""
 
     def __init__(
         self,
@@ -123,13 +169,15 @@ class MusicIdentifier:
         threshold: float = 0.85,
         fingerprint: Callable[[str], tuple[int, str] | None] = fpcalc,
         mb_interval: float = 1.0,  # MusicBrainz allows one request per second
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ):
         self.key, self.threshold = acoustid_key, threshold
         self.client = client or httpx.AsyncClient(timeout=15, follow_redirects=True)
         self._fingerprint = fingerprint
-        self._mb_interval = mb_interval
+        self._sleep = sleep
+        self._mb_pace = _Pacer(mb_interval, sleep)
+        self._acoustid_pace = _Pacer(ACOUSTID_INTERVAL, sleep)
         self._mb_lock = asyncio.Lock()
-        self._last_mb = 0.0
         self._releases: dict[str, dict] = {}  # one fetch per album
 
     async def identify(self, path: str) -> tuple[float, dict] | None:
@@ -138,7 +186,8 @@ class MusicIdentifier:
         if fp is None:
             return None
         try:
-            resp = await self.client.get(
+            resp = await self._get(
+                self._acoustid_pace,
                 f"{ACOUSTID_URL}/lookup",
                 params={
                     "client": self.key,
@@ -162,19 +211,38 @@ class MusicIdentifier:
             logger.warning("identify failed for %s: %s", path, http_error_summary(e))
         return None
 
+    async def _get(self, pacer: _Pacer, url: str, **kw) -> httpx.Response:
+        """Paced GET; 429/5xx is retried with Retry-After (capped) backoff."""
+        for attempt in range(MAX_ATTEMPTS):
+            await pacer.wait()
+            resp = await self.client.get(url, **kw)
+            if resp.status_code not in RETRY_STATUS:
+                return resp
+            if attempt < MAX_ATTEMPTS - 1:
+                try:
+                    wait = float(resp.headers.get("Retry-After", 2**attempt))
+                except ValueError:
+                    wait = 2.0**attempt
+                await self._sleep(min(wait, MAX_BACKOFF))
+        if resp.status_code in (
+            429,
+            503,
+        ):  # throttled/down, not an answer about the track
+            raise ProviderUnavailable(f"{url.split('?')[0]} -> HTTP {resp.status_code}")
+        return resp  # other 5xx: the caller's raise_for_status logs it as a failure
+
     async def _release(self, release_id: str) -> dict:
         async with self._mb_lock:
             if release_id not in self._releases:
-                wait = self._last_mb + self._mb_interval - time.monotonic()
-                if wait > 0:
-                    await asyncio.sleep(wait)
-                resp = await self.client.get(
+                resp = await self._get(
+                    self._mb_pace,
                     f"{MB_URL}/release/{release_id}",
                     params={"inc": "recordings+artist-credits+genres", "fmt": "json"},
                     headers={"User-Agent": USER_AGENT},
                 )
-                self._last_mb = time.monotonic()
                 resp.raise_for_status()
+                if len(self._releases) >= MAX_CACHED_RELEASES:
+                    del self._releases[next(iter(self._releases))]  # oldest first
                 self._releases[release_id] = resp.json()
             return self._releases[release_id]
 

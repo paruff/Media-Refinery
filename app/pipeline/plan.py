@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
+from pathlib import Path
 
 from sqlalchemy import select
 
 from app.core.planning import IMAGE_SUBS, build_plan, is_audio_only
 from app.core.tools import run_tool
-from app.models.media import FileState, MediaItem, NormalizationPlan, PlanStatus
+from app.models.media import (
+    FileState,
+    MediaItem,
+    MediaType,
+    NormalizationPlan,
+    PlanStatus,
+)
 from app.pipeline.types import strategy_for
 from app.pipeline.types.base import load_meta
 
@@ -21,6 +29,13 @@ async def _probe_streams(source: str) -> list[dict]:
         return json.loads(out).get("streams", []) if rc == 0 else []
     except ValueError:
         return []
+
+
+async def _held(session, target_path: str) -> list:
+    clash = await session.execute(
+        select(NormalizationPlan).where(NormalizationPlan.target_path == target_path)
+    )
+    return list(clash.scalars().all())
 
 
 async def run(o, item_id) -> bool:
@@ -45,12 +60,22 @@ async def run(o, item_id) -> bool:
             item.state, item.error_log = FileState.error, str(e)
             await session.commit()
             return True
-        clash = await session.execute(
-            select(NormalizationPlan).where(
-                NormalizationPlan.target_path == spec.target_path
+        held = await _held(session, spec.target_path)
+        if item.media_type == MediaType.music and any(
+            p.plan_status != PlanStatus.failed and p.media_item_id != item.id
+            for p in held
+        ):
+            # untagged same-title tracks share a name: keep both, tell them apart by content id
+            target = Path(spec.target_path)
+            spec = replace(
+                spec,
+                target_path=str(
+                    target.with_name(
+                        f"{target.stem} [{str(item.id)[:8]}]{target.suffix}"
+                    )
+                ),
             )
-        )
-        held = clash.scalars().all()
+            held = await _held(session, spec.target_path)
         # a failed plan keeps its history but releases the target (unique)
         for old in held:
             if old.plan_status == PlanStatus.failed:
