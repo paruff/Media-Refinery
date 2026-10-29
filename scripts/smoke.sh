@@ -71,6 +71,10 @@ wait_for() { # label, command that succeeds when done
   echo "ok: $1"
 }
 wait_for ready "curl -fs http://localhost:18000/ready"
+# #107: prove /health (200 only when the DB answers) and Docker's own HEALTHCHECK, which is what
+# `restart`/orchestrators act on; a HEALTHCHECK that points at a dead path never turns healthy
+wait_for health "curl -fs http://localhost:18000/health"
+wait_for "container healthy" "[ \"\$(docker inspect -f '{{.State.Health.Status}}' \$(docker compose -p $P ps -q media-refinery))\" = healthy ]"
 # README quickstart: doctor, then plan (writes nothing), then approve, exactly as in the README
 dc() { docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" exec -T media-refinery "$@"; }
 [ "$(dc printenv ABS_TOKEN)" = smoke-abs ] || fail "env passthrough"
