@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Ebooks promoted to beta (P1, #152): `ebook` joins `music` in the default `ENABLED_TYPES`; generated ebook corpus (epub/pdf/mobi/azw3, DRM'd AZW3, duplicate ISBNs, corrupt zip, `&` and unicode titles) and Calibre crash sweep; recorded `fetch-ebook-metadata` fixture; publisher and pubdate are written to Calibre and a cover is fetched when the book has none; `parse_meta` keeps `AT&T`-style names and the first value of a repeated field; `epub_text_length` is memory-bounded and survives a corrupt zip; two copies of one ISBN planned together are no longer both added; a scanned PDF kept as PDF gets a unique plan target (#188); #101 closed
 - Fix (B4 follow-ups, #171): UI session cookies use a domain-separated HMAC key (existing sessions are logged out once); `retry` claims before checking the source; `.part`/`.tmp` exclusion matches the file suffix only (`report.partial.txt` is no longer skipped); test that `approve` skips review-flagged items
 
 ## [0.3.0-rc.2]

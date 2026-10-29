@@ -5,6 +5,7 @@ the clean-run result, nothing duplicated."""
 
 import contextlib
 import hashlib
+import shutil
 from pathlib import Path
 
 import pytest
@@ -13,11 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.core.orchestrator as orchestrator
 import app.core.publish as publish
+import app.media.ebook as ebook_media
 import app.pipeline.publish as pipeline_publish
 import app.pipeline.types.audiobook as audiobook
 import app.pipeline.types.ebook as ebook_type
 from app.core.orchestrator import STAGE_ORDER, PipelineOrchestrator
 from app.models.media import FileState, MediaItem, VerificationRecord
+from tests.ebook_helpers import make_epub
 from tests.pipeline_helpers import (
     import_input,
     make_config,
@@ -33,6 +36,22 @@ KINDS = {
         d / "a.mp3", artist="X", album="Y", title="Z", track="1"
     ),
     "movie": lambda d: make_mkv(d / "Crash Movie (2020).mkv"),
+    "ebook": lambda d: make_epub(d / "crash.epub", "Crash Book", "Crash Author"),
+}
+# music and ebook are byte-exact; a remuxed MKV embeds a muxing date, and Calibre's database
+# and OPF files embed timestamps, so those are compared by name and checked another way
+EXACT = {"music"}
+# the side effects each kind must actually hit, or the sweep proves nothing about it
+REQUIRED = {
+    "music": {"commit:before", "move:before", "archive_original:after", "ffmpeg:after"},
+    "movie": {"commit:before", "move:before", "archive_original:after", "ffmpeg:after"},
+    "ebook": {
+        "commit:before",
+        "archive_original:after",
+        "to_epub:after",
+        "calibredb_add:before",
+        "calibredb_add:after",
+    },
 }
 
 
@@ -88,6 +107,11 @@ class Injector:
             wrapped = self.wrap_sync(fn, getattr(modules[0], fn))
             for module in modules:
                 mp.setattr(module, fn, wrapped)
+        for fn in (
+            "to_epub",
+            "calibredb_add",
+        ):  # the Calibre add step is the ebook publish
+            mp.setattr(ebook_media, fn, self.wrap_async(fn, getattr(ebook_media, fn)))
         mp.setattr(
             PipelineOrchestrator,
             "_run_ffmpeg",
@@ -136,7 +160,7 @@ async def _published_matches_record(cfg, factory) -> list[str]:
         )
     lib = _files(cfg.music_root.parent)
     return [f"{rel} does not match a verification record" for rel, sha in lib.items()
-            if sha not in shas]  # fmt: skip
+            if sha not in shas and not rel.startswith("Books/")]  # fmt: skip
 
 
 async def _states(factory) -> list[FileState]:
@@ -145,7 +169,7 @@ async def _states(factory) -> list[FileState]:
 
 
 async def _scenario(base: Path, kind: str, target: int | None, ref=None):
-    exact = kind == "music"
+    exact = kind in EXACT
     """Run the pipeline with a Crash injected at point `target` (None: clean run), then
     restart once if it crashed. Returns (injector, cfg, factory, source sha, states at crash, engine, problems at crash)."""
     cfg = make_config(base)
@@ -194,19 +218,19 @@ def _problems(cfg, original, states, final, ref=None, exact=True) -> list[str]:
 
 
 @pytest.mark.parametrize("kind", sorted(KINDS))
-async def test_crash_at_every_step_preserves_invariants(tmp_path, kind):
+async def test_crash_at_every_step_preserves_invariants(tmp_path, kind, monkeypatch):
+    if kind == "ebook" and not all(
+        shutil.which(t) for t in ("calibredb", "ebook-convert")
+    ):
+        pytest.skip("Calibre CLI not installed")
+    monkeypatch.setenv("QTWEBENGINE_CHROMIUM_FLAGS", "--no-sandbox")  # Calibre as root
     inj, cfg, factory, _, _, engine, _ = await _scenario(tmp_path / "ref", kind, None)
-    exact = kind == "music"
+    exact = kind in EXACT
     ref = _files(cfg.music_root.parent, exact)
     assert ref and await _states(factory) == [FileState.validated]
     await engine.dispose()
     names = inj.names
-    assert {
-        "commit:before",
-        "move:before",
-        "archive_original:after",
-        "ffmpeg:after",
-    } <= set(names)
+    assert REQUIRED[kind] <= set(names), REQUIRED[kind] - set(names)
 
     failures, seen = [], set()
     for k in range(len(names)):

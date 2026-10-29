@@ -55,7 +55,9 @@ class EbookStrategy(MediaStrategy):
 
     async def build(self, o, item, plan, source: Path, tmp: Path):
         """R-EBOOK-1: EPUB 3 via ebook-convert; scanned-image PDFs stay PDF and are flagged."""
-        await ebook.extract_cover(source, tmp.with_name("cover.jpg"))
+        cover = tmp.with_name("cover.jpg")
+        if not await ebook.extract_cover(source, cover) and o.cfg.ebook_fetch:
+            await ebook.fetch_meta(load_meta(item).get("ebook", {}), cover)
         rc, err = await ebook.to_epub(source, tmp)
         out = tmp
         if (
@@ -71,7 +73,11 @@ class EbookStrategy(MediaStrategy):
             out = tmp.with_suffix(".pdf")
             await asyncio.to_thread(shutil.copyfile, source, out)
         if rc == 0 and out.suffix == ".pdf":  # kept as PDF: plan follows the file
-            plan.target_path = str(Path(str(plan.target_path)).with_suffix(".pdf"))
+            # the item id (content hash) in the name keeps the unique target free of clashes
+            target = Path(str(plan.target_path))
+            plan.target_path = str(
+                target.with_name(f"{target.stem} [{str(item.id)[:8]}].pdf")
+            )
         return rc, err, out
 
     async def verify(self, o, item, plan, work: Path):
@@ -83,16 +89,32 @@ class EbookStrategy(MediaStrategy):
         meta = json.loads(str(item.enrichment_data))["ebook"]
         cover = work.with_name("cover.jpg")
         async with o._calibre_lock:
-            book_id, err = await ebook.calibredb_add(
-                o.cfg.ebooks_root, work, meta, cover if cover.exists() else None
+            # two new copies of one book planned in the same pass both missed PLAN's check
+            dup = (
+                None
+                if meta.get("allow_duplicate")
+                else await ebook.find_duplicate(o.cfg.ebooks_root, meta)
             )
+            if dup is not None:
+                book_id, err = None, ""
+            else:
+                book_id, err = await ebook.calibredb_add(
+                    o.cfg.ebooks_root, work, meta, cover if cover.exists() else None
+                )
         if err.startswith(ebook.BUSY_PREFIX):  # held by another Calibre program
             o._emit("publish", item.id, "skipped", err)
             return False
         if err:
             await o._quarantine(session, item, "calibre_add_failed", err, work)
             return True
-        detail = f"calibre id {book_id}" if book_id else "duplicate skipped by calibre"
+        if book_id:
+            await ebook.set_extra_fields(o.cfg.ebooks_root, book_id, meta)
+        if dup is not None:
+            detail = f"duplicate of calibre id {dup}, skipped"
+        else:
+            detail = (
+                f"calibre id {book_id}" if book_id else "duplicate skipped by calibre"
+            )
         plan.execution_log = f"{plan.execution_log}\n{detail}".strip()
         item.state = FileState.published
         await session.commit()

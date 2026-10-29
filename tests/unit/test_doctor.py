@@ -32,7 +32,8 @@ async def test_missing_tool_unwritable_path_and_dead_server_fail(tmp_path, monke
     assert got["path WORK_DIR"] == "fail" and got["path INPUT_DIR"] == "ok"
     assert got["key ACOUSTID_API_KEY"] == "warn"
     assert got["server plex"] == "fail"
-    assert "tool calibredb" not in got  # ebook is not enabled
+    assert got["tool calibredb"] == "ok"  # ebook is on by default
+    assert "tool ffprobe" in got
 
 
 def test_cli_exit_code_follows_failures(monkeypatch, tmp_path):

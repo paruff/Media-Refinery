@@ -66,3 +66,30 @@ async def test_acoustid_and_musicbrainz_to_tags():
     )
     assert tags["year"] == "1973"
     assert tags["musicbrainz_albumid"] == "b84ee12a-09ef-421b-82de-0441a926375b"
+
+
+@pytest.mark.asyncio
+async def test_fetch_ebook_metadata_to_meta():
+    """Calibre's fetch-ebook-metadata (recorded, ISBN 9780441172719) through the real parser."""
+    from unittest.mock import AsyncMock, patch
+
+    from app.media import ebook
+
+    text = (FX / "fetch_ebook_metadata.txt").read_text()
+    with patch(
+        "app.media.ebook.run_tool", AsyncMock(return_value=(0, text, ""))
+    ) as run:
+        meta = await ebook.fetch_meta({"isbn": "9780441172719"})
+    assert run.await_args.args[0][:3] == [
+        "fetch-ebook-metadata",
+        "--isbn",
+        "9780441172719",
+    ]
+    assert meta == {
+        "title": "Dune",
+        "authors": ["Frank Herbert"],
+        "publisher": "Penguin Publishing Group",
+        "published": "1990-09-01T19:11:44.781197+00:00",
+        "isbn": "9780441172719",
+    }
+    assert ebook._pubdate(meta["published"]) == "1990-09-01"

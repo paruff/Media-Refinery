@@ -1,0 +1,8 @@
+Title               : Dune
+Author(s)           : Frank Herbert
+Publisher           : Penguin Publishing Group
+Tags                : Fiction, Science Fiction, Space Opera, Classics, Fantasy, Epic
+Languages           : eng
+Published           : 1990-09-01T19:11:44.781197+00:00
+Identifiers         : google:nrRKDwAAQBAJ, isbn:9780441172719
+Comments            : <p>Set on the desert planet Arrakis.</p>
