@@ -11,12 +11,21 @@ from watchdog.observers import Observer
 from app.models.media import FileState, MediaItem, MediaType
 
 EXCLUDE_PATTERNS = (".DS_Store", ".tmp", ".part")
+SIDECAR_IMAGES = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+)  # covers/posters are never media (#173)
 
 
 def is_excluded(path) -> bool:
     """Match the file name only: a parent directory called `x.tmp-album` must not hide its files."""
     name = os.path.basename(str(path))
-    return any(p in name for p in EXCLUDE_PATTERNS)
+    return name.lower().endswith(SIDECAR_IMAGES) or any(
+        p in name for p in EXCLUDE_PATTERNS
+    )
 
 
 STABILITY_WINDOW = 5  # seconds size+mtime must stay unchanged (R-PIPE-3)
