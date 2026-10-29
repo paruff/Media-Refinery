@@ -35,7 +35,11 @@ class EbookStrategy(MediaStrategy):
             o._emit("enrich", item.id, "success" if fetched else "skipped")
             meta = ebook.merge_meta(meta, fetched)  # embedded values win
         ext = source.suffix.lstrip(".").lower()
-        meta["title"] = meta.get("title") or source.stem
+        if ebook.is_untitled(meta.get("title")) or (
+            ext == "epub" and await asyncio.to_thread(ebook.epub_lacks_title, source)
+        ):  # the file name is the best clue left
+            meta["title"] = ebook.placeholder_title(source)
+            meta["placeholder_title"] = True
         meta["authors"] = meta.get("authors") or ["Unknown"]
         meta["format"], meta["convert"] = "epub" if ext != "pdf" else ext, ext != "epub"
         item.enrichment_data = json.dumps({"ebook": meta})
@@ -55,8 +59,12 @@ class EbookStrategy(MediaStrategy):
 
     async def build(self, o, item, plan, source: Path, tmp: Path):
         """R-EBOOK-1: EPUB 3 via ebook-convert; scanned-image PDFs stay PDF and are flagged."""
-        await ebook.extract_cover(source, tmp.with_name("cover.jpg"))
-        rc, err = await ebook.to_epub(source, tmp)
+        cover = tmp.with_name("cover.jpg")
+        if not await ebook.extract_cover(source, cover) and o.cfg.ebook_fetch:
+            await ebook.fetch_meta(load_meta(item).get("ebook", {}), cover)
+        meta = load_meta(item).get("ebook", {})
+        retitle = {"title": meta["title"]} if meta.get("placeholder_title") else None
+        rc, err = await ebook.to_epub(source, tmp, retitle)
         out = tmp
         if (
             rc == 0
@@ -71,7 +79,11 @@ class EbookStrategy(MediaStrategy):
             out = tmp.with_suffix(".pdf")
             await asyncio.to_thread(shutil.copyfile, source, out)
         if rc == 0 and out.suffix == ".pdf":  # kept as PDF: plan follows the file
-            plan.target_path = str(Path(str(plan.target_path)).with_suffix(".pdf"))
+            # the item id (content hash) in the name keeps the unique target free of clashes
+            target = Path(str(plan.target_path))
+            plan.target_path = str(
+                target.with_name(f"{target.stem} [{str(item.id)[:8]}].pdf")
+            )
         return rc, err, out
 
     async def verify(self, o, item, plan, work: Path):
@@ -83,16 +95,32 @@ class EbookStrategy(MediaStrategy):
         meta = json.loads(str(item.enrichment_data))["ebook"]
         cover = work.with_name("cover.jpg")
         async with o._calibre_lock:
-            book_id, err = await ebook.calibredb_add(
-                o.cfg.ebooks_root, work, meta, cover if cover.exists() else None
+            # two new copies of one book planned in the same pass both missed PLAN's check
+            dup_id = (
+                None
+                if meta.get("allow_duplicate")
+                else await ebook.find_duplicate(o.cfg.ebooks_root, meta)
             )
+            if dup_id is not None:
+                book_id, err = None, ""
+            else:
+                book_id, err = await ebook.calibredb_add(
+                    o.cfg.ebooks_root, work, meta, cover if cover.exists() else None
+                )
         if err.startswith(ebook.BUSY_PREFIX):  # held by another Calibre program
             o._emit("publish", item.id, "skipped", err)
             return False
         if err:
             await o._quarantine(session, item, "calibre_add_failed", err, work)
             return True
-        detail = f"calibre id {book_id}" if book_id else "duplicate skipped by calibre"
+        if book_id:
+            await ebook.set_extra_fields(o.cfg.ebooks_root, book_id, meta)
+        if dup_id is not None:
+            detail = f"duplicate of calibre id {dup_id}, skipped"
+        else:
+            detail = (
+                f"calibre id {book_id}" if book_id else "duplicate skipped by calibre"
+            )
         plan.execution_log = f"{plan.execution_log}\n{detail}".strip()
         item.state = FileState.published
         await session.commit()

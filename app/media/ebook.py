@@ -7,6 +7,7 @@ import shutil
 import struct
 import zipfile
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from app.core.tools import run_tool
 
@@ -20,6 +21,10 @@ FONT_OBFUSCATION = (
     "http://ns.adobe.com/pdf/enc#RC",
 )
 LINE = re.compile(r"^(\w[\w()\s]*?)\s*:\s(.*)$")
+AUTHOR_SPLIT = re.compile(
+    r"\s&\s"
+)  # Calibre joins authors with " & "; "AT&T" is one name
+MAX_HTML_READ = 2_000_000  # bytes per (x)html member; bounds memory on a zip bomb
 
 
 def is_ebook(path: str | Path) -> bool:
@@ -67,16 +72,18 @@ def detect_drm(path: str | Path) -> str | None:
 
 def parse_meta(text: str) -> dict:
     """Parse the 'Key  : value' listing of ebook-meta / fetch-ebook-metadata."""
-    fields = {}
+    fields: dict[str, str] = {}
     for raw in text.splitlines():
-        if m := LINE.match(raw):
-            fields[m.group(1).strip().lower()] = m.group(2).strip()
+        if m := LINE.match(raw):  # first wins: a Comments body can contain "Title: x"
+            fields.setdefault(m.group(1).strip().lower(), m.group(2).strip())
     out: dict = {}
     if title := fields.get("title"):
         out["title"] = title
     if authors := fields.get("author(s)"):
         out["authors"] = [
-            a.strip() for a in re.sub(r"\[.*?\]", "", authors).split("&") if a.strip()
+            a.strip()
+            for a in AUTHOR_SPLIT.split(re.sub(r"\[.*?\]", "", authors))
+            if a.strip()
         ]
     if series := re.match(r"(.+?) #([\d.]+)$", fields.get("series", "")):
         out["series"], out["series_index"] = series.group(1), series.group(2)
@@ -100,8 +107,10 @@ async def extract_cover(path: Path, dest: Path) -> Path | None:
     return dest if rc == 0 and await asyncio.to_thread(dest.exists) else None
 
 
-async def fetch_meta(meta: dict) -> dict:
-    """R-EBOOK-2: Calibre's metadata sources by ISBN, else title+author. A miss is empty."""
+async def fetch_meta(meta: dict, cover: Path | None = None) -> dict:
+    """R-EBOOK-2: Calibre's metadata sources by ISBN, else title+author. A miss is empty.
+
+    With `cover`, a fetched cover image is saved there (absent on a miss)."""
     args = ["fetch-ebook-metadata"]
     if meta.get("isbn"):
         args += ["--isbn", meta["isbn"]]
@@ -111,26 +120,97 @@ async def fetch_meta(meta: dict) -> dict:
             args += ["--authors", " & ".join(meta["authors"])]
     else:
         return {}
+    if cover is not None:
+        args += ["--cover", str(cover)]
     rc, out, _ = await run_tool(args, FETCH_TIMEOUT)
     return parse_meta(out) if rc == 0 else {}
 
 
-def epub_text_length(path: Path) -> int:
-    """Visible-ish text in an EPUB's (x)html files; markup is stripped crudely."""
+def epub_text_length(path: Path, enough: int = MIN_PDF_TEXT) -> int:
+    """Visible-ish text in an EPUB's (x)html files; markup is stripped crudely.
+
+    Reads at most MAX_HTML_READ bytes per member and stops once `enough` is reached; a
+    corrupt zip counts as no text."""
     total = 0
-    with zipfile.ZipFile(path) as z:
-        for name in z.namelist():
-            if name.lower().endswith((".xhtml", ".html", ".htm")):
-                html = z.read(name).decode(errors="replace")
+    try:
+        with zipfile.ZipFile(path) as z:
+            for name in z.namelist():
+                if not name.lower().endswith((".xhtml", ".html", ".htm")):
+                    continue
+                with z.open(name) as f:
+                    html = f.read(MAX_HTML_READ).decode(errors="replace")
                 html = re.sub(r"<(script|style)\b.*?</\1>", "", html, flags=re.S)
                 total += len(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).strip())
+                if total >= enough:
+                    break
+    except zipfile.BadZipFile, OSError, RuntimeError:
+        return 0
     return total
 
 
-async def to_epub(source: Path, out: Path) -> tuple[int, str]:
-    """R-EBOOK-1: EPUB 3 (else Calibre default) via ebook-convert; an EPUB source is copied as is."""
+def placeholder_title(path: Path) -> str:
+    """A readable title from the file name: 'my_book.v2' -> 'my book v2'."""
+    return re.sub(r"[\s_.]+", " ", path.stem).strip() or path.stem
+
+
+def is_untitled(title: str | None) -> bool:
+    return (title or "").strip().lower() in ("", "unknown", "untitled")
+
+
+def epub_lacks_title(path: Path) -> bool:
+    """True when the EPUB's OPF has no non-empty dc:title. Calibre invents a title from the
+    file name for such a book, so ebook-meta alone cannot tell."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            container = z.read("META-INF/container.xml").decode(errors="replace")
+            opf_path = re.search(r'full-path="([^"]+)"', container)
+            if not opf_path:
+                return False
+            opf = z.read(opf_path.group(1))
+    except zipfile.BadZipFile, KeyError, OSError, RuntimeError:
+        return False  # unreadable is the verify step's problem, not a missing title
+    return not re.search(rb"<dc:title[^>]*>\s*[^\s<]", opf)
+
+
+def retitle_epub(source: Path, out: Path, title: str) -> None:
+    """Copy an EPUB, adding a dc:title to its OPF (epubcheck rejects an OPF without one).
+
+    Only the OPF changes: an ebook-convert rewrite of a plain EPUB leaves nav.xhtml pointing
+    at stylesheets it never wrote, which epubcheck also rejects."""
+    with zipfile.ZipFile(source) as z:
+        container = z.read("META-INF/container.xml").decode(errors="replace")
+        opf_name = re.search(r'full-path="([^"]+)"', container)
+        if not opf_name:
+            raise ValueError("no OPF in container.xml")
+        tag = f"<dc:title>{escape(title)}</dc:title>"
+        with zipfile.ZipFile(out, "w") as o:
+            for info in z.infolist():  # same order: mimetype stays first and stored
+                data = z.read(info.filename)
+                if info.filename == opf_name.group(1):
+                    opf = data.decode()
+                    opf = re.sub(
+                        r"<dc:title\b[^>]*/>|<dc:title\b[^>]*>\s*</dc:title>", "", opf
+                    )
+                    opf = re.sub(
+                        r"(<metadata\b[^>]*>)", lambda m: m.group(1) + tag, opf, count=1
+                    )
+                    data = opf.encode()
+                o.writestr(info, data, info.compress_type)
+
+
+async def to_epub(
+    source: Path, out: Path, retitle: dict | None = None
+) -> tuple[int, str]:
+    """R-EBOOK-1: EPUB 3 (else Calibre default) via ebook-convert; an EPUB source is copied
+    as is, or with a placeholder dc:title when `retitle` ({title}) says it has none."""
     if source.suffix.lower() == ".epub":
-        await asyncio.to_thread(shutil.copyfile, source, out)
+        try:
+            if retitle:
+                await asyncio.to_thread(retitle_epub, source, out, retitle["title"])
+            else:
+                await asyncio.to_thread(shutil.copyfile, source, out)
+        except (zipfile.BadZipFile, ValueError, KeyError, OSError) as e:
+            return 1, f"cannot retitle epub: {e}"
         return 0, ""
     cmd = ["ebook-convert", str(source), str(out)]
     rc, _, err = await run_tool([*cmd, "--epub-version", "3"], CALIBRE_TIMEOUT)
@@ -196,6 +276,28 @@ def add_args(library: Path, book: Path, meta: dict, cover: Path | None) -> list[
     if cover is not None:
         args += ["--cover", str(cover)]
     return args
+
+
+def _pubdate(published: str) -> str | None:
+    """Calibre prints 'published' as an ISO timestamp; keep the date part."""
+    m = re.match(r"\d{4}(-\d{2}(-\d{2})?)?", published or "")
+    return m.group(0) if m else None
+
+
+async def set_extra_fields(library: Path, book_id: int, meta: dict) -> None:
+    """`calibredb add` cannot take publisher or pubdate, so set them after. Best effort: the
+    book is already in the library, so a failure here must not quarantine it."""
+    fields = {
+        "publisher": meta.get("publisher"),
+        "pubdate": _pubdate(meta.get("published", "")),
+    }
+    pairs = [f"{name}:{value}" for name, value in fields.items() if value]
+    if not pairs:
+        return
+    args = ["calibredb", "set_metadata", "--with-library", str(library), str(book_id)]
+    for pair in pairs:
+        args += ["--field", pair]
+    await run_tool(args, CALIBRE_TIMEOUT)
 
 
 BUSY_PREFIX = "busy:"

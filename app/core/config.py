@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     ACOUSTID_API_KEY: str = ""  # music identification; empty = embedded tags only
     ACOUSTID_MIN_SCORE: float = 0.85  # below this a music plan needs manual approval
     # Lead pipeline (G16): only these types are processed; others are experimental and off.
-    ENABLED_TYPES: list[str] = ["music"]
+    ENABLED_TYPES: list[str] = ["music", "ebook"]
     # Opt-in approval rules: media types ("music", "movie", "series", "audiobook", "ebook") that skip review.
     AUTO_APPROVE_TYPES: list[str] = []
 

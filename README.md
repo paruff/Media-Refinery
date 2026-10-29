@@ -17,8 +17,9 @@ Plex, Jellyfin, Audiobookshelf or Music Assistant to rescan. Originals are never
 
 Self-hosters with a messy pile of downloads and a Plex, Jellyfin, Audiobookshelf or Music Assistant
 server who want every file converted to one canonical, *verified* format and published into a clean
-library, with a human approving the plan first. **Music is the supported lead type**; movies, TV,
-audiobooks and ebooks are experimental and off until you list them in `ENABLED_TYPES`.
+library, with a human approving the plan first. **Music is the supported lead type** and **ebooks are
+supported (beta)**, which needs Calibre (in the image); movies, TV and audiobooks are experimental and
+off until you list them in `ENABLED_TYPES`.
 
 ## What it is not
 
@@ -35,7 +36,7 @@ audiobooks and ebooks are experimental and off until you list them in `ENABLED_T
 | Sonarr / Radarr / Lidarr | Find and download releases, then rename/import | Starts after download: normalizes whatever landed in the drop folder, any source |
 | beets | Tags and organizes music from a CLI | Also converts, verifies and notifies servers; web review UI instead of an interactive prompt |
 | MusicBrainz Picard | Interactive desktop tagger | Unattended pipeline with a review queue only for low-confidence matches |
-| Calibre | Ebook library manager and converter | Uses Calibre underneath for ebooks, alongside the other four types |
+| Calibre | Ebook library manager and converter | Uses Calibre underneath for ebooks (supported, beta), alongside the other four types |
 
 ## Quickstart
 
