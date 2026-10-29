@@ -107,9 +107,10 @@ async def _claim_target(session, item, spec, review) -> None:
         )
     )
     item.state = FileState.planned
+    item_id = item.id  # rollback expires `item`; reading it afterwards would lazy-load
     try:
         await session.commit()
     except IntegrityError:  # backstop: another process claimed the target
         await session.rollback()
-        item = await session.get(MediaItem, item.id, populate_existing=True)
+        item = await session.get(MediaItem, item_id, populate_existing=True)
         await _quarantine_conflict(session, item, spec.target_path)
