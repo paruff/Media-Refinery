@@ -45,7 +45,12 @@ def make_session() -> str:
 def session_valid(value: str) -> bool:
     """Signed with the API token (rotating it logs everyone out) and expires after SESSION_MAX_AGE."""
     issued, _, sig = value.partition(".")
-    if not (settings.API_TOKEN and issued.isdigit() and len(issued) < 15):
+    if not (
+        settings.API_TOKEN
+        and issued.isascii()
+        and issued.isdigit()
+        and len(issued) < 15
+    ):
         return False
     age = time.time() - int(issued)
     return 0 <= age <= SESSION_MAX_AGE and token_matches(sig, _sign(issued))
