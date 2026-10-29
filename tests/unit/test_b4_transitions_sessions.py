@@ -198,3 +198,10 @@ async def test_expired_htmx_poll_gets_hx_redirect_not_the_login_page(client):
     assert r.status_code == 401 and r.headers["hx-redirect"] == "/ui/login"
     plain = await client.get("/ui/queue")
     assert plain.status_code == 303 and "hx-redirect" not in plain.headers
+
+
+def test_sidecar_images_are_not_ingested_as_media():
+    """B7 trial (#173): cover.jpg next to tracks was classified as music and planned as cover.flac."""
+    for name in ("cover.jpg", "Folder.JPEG", "poster.png", "front.webp"):
+        assert is_excluded(f"/music/Album/{name}")
+    assert not is_excluded("/music/Album/01.flac")
