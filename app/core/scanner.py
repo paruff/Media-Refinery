@@ -142,10 +142,12 @@ class ScannerService:
             item.video_fingerprint = fp
         if not fp:
             return None
+        query = select(MediaItem.id).where(column == fp, MediaItem.id != item.id)
+        if audio_only and item.album:
+            # Same recording on a compilation and its studio album is not a duplicate (#178)
+            query = query.where(MediaItem.album == item.album)
         # limit(1): any number of existing matches is just "a duplicate"
-        dup = await session.execute(
-            select(MediaItem.id).where(column == fp, MediaItem.id != item.id).limit(1)
-        )
+        dup = await session.execute(query.limit(1))
         return kind if dup.first() else None
 
     def _parse_and_update(self, item, data):
