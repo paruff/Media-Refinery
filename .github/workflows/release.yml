@@ -55,8 +55,8 @@ jobs:
           provenance: mode=max
           sbom: true
           tags: ${{ env.IMAGE }}:${{ env.CANDIDATE }}
-          cache-from: type=gha,scope=image
-          cache-to: type=gha,scope=image,mode=max
+          cache-from: type=gha,scope=release
+          cache-to: type=gha,scope=release,mode=max
       - name: Compose smoke on that digest (amd64)
         env:
           DIGEST: ${{ steps.build.outputs.digest }}

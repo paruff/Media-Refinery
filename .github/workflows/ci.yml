@@ -91,7 +91,7 @@ jobs:
       - name: Unit + integration tests with coverage
         # Floor per spec NF-3.
         run: >-
-          uv run --no-sync pytest tests/unit tests/integration -n auto
+          uv run --no-sync pytest tests/unit tests/integration -n auto --dist loadfile
           -p no:cacheprovider --timeout=120 -ra
           --cov=app --cov-report=term --cov-report=xml --cov-fail-under=80
       - name: BDD features
@@ -222,5 +222,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE }}:canary
-          cache-from: type=gha,scope=image
-          cache-to: type=gha,scope=image,mode=max
+          cache-from: type=gha,scope=canary
+          cache-to: type=gha,scope=canary,mode=max

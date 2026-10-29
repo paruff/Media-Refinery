@@ -3,6 +3,7 @@
 import httpx
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_async_session
@@ -174,3 +175,18 @@ async def test_login_cookie_flags_logout_and_throttle(client):
     from app.ui.routes import _failed_logins
 
     _failed_logins.clear()
+
+
+# ---- review diff shows the persisted before/after facts (#103) ------------
+async def test_review_row_shows_source_technical_summary_and_planned_actions(client):
+    cookies = await _login(client)
+    await _seed("a.mp3", FileState.planned)
+    async with app.state.factory() as s:
+        item = await s.get(MediaItem, "a.mp3")
+        item.container, item.audio_codec = "mp3", "mp3"
+        plan = (await s.execute(select(NormalizationPlan))).scalar_one()
+        plan.needs_transcode, plan.needs_tagging = True, True
+        await s.commit()
+    page = (await client.get("/ui/review", cookies=cookies)).text
+    assert "mp3 · mp3" in page
+    assert "transcode" in page and "retag" in page

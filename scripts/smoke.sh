@@ -1,17 +1,23 @@
 #!/bin/sh
 # G12 compose smoke test: one generated fixture per media type goes through the
 # real image via docker compose and must land in its library. Host needs only Docker.
+# Needs: docker (with compose) and curl.
 # Usage: scripts/smoke.sh [image]   (default media-refinery:ci)
 set -eu
+command -v curl >/dev/null || { echo "smoke.sh needs curl on the host" >&2; exit 2; }
 
 IMAGE=${1:-media-refinery:ci}
 ROOT=$(mktemp -d "$HOME/.mrsmoke.XXXXXX")  # under $HOME: colima/Docker Desktop share it with the VM
 P=mrsmoke
 # container-written files belong to uid 1000, which the host user may not be: delete as root
-trap 'docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" down >/dev/null 2>&1 || true
-  docker run --rm --user root -v "$ROOT":/r "$IMAGE" sh -c "rm -rf /r/*" >/dev/null 2>&1 || true; rm -rf "$ROOT"' EXIT
+cleanup() {
+  docker compose -p $P -f docker-compose.yml -f "$ROOT/override.yml" down >/dev/null 2>&1 || true
+  docker run --rm --user root -v "$ROOT:/r" "$IMAGE" sh -c "rm -rf /r/*" >/dev/null 2>&1 || true
+  rm -rf "$ROOT"
+}
+trap cleanup EXIT
 for d in input output work archive quarantine data; do mkdir -p "$ROOT/$d"; done
-chmod -R 777 "$ROOT"
+chmod 777 "$ROOT"/* # subdirs only: the mktemp parent stays 0700
 
 # Fixtures are generated inside the image (ffmpeg, calibre).
 docker run --rm --user root -v "$ROOT/input":/input "$IMAGE" sh -c '

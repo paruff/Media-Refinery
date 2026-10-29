@@ -146,7 +146,7 @@ An output is publishable only if all checks for its type pass; results are store
 ### R-UI (web)
 
 - Server-rendered (Jinja2 + htmx; no SPA build step) following [DESIGN.md](DESIGN.md).
-- Views: **Queue** (by state), **Review** (pending plans with before→after diff of path, codecs, tags, artwork; approve/reject, bulk approve), **Item detail** (log, verification record), **Quarantine**, **Summary**.
+- Views: **Queue** (by state), **Review** (pending plans with a before→after diff of path, plus source container/codecs and planned actions (transcode, rename, retag, subtitle conversion); per-tag and artwork diffs are out of scope because plans do not store target tags; approve/reject, bulk approve), **Item detail** (log, verification record), **Quarantine**, **Summary**.
 
 ### R-CLI (Typer)
 

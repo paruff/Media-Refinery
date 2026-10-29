@@ -24,9 +24,9 @@ ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
-COPY app ./app
-COPY alembic ./alembic
-COPY alembic.ini run_refinery.py ./
+COPY --chown=1000:1000 app ./app
+COPY --chown=1000:1000 alembic ./alembic
+COPY --chown=1000:1000 alembic.ini run_refinery.py ./
 # `refinery` CLI (docker compose exec media-refinery refinery doctor)
 RUN printf '#!/bin/sh\ncd /app && exec python -m app.cli "$@"\n' > /usr/local/bin/refinery \
     && chmod +x /usr/local/bin/refinery
@@ -35,7 +35,7 @@ RUN printf '#!/bin/sh\ncd /app && exec python -m app.cli "$@"\n' > /usr/local/bi
 RUN mkdir -p /input /output /work /archive /quarantine /data \
     && groupadd --gid 1000 refinery \
     && useradd --uid 1000 --gid 1000 --home-dir /data refinery \
-    && chown -R refinery /app /input /output /work /archive /quarantine /data
+    && chown refinery /app && chown -R refinery /input /output /work /archive /quarantine /data
 USER 1000:1000
 
 ENV HOME=/data \
@@ -56,6 +56,7 @@ ENV HOME=/data \
 VOLUME ["/input", "/output", "/work", "/archive", "/quarantine", "/data"]
 EXPOSE 8000
 
+# /ready is unauthenticated on purpose: probes carry no token, and it reports only booleans
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=4)"]
 
