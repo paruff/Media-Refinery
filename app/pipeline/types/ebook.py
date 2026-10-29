@@ -35,7 +35,11 @@ class EbookStrategy(MediaStrategy):
             o._emit("enrich", item.id, "success" if fetched else "skipped")
             meta = ebook.merge_meta(meta, fetched)  # embedded values win
         ext = source.suffix.lstrip(".").lower()
-        meta["title"] = meta.get("title") or source.stem
+        if ebook.is_untitled(meta.get("title")) or (
+            ext == "epub" and await asyncio.to_thread(ebook.epub_lacks_title, source)
+        ):  # the file name is the best clue left
+            meta["title"] = ebook.placeholder_title(source)
+            meta["placeholder_title"] = True
         meta["authors"] = meta.get("authors") or ["Unknown"]
         meta["format"], meta["convert"] = "epub" if ext != "pdf" else ext, ext != "epub"
         item.enrichment_data = json.dumps({"ebook": meta})
@@ -58,7 +62,9 @@ class EbookStrategy(MediaStrategy):
         cover = tmp.with_name("cover.jpg")
         if not await ebook.extract_cover(source, cover) and o.cfg.ebook_fetch:
             await ebook.fetch_meta(load_meta(item).get("ebook", {}), cover)
-        rc, err = await ebook.to_epub(source, tmp)
+        meta = load_meta(item).get("ebook", {})
+        retitle = {"title": meta["title"]} if meta.get("placeholder_title") else None
+        rc, err = await ebook.to_epub(source, tmp, retitle)
         out = tmp
         if (
             rc == 0

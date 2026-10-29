@@ -210,7 +210,7 @@ async def test_pdf_input_is_converted_and_a_text_pdf_becomes_epub(tmp_path):
     src.write_bytes(b"%PDF")
     plan = SimpleNamespace(target_path=str(tmp_path / "x.epub"))
 
-    async def convert(source, out):
+    async def convert(source, out, retitle=None):
         make_epub(out, "T", "A", {"OEBPS/c1.xhtml": "<p>" + "text " * 100 + "</p>"})
         return 0, ""
 
@@ -230,7 +230,7 @@ async def test_scanned_pdf_stays_pdf_and_the_retarget_cannot_collide(tmp_path):
     src = tmp_path / "scan.pdf"
     src.write_bytes(b"%PDF")
 
-    async def convert(source, out):
+    async def convert(source, out, retitle=None):
         make_epub(out, "T", "A", {"OEBPS/c1.xhtml": "<p></p>"})
         return 0, ""
 
@@ -293,3 +293,77 @@ async def test_publish_adds_and_writes_extra_fields(tmp_path):
         )
     extra.assert_awaited_once()
     assert extra.await_args.args[1] == 9
+
+
+# ---- placeholder titles ---------------------------------------------------
+def test_placeholder_title_comes_from_the_file_name():
+    assert (
+        ebook.placeholder_title(Path("/in/my_great.book_v2.epub")) == "my great book v2"
+    )
+    assert ebook.placeholder_title(Path("/in/bare.epub")) == "bare"
+    assert (
+        ebook.is_untitled(None)
+        and ebook.is_untitled("Unknown")
+        and ebook.is_untitled(" ")
+    )
+    assert not ebook.is_untitled("Dune")
+
+
+@pytest.mark.asyncio
+async def test_classify_uses_the_file_name_when_calibre_says_unknown(tmp_path):
+    book = make_epub(tmp_path / "lost_book.epub", "x", "x")
+    item, o = _item(book), _orch(tmp_path, fetch=False)
+    with patch(
+        "app.media.ebook.read_meta", AsyncMock(return_value={"title": "Unknown"})
+    ):
+        await EbookStrategy().classify(o, AsyncMock(), item)
+    meta = json.loads(item.enrichment_data)["ebook"]
+    assert meta["title"] == "lost book" and meta["placeholder_title"] is True
+    assert meta["authors"] == ["Unknown"]
+
+
+@pytest.mark.asyncio
+async def test_untitled_epub_gets_a_title_without_ebook_convert(tmp_path):
+    from tests.ebook_helpers import make_bare_epub
+
+    run = AsyncMock()
+    src = make_bare_epub(tmp_path / "bare.epub")
+    with patch("app.media.ebook.run_tool", run):
+        rc, _ = await ebook.to_epub(src, tmp_path / "o.epub", {"title": "bare"})
+    assert rc == 0 and not ebook.epub_lacks_title(tmp_path / "o.epub")
+    run.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_retitle_of_a_corrupt_epub_is_a_conversion_failure(tmp_path):
+    (tmp_path / "x.epub").write_bytes(b"PK\x03\x04junk")
+    rc, err = await ebook.to_epub(
+        tmp_path / "x.epub", tmp_path / "o.epub", {"title": "x"}
+    )
+    assert rc == 1 and "cannot retitle" in err
+
+
+def test_epub_lacks_title_reads_the_opf(tmp_path):
+    from tests.ebook_helpers import make_bare_epub
+
+    assert ebook.epub_lacks_title(make_bare_epub(tmp_path / "b.epub"))
+    assert not ebook.epub_lacks_title(make_epub(tmp_path / "t.epub", "Dune", "A"))
+    (tmp_path / "bad.epub").write_bytes(b"nope")
+    assert not ebook.epub_lacks_title(tmp_path / "bad.epub")
+
+
+def test_retitle_epub_adds_dc_title_and_leaves_the_rest_alone(tmp_path):
+    from tests.ebook_helpers import make_bare_epub
+
+    src = make_bare_epub(tmp_path / "bare.epub")
+    ebook.retitle_epub(src, tmp_path / "out.epub", "My & Book")
+    assert not ebook.epub_lacks_title(tmp_path / "out.epub")
+    with zipfile.ZipFile(src) as a, zipfile.ZipFile(tmp_path / "out.epub") as b:
+        assert (
+            b.namelist()[0] == "mimetype"
+            and b.infolist()[0].compress_type == zipfile.ZIP_STORED
+        )
+        assert a.namelist() == b.namelist()
+        same = [n for n in a.namelist() if n != "OEBPS/content.opf"]
+        assert all(a.read(n) == b.read(n) for n in same)
+        assert b"<dc:title>My &amp; Book</dc:title>" in b.read("OEBPS/content.opf")

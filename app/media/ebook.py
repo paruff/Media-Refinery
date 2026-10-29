@@ -7,6 +7,7 @@ import shutil
 import struct
 import zipfile
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from app.core.tools import run_tool
 
@@ -147,10 +148,69 @@ def epub_text_length(path: Path, enough: int = MIN_PDF_TEXT) -> int:
     return total
 
 
-async def to_epub(source: Path, out: Path) -> tuple[int, str]:
-    """R-EBOOK-1: EPUB 3 (else Calibre default) via ebook-convert; an EPUB source is copied as is."""
+def placeholder_title(path: Path) -> str:
+    """A readable title from the file name: 'my_book.v2' -> 'my book v2'."""
+    return re.sub(r"[\s_.]+", " ", path.stem).strip() or path.stem
+
+
+def is_untitled(title: str | None) -> bool:
+    return (title or "").strip().lower() in ("", "unknown", "untitled")
+
+
+def epub_lacks_title(path: Path) -> bool:
+    """True when the EPUB's OPF has no non-empty dc:title. Calibre invents a title from the
+    file name for such a book, so ebook-meta alone cannot tell."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            container = z.read("META-INF/container.xml").decode(errors="replace")
+            opf_path = re.search(r'full-path="([^"]+)"', container)
+            if not opf_path:
+                return False
+            opf = z.read(opf_path.group(1))
+    except zipfile.BadZipFile, KeyError, OSError, RuntimeError:
+        return False  # unreadable is the verify step's problem, not a missing title
+    return not re.search(rb"<dc:title[^>]*>\s*[^\s<]", opf)
+
+
+def retitle_epub(source: Path, out: Path, title: str) -> None:
+    """Copy an EPUB, adding a dc:title to its OPF (epubcheck rejects an OPF without one).
+
+    Only the OPF changes: an ebook-convert rewrite of a plain EPUB leaves nav.xhtml pointing
+    at stylesheets it never wrote, which epubcheck also rejects."""
+    with zipfile.ZipFile(source) as z:
+        container = z.read("META-INF/container.xml").decode(errors="replace")
+        opf_name = re.search(r'full-path="([^"]+)"', container)
+        if not opf_name:
+            raise ValueError("no OPF in container.xml")
+        tag = f"<dc:title>{escape(title)}</dc:title>"
+        with zipfile.ZipFile(out, "w") as o:
+            for info in z.infolist():  # same order: mimetype stays first and stored
+                data = z.read(info.filename)
+                if info.filename == opf_name.group(1):
+                    opf = data.decode()
+                    opf = re.sub(
+                        r"<dc:title\b[^>]*/>|<dc:title\b[^>]*>\s*</dc:title>", "", opf
+                    )
+                    opf = re.sub(
+                        r"(<metadata\b[^>]*>)", lambda m: m.group(1) + tag, opf, count=1
+                    )
+                    data = opf.encode()
+                o.writestr(info, data, info.compress_type)
+
+
+async def to_epub(
+    source: Path, out: Path, retitle: dict | None = None
+) -> tuple[int, str]:
+    """R-EBOOK-1: EPUB 3 (else Calibre default) via ebook-convert; an EPUB source is copied
+    as is, or with a placeholder dc:title when `retitle` ({title}) says it has none."""
     if source.suffix.lower() == ".epub":
-        await asyncio.to_thread(shutil.copyfile, source, out)
+        try:
+            if retitle:
+                await asyncio.to_thread(retitle_epub, source, out, retitle["title"])
+            else:
+                await asyncio.to_thread(shutil.copyfile, source, out)
+        except (zipfile.BadZipFile, ValueError, KeyError, OSError) as e:
+            return 1, f"cannot retitle epub: {e}"
         return 0, ""
     cmd = ["ebook-convert", str(source), str(out)]
     rc, _, err = await run_tool([*cmd, "--epub-version", "3"], CALIBRE_TIMEOUT)

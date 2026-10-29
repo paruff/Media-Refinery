@@ -4,6 +4,7 @@ and re-ingesting an already-added book is a no-op."""
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -55,6 +56,16 @@ def messy_ebooks(root: Path) -> dict[str, Path]:
             root / "dune-2.epub", "Dune (copy)", "F. Herbert", ISBN
         ),
     }
+
+
+def calibre_major() -> int:
+    """Calibre 7.6 (Ubuntu 24.04 apt) turns an AZW3 into an EPUB with a colon in an `id`, which
+    epubcheck rejects; 8.x (the image) does not. 0 when the version cannot be read."""
+    out = subprocess.run(
+        ["ebook-convert", "--version"], capture_output=True, text=True
+    ).stdout
+    found = re.search(r"calibre (\d+)\.", out)
+    return int(found.group(1)) if found else 0
 
 
 def _sha(p: Path) -> str:
@@ -141,13 +152,20 @@ async def test_messy_ebook_library_converges_without_loss_or_junk(
     # & and unicode titles, and missing metadata, come through intact
     assert titles["Q & A: Tom & Jerry"]["authors"] == "Barnes & Noble"
     assert titles["Zażółć gęślą jaźń 日本語"]["authors"] == "Björk Guðmundsdóttir"
-    # an EPUB with no title fails epubcheck (dc:title is required): held, not added
-    assert items[made["bare"].name].state == FileState.quarantined
-    assert "epubcheck_failed" in str(items[made["bare"].name].error_log)
+    # an EPUB with no title is rewritten under its file name and passes epubcheck
+    assert "bare" in titles and titles["bare"]["authors"] == "Unknown"
     # a PDF with no metadata still lands, under whatever title Calibre or the file name gives
     assert len([b for b in books if "text" in b["title"].lower()]) == 1, titles
     # every format converts to EPUB (a scanned PDF may stay PDF)
-    assert {"Plain Book", "Old Mobi", "Kindle Book"} <= set(titles)
+    assert {"Plain Book", "Old Mobi"} <= set(titles)
+    kindle = items[made["azw3"].name]
+    if calibre_major() >= 8:
+        assert "Kindle Book" in titles
+    else:  # an old Calibre's bad output is held by epubcheck, never added
+        assert "Kindle Book" in titles or (
+            kindle.state == FileState.quarantined
+            and "epubcheck_failed" in str(kindle.error_log)
+        )
     assert {Path(f).suffix for b in books for f in b["formats"]} <= {".epub", ".pdf"}
     # a duplicate ISBN is not added twice
     assert len([b for b in books if "isbn" in str(b.get("identifiers", ""))]) == 1, (
