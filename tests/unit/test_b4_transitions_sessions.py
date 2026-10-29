@@ -1,6 +1,7 @@
 """B4 (#102/#103): atomic approve/reject/retry, honest 409 reasons, signed expiring UI sessions."""
 
 import asyncio
+import re
 
 import httpx
 import pytest
@@ -131,7 +132,8 @@ def test_exclude_patterns_ignore_parent_directory_names():
 # ---- CLI approve needs an explicit flag for review-flagged items (#102) ----
 def test_cli_approve_has_include_review_flag():
     out = CliRunner().invoke(cli_app, ["approve", "--help"]).output
-    assert "--include-review" in out
+    # CI forces colour; rich then wraps pieces of the option name in separate ANSI codes
+    assert "--include-review" in re.sub(r"\x1b\[[0-9;]*m", "", out)
 
 
 # ---- signed, expiring UI session (#103) -----------------------------------
