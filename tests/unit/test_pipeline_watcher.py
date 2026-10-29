@@ -1,4 +1,5 @@
 import asyncio
+import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -192,6 +193,31 @@ async def test_retries_back_off_and_give_up_is_an_error(
     with caplog.at_level("ERROR"):
         await _run_passes(watcher, 30)
     assert "giving up" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_file_changed_while_hashing_does_not_use_retry_budget(
+    tmp_path, async_session, monkeypatch
+):
+    monkeypatch.setattr("app.core.watcher.STABILITY_WINDOW", 0)
+    f = tmp_path / "a.mkv"
+    f.write_bytes(b"x")
+    watcher = InputWatcher(str(tmp_path), _factory(async_session))
+    watcher.processing_queue[str(f)] = 0
+    changes = [w.FileChangedError("busy")] * (MAX_IMPORT_ATTEMPTS + 2)
+    watcher.insert_if_new = AsyncMock(side_effect=[*changes, None])
+    await _run_passes(watcher, 40)
+    assert watcher.insert_if_new.await_count == len(changes) + 1  # not dropped
+    assert not watcher.processing_queue
+
+
+def test_stat_signature_sees_same_size_rewrite(tmp_path):
+    f = tmp_path / "a.mkv"
+    f.write_bytes(b"aaaa")
+    before = w._stat_signature(str(f))
+    f.write_bytes(b"bbbb")
+    os.utime(f, ns=(1, 2))  # coarse filesystem clocks: force a distinct mtime
+    assert w._stat_signature(str(f)) != before
 
 
 @pytest.mark.asyncio
