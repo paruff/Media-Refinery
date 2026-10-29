@@ -105,6 +105,45 @@ else:
             raise
 
 
+async def _output_matches_plan(session, plan, src, output_file) -> bool:
+    """True when an existing output is this plan's own result.
+
+    The rename that publishes the output is atomic, so a committed saga log for the plan
+    proves it; otherwise a straight copy is accepted only if its bytes equal the source.
+    """
+    import asyncio
+    import hashlib
+
+    from sqlalchemy import select
+
+    from app.models.saga import SagaFileMoveLog, SagaLogStatus
+
+    committed = await session.scalar(
+        select(SagaFileMoveLog.id).where(
+            SagaFileMoveLog.plan_id == plan.id,
+            SagaFileMoveLog.dest_path == str(output_file),
+            SagaFileMoveLog.status == SagaLogStatus.committed,
+        )
+    )
+    if committed is not None:
+        return True
+    if plan.needs_transcode:
+        return False
+
+    def digest(path):
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.digest()
+
+    if output_file.stat().st_size != src.stat().st_size:
+        return False
+    return await asyncio.to_thread(digest, output_file) == await asyncio.to_thread(
+        digest, src
+    )
+
+
 def _execute_normalization_plan(plan_dict):
     """Execute plan synchronously by running an async worker that performs the saga file move.
 
@@ -147,14 +186,28 @@ def _execute_normalization_plan(plan_dict):
     async def do_work():
         await init_db()
         async with AsyncSessionLocal() as session:
-            await session.execute(
-                update(DBPlan)
-                .where(DBPlan.id == plan.id)
-                .values(plan_status=PlanStatus.executing)
-            )
-            await session.commit()
-
             with lock.acquire(timeout=10):
+                # Checked under the lock so two workers cannot both pass it (TOCTOU).
+                if await asyncio.to_thread(output_file.exists):
+                    if not await _output_matches_plan(session, plan, src, output_file):
+                        raise FileExistsError(
+                            f"{output_file} exists but is not the output of plan {plan.id}"
+                        )
+                    logger.info(f"{output_file} already produced; plan {plan.id} done")
+                    await session.execute(
+                        update(DBPlan)
+                        .where(DBPlan.id == plan.id)
+                        .values(plan_status=PlanStatus.completed)
+                    )
+                    await session.commit()
+                    return
+
+                await session.execute(
+                    update(DBPlan)
+                    .where(DBPlan.id == plan.id)
+                    .values(plan_status=PlanStatus.executing)
+                )
+                await session.commit()
                 saga_log = SagaFileMoveLog(
                     plan_id=plan.id,
                     src_path=str(src),
@@ -196,9 +249,6 @@ def _execute_normalization_plan(plan_dict):
                 )
                 await session.commit()
 
-    if output_file.exists():
-        logger.info(f"{output_file} already exists; skipping {plan.id}")
-        return
     asyncio.run(do_work())
 
 
