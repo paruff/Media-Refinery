@@ -4,9 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.core import watcher as w
 from app.core.pipeline import PipelineCoordinator
-from app.core.watcher import DebounceHandler, InputWatcher
+from app.core.watcher import MAX_IMPORT_ATTEMPTS, DebounceHandler, InputWatcher
 from app.models.media import FileState, MediaItem
+
+pytestmark = pytest.mark.regression  # #144 done-when runs `-m regression`
 
 
 def _factory(session):
@@ -154,6 +157,7 @@ async def test_failed_import_is_retried_then_dropped(
     tmp_path, async_session, monkeypatch
 ):
     monkeypatch.setattr("app.core.watcher.STABILITY_WINDOW", 0)
+    monkeypatch.setattr("app.core.watcher.RETRY_BACKOFF", 0)
     f = tmp_path / "a.mkv"
     f.write_bytes(b"x")
     watcher = InputWatcher(str(tmp_path), _factory(async_session))
@@ -165,9 +169,52 @@ async def test_failed_import_is_retried_then_dropped(
 
     watcher.processing_queue[str(f)] = 0
     watcher.insert_if_new = AsyncMock(side_effect=OSError("always"))
-    await _run_passes(watcher, 12)
-    assert watcher.insert_if_new.await_count == 3  # MAX_IMPORT_ATTEMPTS, then dropped
+    await _run_passes(watcher, 30)
+    assert watcher.insert_if_new.await_count == MAX_IMPORT_ATTEMPTS  # then dropped
     assert not watcher.processing_queue
+
+
+@pytest.mark.asyncio
+async def test_retries_back_off_and_give_up_is_an_error(
+    tmp_path, async_session, monkeypatch, caplog
+):
+    monkeypatch.setattr("app.core.watcher.STABILITY_WINDOW", 0)
+    f = tmp_path / "a.mkv"
+    f.write_bytes(b"x")
+    watcher = InputWatcher(str(tmp_path), _factory(async_session))
+    watcher.processing_queue[str(f)] = 0
+    watcher.insert_if_new = AsyncMock(side_effect=OSError("db down"))
+    await _run_passes(watcher, 10)  # default backoff is far longer than 10 passes
+    assert watcher.insert_if_new.await_count == 1
+    assert str(f) in watcher.processing_queue  # waiting, not dropped
+
+    monkeypatch.setattr("app.core.watcher.RETRY_BACKOFF", 0)
+    with caplog.at_level("ERROR"):
+        await _run_passes(watcher, 30)
+    assert "giving up" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_unreadable_file_does_not_kill_the_loop(
+    tmp_path, async_session, monkeypatch
+):
+    monkeypatch.setattr("app.core.watcher.STABILITY_WINDOW", 0)
+    bad, good = tmp_path / "bad.mkv", tmp_path / "good.mkv"
+    bad.write_bytes(b"x")
+    good.write_bytes(b"y")
+    real = w._stat_signature
+
+    def flaky(path):
+        if path == str(bad):
+            raise PermissionError("denied")
+        return real(path)
+
+    monkeypatch.setattr("app.core.watcher._stat_signature", flaky)
+    watcher = InputWatcher(str(tmp_path), _factory(async_session))
+    watcher.processing_queue.update({str(bad): 0, str(good): 0})
+    watcher.insert_if_new = AsyncMock()
+    await _run_passes(watcher, 4)
+    watcher.insert_if_new.assert_any_await(str(good))
 
 
 @pytest.mark.asyncio
