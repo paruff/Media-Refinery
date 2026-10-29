@@ -164,3 +164,41 @@ async def test_missing_flac_binary_fails_verification_visibly():
     with patch("app.core.verify.shutil.which", return_value=None):
         check = await verify._flac_test("/x.flac")
     assert check.passed is False and "not installed" in check.detail
+
+
+async def test_unidentified_music_is_filed_by_its_embedded_artist_and_album():
+    """B7 trial: classification keeps artist/album in enrichment_data; enrich must use them."""
+    item = MediaItem(
+        id="x",
+        source_path="/in/1975 ABBA/01.flac",
+        state=FileState.scanned,
+        media_type=MediaType.music,
+        audio_codec="flac",
+        enrichment_data=json.dumps(
+            {
+                "artist": "ABBA",
+                "album": "ABBA",
+                "album_artist": "ABBA",
+                "track_title": "Mamma Mia",
+                "track_number": 1,
+            }
+        ),
+    )
+    await MusicStrategy().enrich(type("O", (), {"identifier": None})(), item)
+    plan = build_plan(item, ROOTS, [])
+    assert plan.target_path.endswith("/Music/ABBA/ABBA/01 - Mamma Mia.flac")
+
+
+async def test_embedded_artist_is_used_when_there_is_no_album_artist_tag():
+    item = MediaItem(
+        id="y",
+        source_path="/in/x/01.flac",
+        state=FileState.scanned,
+        media_type=MediaType.music,
+        audio_codec="flac",
+        enrichment_data=json.dumps(
+            {"artist": "Solo", "album": "LP", "track_number": 2}
+        ),
+    )
+    await MusicStrategy().enrich(type("O", (), {"identifier": None})(), item)
+    assert "/Music/Solo/LP/" in build_plan(item, ROOTS, []).target_path

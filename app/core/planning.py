@@ -48,7 +48,11 @@ def _music(item: MediaItem, root: str) -> PlanSpec:
     keep = codec in LOSSY_EXT or codec == "flac"
     args = ["-map", "0:a", "-c", "copy" if keep else "flac"]
     artist = (
-        tags.get("album_artist") or item.album_artist or item.artist or "Unknown Artist"
+        tags.get("album_artist")
+        or item.album_artist
+        or tags.get("artist")
+        or item.artist
+        or "Unknown Artist"
     )
     album = tags.get("album") or item.album_name or item.album or "Unknown Album"
     year = _year(tags.get("year") or item.release_year or item.year)
