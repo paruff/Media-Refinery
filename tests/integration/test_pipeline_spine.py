@@ -285,17 +285,20 @@ def _twin_mp3(cfg, name, freq):
     )  # same tags, same target, different content
 
 
-async def test_second_item_with_same_target_is_quarantined_plan_conflict(env):
+async def test_same_title_untagged_tracks_are_both_planned_with_distinct_targets(env):
     cfg, factory = env
     _twin_mp3(cfg, "a.mp3", 440)
     _twin_mp3(cfg, "b.mp3", 880)
     await import_input(cfg, factory)
     orch = PipelineOrchestrator(factory, cfg)
     await orch.run_until_idle()
-    states = sorted(i.state.value for i in await _items(factory))
-    assert states == ["planned", "quarantined"]
-    quarantined = next(i for i in await _items(factory) if i.state != FileState.planned)
-    assert quarantined.error_log.startswith("plan_conflict")
+    items = await _items(factory)
+    assert [i.state for i in items] == [FileState.planned, FileState.planned]
+    async with factory() as s:
+        targets = (
+            (await s.execute(select(NormalizationPlan.target_path))).scalars().all()
+        )
+    assert len(set(targets)) == 2 and sum("[" in t for t in targets) == 1
 
 
 async def test_failed_plan_does_not_block_a_new_item_with_same_target(env):

@@ -40,10 +40,10 @@ def _with_cover(path: Path, size: int) -> Path:
     return path
 
 
-async def _run(tmp_path, *, ident=None, approve=True, **cfg_kw):
+async def _run(tmp_path, **cfg_kw):
     cfg = make_config(tmp_path, enabled_types=frozenset({"music"}), **cfg_kw)
     engine, factory = await make_session_factory(tmp_path)
-    return cfg, engine, factory, ident
+    return cfg, engine, factory
 
 
 async def _go(cfg, factory, ident=None, approve=True):
@@ -81,7 +81,7 @@ def _published(cfg, pattern="*.flac") -> list[Path]:
 
 async def test_small_embedded_cover_survives(tmp_path):
     """-map 0:a drops pictures; a cover below 500 px is still better than none."""
-    cfg, engine, factory, _ = await _run(tmp_path)
+    cfg, engine, factory = await _run(tmp_path)
     src = tone(cfg.input_dir / "A/01.flac", codec="flac", track="1", title="T", **TAGS)
     _with_cover(src, 300)
     await _go(cfg, factory)
@@ -97,7 +97,7 @@ async def test_small_embedded_cover_survives(tmp_path):
 )  # fmt: skip
 async def test_flac_is_16_or_24_bit(tmp_path, codec, extra, bits):
     """R-MUSIC-1: 32-bit float and 8-bit sources become 16/24-bit FLAC, never pass through."""
-    cfg, engine, factory, _ = await _run(tmp_path)
+    cfg, engine, factory = await _run(tmp_path)
     tone(
         cfg.input_dir / "A/01.wav",
         codec=codec,
@@ -115,7 +115,7 @@ async def test_flac_is_16_or_24_bit(tmp_path, codec, extra, bits):
 
 
 async def test_16_bit_flac_is_copied_not_reencoded(tmp_path):
-    cfg, engine, factory, _ = await _run(tmp_path)
+    cfg, engine, factory = await _run(tmp_path)
     src = tone(cfg.input_dir / "A/01.flac", codec="flac", track="1", title="T", **TAGS)
 
     async def md5(p):
@@ -130,7 +130,7 @@ async def test_16_bit_flac_is_copied_not_reencoded(tmp_path):
 
 
 async def test_identified_tags_keep_full_date_and_every_artist(tmp_path):
-    cfg, engine, factory, _ = await _run(tmp_path)
+    cfg, engine, factory = await _run(tmp_path)
     tone(cfg.input_dir / "A/01.flac", codec="flac", **TAGS)
     await _go(cfg, factory, ident=identifier(), approve=True)
     (out,) = _published(cfg)
@@ -141,7 +141,7 @@ async def test_identified_tags_keep_full_date_and_every_artist(tmp_path):
 
 
 async def test_multidisc_track_without_number_has_no_bare_disc_prefix(tmp_path):
-    cfg, engine, factory, _ = await _run(tmp_path)
+    cfg, engine, factory = await _run(tmp_path)
     for disc in (1, 2):
         tone(cfg.input_dir / f"D{disc}/x.flac", codec="flac", freq=300 + disc, title="Song",
              disc=f"{disc}/2", **TAGS)  # fmt: skip
@@ -153,7 +153,7 @@ async def test_multidisc_track_without_number_has_no_bare_disc_prefix(tmp_path):
 
 
 async def test_stale_cover_jpg_is_replaced(tmp_path):
-    cfg, engine, factory, _ = await _run(tmp_path)
+    cfg, engine, factory = await _run(tmp_path)
     src = tone(cfg.input_dir / "A/01.flac", codec="flac", track="1", title="T", **TAGS)
     _with_cover(src, 600)
     stale = cfg.music_root / "Artist Z" / "Album Z (2020)" / "cover.jpg"
@@ -166,7 +166,7 @@ async def test_stale_cover_jpg_is_replaced(tmp_path):
 
 
 async def test_partial_mixed_format_album_publishes_the_good_tracks_only(tmp_path):
-    cfg, engine, factory, _ = await _run(tmp_path)
+    cfg, engine, factory = await _run(tmp_path)
     tone(cfg.input_dir / "A/01.mp3", freq=310, track="1", title="One", **TAGS)
     tone(
         cfg.input_dir / "A/02.flac",
@@ -182,7 +182,7 @@ async def test_partial_mixed_format_album_publishes_the_good_tracks_only(tmp_pat
     out = {p.suffix for p in cfg.music_root.rglob("*") if p.suffix in (".mp3", ".flac")}
     assert out == {".mp3", ".flac"}
     bad = next(i for i in items if str(i.source_path).endswith("03.mp3"))
-    assert bad.state in (FileState.error, FileState.quarantined)
+    assert bad.state == FileState.error
     kept = [
         p
         for r in (cfg.input_dir, cfg.archive_dir, cfg.quarantine_dir)
@@ -196,9 +196,7 @@ async def test_partial_mixed_format_album_publishes_the_good_tracks_only(tmp_pat
 async def test_auto_approve_never_publishes_a_doubtful_identification(
     tmp_path, failure
 ):
-    cfg, engine, factory, _ = await _run(
-        tmp_path, auto_approve_types=frozenset({"music"})
-    )
+    cfg, engine, factory = await _run(tmp_path, auto_approve_types=frozenset({"music"}))
     tone(cfg.input_dir / "A/01.flac", codec="flac", track="1", title="T", **TAGS)
     if failure == "low_score":
         ident = identifier(score=0.5)

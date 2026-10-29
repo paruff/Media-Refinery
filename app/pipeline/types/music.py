@@ -4,20 +4,26 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 from sqlalchemy import select
 
+from app.core.tools import run_tool
 from app.models.media import FileState, MediaItem, MediaType
 from app.pipeline.types.base import MediaStrategy, flag_review, load_meta
 from app.services.music_id import (
+    ProviderUnavailable,
     embedded_cover,
+    is_jpeg,
     jpeg_cover,
     local_cover,
     write_album_cover,
 )
 from app.services.replaygain import measure
 from app.services.tagging_service import TaggingService
+
+logger = logging.getLogger("music")
 
 # music items whose source file / album state still matter to their siblings
 MUSIC_IN_FLIGHT = (
@@ -28,6 +34,34 @@ MUSIC_IN_FLIGHT = (
     FileState.executed,
     FileState.verified,
 )
+
+
+async def probe_audio(path: str) -> dict:
+    """First audio stream's codec_name / bits_per_raw_sample, {} if ffprobe cannot tell."""
+    rc, out, _ = await run_tool(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "a:0",
+            "-show_entries", "stream=codec_name,bits_per_raw_sample",
+            "-of", "json", path,
+        ],
+        60,
+    )  # fmt: skip
+    try:
+        return (json.loads(out).get("streams") or [{}])[0] if rc == 0 else {}
+    except ValueError:
+        return {}
+
+
+def unsupported_audio(stream: dict) -> str:
+    """R-MUSIC-1 is lossless 16/24-bit PCM; DSD, 8-bit and 32-bit need a human, not ffmpeg defaults."""
+    codec = str(stream.get("codec_name") or "")
+    raw = str(stream.get("bits_per_raw_sample") or "")
+    bits = int(raw) if raw.isdigit() else 0  # 0/N/A for lossy codecs
+    if codec.startswith("dsd") or codec in ("pcm_u8", "pcm_s8"):
+        return f"unsupported_audio: {codec}"
+    if bits and (bits <= 8 or bits > 24):
+        return f"unsupported_audio: {bits}-bit"
+    return ""
 
 
 async def album_pending(o, session, item, unit) -> bool:
@@ -58,9 +92,15 @@ class MusicStrategy(MediaStrategy):
             "track_number": meta.get("track_number"),
         }
         tags = {k: v for k, v in tags.items() if v}
-        found = (
-            await o.identifier.identify(str(item.source_path)) if o.identifier else None
-        )
+        found, unavailable = None, False
+        try:
+            if o.identifier:
+                found = await o.identifier.identify(str(item.source_path))
+        except (
+            ProviderUnavailable
+        ) as e:  # rate limited: retry later, don't call it 'no match'
+            unavailable = True
+            logger.warning("identify unavailable for %s: %s", item.source_path, e)
         review = o.identifier is not None and (
             found is None or found[0] < o.identifier.threshold
         )
@@ -84,13 +124,22 @@ class MusicStrategy(MediaStrategy):
                 "identify",
                 item.id,
                 "degraded" if review else "success",
-                "low_confidence" if found and review else "no_match" if review else "",
+                "provider_unavailable"
+                if unavailable
+                else "low_confidence"
+                if found and review
+                else "no_match"
+                if review
+                else "",
             )
 
     async def prepare_plan(self, o, session, item) -> tuple[bool | None, str]:
         if await album_pending(o, session, item, self.unit):
             return False, ""
         await self.check_album_consistency(o, session, item)
+        if reason := unsupported_audio(await probe_audio(str(item.source_path))):
+            flag_review(item, reason)
+            o._emit("review", item.id, "degraded", reason)
         meta = load_meta(item)
         await self.replaygain(o, session, item, meta)
         item.enrichment_data = json.dumps(meta)
@@ -181,8 +230,14 @@ class MusicStrategy(MediaStrategy):
                 "cover",
                 item.id,
                 "skipped" if cover is None else "degraded",
-                "no usable cover (>=500px)",
+                "no usable cover (>=500px)"
+                if cover is None
+                else "cover below 500px kept as-is",
             )
+        elif (
+            raw := await asyncio.to_thread(embedded_cover, source)
+        ) is not None and not is_jpeg(raw):
+            o._emit("cover", item.id, "degraded", "cover re-encoded to JPEG")
         tags = {**meta["tags"], "cover": cover}
         # tags from an identified release replace the file's; otherwise merge into them
         clean = item.release_mbid is not None
