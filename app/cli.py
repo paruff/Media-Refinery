@@ -142,13 +142,20 @@ def plan(path: PathArg, dry_run: DryRun = True, type: Kind = None) -> None:
 
 
 @app.command()
-def approve(path: PathArg, dry_run: DryRun = False, type: Kind = None) -> None:
-    """Plan, then approve every item under PATH (including review-flagged ones)."""
+def approve(
+    path: PathArg,
+    dry_run: DryRun = False,
+    type: Kind = None,
+    include_review: Annotated[
+        bool, typer.Option(help="Also approve low-confidence (review-flagged) items")
+    ] = False,
+) -> None:
+    """Plan, then approve every item under PATH except review-flagged ones (see --include-review)."""
 
     async def work(service: Refinery):
         ids = await service.ingest(path)
         await service.advance(ids, FileState.planned, _types(type))
-        count = await service.approve(ids, _types(type))
+        count = await service.approve(ids, _types(type), skip_review=not include_review)
         return count, await service.plan_rows(ids)
 
     count, rows = _drive(dry_run, work)

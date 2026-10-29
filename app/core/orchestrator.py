@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.paths import ensure_inside
 from app.core.publish import quarantine_file
@@ -73,6 +73,9 @@ def _preflight(source: Path, target: Path, root: Path) -> list[dict]:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+RETRYABLE = (FileState.error, FileState.quarantined)
 
 
 class PipelineOrchestrator:
@@ -199,24 +202,34 @@ class PipelineOrchestrator:
         return result.scalars().all()
 
     # ---- approval gate ----------------------------------------------------
+    async def _claim(self, session, item_id: str, frm, to: FileState) -> bool:
+        """Atomic conditional state change: of N racing callers exactly one gets rowcount 1."""
+        res = await session.execute(
+            update(MediaItem)
+            .where(MediaItem.id == item_id, MediaItem.state.in_(frm))
+            .values(state=to, updated_at=_now())
+        )
+        return res.rowcount == 1
+
     async def approve(self, item_id: str) -> bool:
         async with self.session_factory() as session:
-            item = await session.get(MediaItem, item_id)
-            if item is None or item.state != FileState.planned:
+            if not await self._claim(
+                session, item_id, (FileState.planned,), FileState.approved
+            ):
                 return False
             plan = await self._plan(session, item_id)
             plan.plan_status = PlanStatus.approved
-            item.state = FileState.approved
-            item.updated_at = _now()
             await session.commit()
             return True
 
     async def reject(self, item_id: str) -> bool:
         """A reviewer declines a plan: nothing is touched, the item parks in quarantine."""
         async with self.session_factory() as session:
-            item = await session.get(MediaItem, item_id)
-            if item is None or item.state != FileState.planned:
+            if not await self._claim(
+                session, item_id, (FileState.planned,), FileState.quarantined
+            ):
                 return False
+            item = await session.get(MediaItem, item_id)
             await self._quarantine(session, item, "rejected", "declined at review")
             return True
 
@@ -224,12 +237,9 @@ class PipelineOrchestrator:
         """Re-queue a failed/quarantined item from the start; its source must still exist."""
         async with self.session_factory() as session:
             item = await session.get(MediaItem, item_id)
-            if item is None or item.state not in (
-                FileState.error,
-                FileState.quarantined,
-            ):
+            if item is None or not await self._source_exists(item):
                 return False
-            if not await asyncio.to_thread(Path(str(item.source_path)).is_file):
+            if not await self._claim(session, item_id, RETRYABLE, FileState.pending):
                 return False
             plan = await session.execute(
                 select(NormalizationPlan).where(
@@ -238,14 +248,33 @@ class PipelineOrchestrator:
             )
             if (old := plan.scalar_one_or_none()) is not None:
                 await session.delete(old)
-            item.state, item.error_log, item.updated_at = (
-                FileState.pending,
-                None,
-                _now(),
+            await session.execute(
+                update(MediaItem).where(MediaItem.id == item_id).values(error_log=None)
+            )
+            # before the commit: once the item is pending again the pipeline may start using the dir
+            await asyncio.to_thread(
+                shutil.rmtree, self.cfg.work_dir / item_id, ignore_errors=True
             )
             await session.commit()
-        shutil.rmtree(self.cfg.work_dir / item_id, ignore_errors=True)
         return True
+
+    @staticmethod
+    async def _source_exists(item) -> bool:
+        return await asyncio.to_thread(Path(str(item.source_path)).is_file)
+
+    async def refusal(self, item_id: str, action: str) -> str:
+        """Why `action` was refused, for the 409/notice text."""
+        async with self.session_factory() as session:
+            item = await session.get(MediaItem, item_id)
+        if item is None:
+            return "no such item"
+        if (
+            action == "retry"
+            and item.state in RETRYABLE
+            and not await self._source_exists(item)
+        ):
+            return f"its source file is missing ({item.source_path})"
+        return f"it is {item.state.value}"
 
     # ---- dispatch -----------------------------------------------------------
     async def _guarded(self, item_id, state) -> bool:

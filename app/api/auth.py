@@ -1,7 +1,9 @@
 """R-API-1: loopback binds are open; anything else needs the static bearer token."""
 
+import hashlib
 import hmac
 import ipaddress
+import time
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -10,6 +12,7 @@ from app.core.config import settings
 from app.core.orchestrator import PipelineOrchestrator
 
 TOKEN_COOKIE = "mr_token"  # noqa: S105 (cookie name, not a secret)
+SESSION_MAX_AGE = 7 * 24 * 3600
 _bearer = HTTPBearer(auto_error=False)
 
 
@@ -25,6 +28,27 @@ def is_loopback(host: str) -> bool:
 def token_matches(supplied: str, expected: str) -> bool:
     """Constant-time compare on bytes: str compare_digest raises TypeError on non-ASCII."""
     return bool(expected) and hmac.compare_digest(supplied.encode(), expected.encode())
+
+
+def _sign(issued: str) -> str:
+    return hmac.new(
+        settings.API_TOKEN.encode(), issued.encode(), hashlib.sha256
+    ).hexdigest()
+
+
+def make_session() -> str:
+    """UI cookie value: `<issued-at>.<hmac>`; the raw token never leaves the login POST."""
+    issued = str(int(time.time()))
+    return f"{issued}.{_sign(issued)}"
+
+
+def session_valid(value: str) -> bool:
+    """Signed with the API token (rotating it logs everyone out) and expires after SESSION_MAX_AGE."""
+    issued, _, sig = value.partition(".")
+    if not (settings.API_TOKEN and issued.isdigit() and len(issued) < 15):
+        return False
+    age = time.time() - int(issued)
+    return 0 <= age <= SESSION_MAX_AGE and token_matches(sig, _sign(issued))
 
 
 def check_bind_security(host: str, token: str) -> None:
@@ -43,8 +67,13 @@ def require_token(
         return
     # No token configured on a non-loopback bind fails closed: nobody gets in.
     # Browsers can't set headers on navigation, so the web UI login stores the token in a cookie.
-    supplied = creds.credentials if creds else request.cookies.get(TOKEN_COOKIE)
-    if supplied is None or not token_matches(supplied, settings.API_TOKEN):
+    cookie = request.cookies.get(TOKEN_COOKIE)
+    ok = (
+        token_matches(creds.credentials, settings.API_TOKEN)
+        if creds
+        else cookie is not None and session_valid(cookie)
+    )
+    if not ok:
         raise HTTPException(
             401,
             "Invalid or missing bearer token",

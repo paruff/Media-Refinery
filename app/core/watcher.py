@@ -11,6 +11,14 @@ from watchdog.observers import Observer
 from app.models.media import FileState, MediaItem, MediaType
 
 EXCLUDE_PATTERNS = (".DS_Store", ".tmp", ".part")
+
+
+def is_excluded(path) -> bool:
+    """Match the file name only: a parent directory called `x.tmp-album` must not hide its files."""
+    name = os.path.basename(str(path))
+    return any(p in name for p in EXCLUDE_PATTERNS)
+
+
 STABILITY_WINDOW = 5  # seconds size+mtime must stay unchanged (R-PIPE-3)
 POLL_INTERVAL = 1  # seconds between stability passes
 HASH_CHUNK = 1024 * 1024
@@ -54,12 +62,12 @@ class DebounceHandler(FileSystemEventHandler):
             self.loop.call_soon_threadsafe(self.queue.__setitem__, path, now)
 
     def on_created(self, event):
-        if event.is_directory or any(p in event.src_path for p in EXCLUDE_PATTERNS):
+        if event.is_directory or is_excluded(event.src_path):
             return
         self._enqueue(event.src_path)
 
     def on_moved(self, event):
-        if event.is_directory or any(p in event.dest_path for p in EXCLUDE_PATTERNS):
+        if event.is_directory or is_excluded(event.dest_path):
             return
         self._enqueue(event.dest_path)
 
@@ -124,7 +132,7 @@ class InputWatcher:
             ]
 
         for path in await asyncio.to_thread(walk):
-            if not any(p in path for p in EXCLUDE_PATTERNS):
+            if not is_excluded(path):
                 self.processing_queue[path] = time.time()
 
     async def process_queue(self):
