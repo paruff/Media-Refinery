@@ -161,11 +161,13 @@ class ValidatorService:
 
     async def _prune_old_errors(self):
         # Clear error logs older than 30 days. Rows are never deleted (R-SAFE-1).
+        # Items still in error/quarantined keep theirs: it is their only diagnostic.
         cutoff = datetime.now(UTC) - timedelta(days=30)
         await self.db.execute(
             text(
                 "UPDATE media_items SET error_log = NULL "
-                "WHERE error_log IS NOT NULL AND updated_at < :cutoff"
+                "WHERE error_log IS NOT NULL AND updated_at < :cutoff "
+                "AND state NOT IN ('error', 'quarantined')"
             ),
             {"cutoff": cutoff.strftime("%Y-%m-%d %H:%M:%S")},
         )

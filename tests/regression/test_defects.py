@@ -389,3 +389,38 @@ async def test_prune_old_errors_keeps_media_item_rows(async_session):
 
     count = (await async_session.execute(select(func.count(MediaItem.id)))).scalar_one()
     assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_prune_old_errors_keeps_diagnostics_of_error_and_quarantined(
+    async_session,
+):
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.validator_service import ValidatorService
+
+    old = datetime.now(UTC) - timedelta(days=90)
+    for path, state in [
+        ("/e.mkv", FileState.error),
+        ("/q.mkv", FileState.quarantined),
+        ("/d.mkv", FileState.validated),
+    ]:
+        async_session.add(
+            MediaItem(source_path=path, state=state, error_log="boom", updated_at=old)
+        )
+    await async_session.commit()
+
+    service = ValidatorService.__new__(ValidatorService)
+    service.db = async_session
+    await service._prune_old_errors()
+
+    logs = dict(
+        (
+            await async_session.execute(
+                select(MediaItem.source_path, MediaItem.error_log)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    assert logs == {"/e.mkv": "boom", "/q.mkv": "boom", "/d.mkv": None}

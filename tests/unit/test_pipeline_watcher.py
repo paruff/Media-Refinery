@@ -134,3 +134,85 @@ async def test_run_and_stop_start_observer(tmp_path, async_session):
     await asyncio.sleep(0)
     watcher.stop()
     watcher.process_queue.assert_awaited_once()
+
+
+async def _run_passes(watcher, passes):
+    calls = 0
+
+    async def fake_sleep(secs):
+        nonlocal calls
+        calls += 1
+        if calls == passes:
+            raise asyncio.CancelledError
+
+    with patch("asyncio.sleep", fake_sleep), pytest.raises(asyncio.CancelledError):
+        await watcher.process_queue()
+
+
+@pytest.mark.asyncio
+async def test_failed_import_is_retried_then_dropped(
+    tmp_path, async_session, monkeypatch
+):
+    monkeypatch.setattr("app.core.watcher.STABILITY_WINDOW", 0)
+    f = tmp_path / "a.mkv"
+    f.write_bytes(b"x")
+    watcher = InputWatcher(str(tmp_path), _factory(async_session))
+    watcher.processing_queue[str(f)] = 0
+    watcher.insert_if_new = AsyncMock(side_effect=[OSError("db"), None])
+    await _run_passes(watcher, 6)
+    assert watcher.insert_if_new.await_count == 2  # failed once, retried, succeeded
+    assert not watcher.processing_queue
+
+    watcher.processing_queue[str(f)] = 0
+    watcher.insert_if_new = AsyncMock(side_effect=OSError("always"))
+    await _run_passes(watcher, 12)
+    assert watcher.insert_if_new.await_count == 3  # MAX_IMPORT_ATTEMPTS, then dropped
+    assert not watcher.processing_queue
+
+
+@pytest.mark.asyncio
+async def test_event_during_import_is_not_lost(tmp_path, async_session, monkeypatch):
+    monkeypatch.setattr("app.core.watcher.STABILITY_WINDOW", 0)
+    f = tmp_path / "a.mkv"
+    f.write_bytes(b"x")
+    watcher = InputWatcher(str(tmp_path), _factory(async_session))
+    watcher.processing_queue[str(f)] = 0
+
+    async def import_with_new_event(path):
+        watcher.processing_queue[path] = 99  # second write event mid-import
+
+    watcher.insert_if_new = AsyncMock(side_effect=import_with_new_event)
+    await _run_passes(watcher, 2)
+    assert str(f) in watcher.processing_queue
+
+
+@pytest.mark.asyncio
+async def test_import_file_rejects_file_that_grew_while_hashing(
+    tmp_path, async_session, monkeypatch
+):
+    from app.core import watcher as w
+
+    f = tmp_path / "a.mkv"
+    f.write_bytes(b"x")
+    real_hash = w.content_hash
+
+    def growing_hash(path):
+        digest = real_hash(path)
+        with open(path, "ab") as fh:
+            fh.write(b"more")
+        return digest
+
+    monkeypatch.setattr(w, "content_hash", growing_hash)
+    with pytest.raises(w.FileChangedError):
+        await w.import_file(str(f), _factory(async_session), MagicMock())
+
+
+@pytest.mark.asyncio
+async def test_watcher_uses_running_loop_and_scan_runs_off_loop(
+    tmp_path, async_session
+):
+    watcher = InputWatcher(str(tmp_path), _factory(async_session))
+    assert watcher.loop is asyncio.get_running_loop()
+    with patch("asyncio.to_thread", wraps=asyncio.to_thread) as spy:
+        await watcher.startup_scan()
+    spy.assert_called_once()
