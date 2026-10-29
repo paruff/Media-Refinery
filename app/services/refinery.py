@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.orchestrator import PipelineConfig, PipelineOrchestrator
 from app.core.tools import run_tool
 from app.core.verify import sha256_file
-from app.core.watcher import EXCLUDE_PATTERNS, import_file
+from app.core.watcher import import_file, is_excluded
 from app.models.media import (
     FileState,
     MediaItem,
@@ -70,7 +70,7 @@ class Refinery:
         files = await asyncio.to_thread(_files_under, path)
         ids = []
         for f in files:
-            if not f.is_file() or any(p in str(f) for p in EXCLUDE_PATTERNS):
+            if not f.is_file() or is_excluded(f):
                 continue
             if item_id := await import_file(str(f), self.factory, self.logger):
                 ids.append(item_id)

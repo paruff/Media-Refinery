@@ -11,7 +11,14 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import TOKEN_COOKIE, get_orchestrator, require_token, token_matches
+from app.api.auth import (
+    SESSION_MAX_AGE,
+    TOKEN_COOKIE,
+    get_orchestrator,
+    make_session,
+    require_token,
+    token_matches,
+)
 from app.api.v1.items import get_item
 from app.core.config import settings
 from app.core.database import get_async_session
@@ -30,6 +37,9 @@ def ui_auth(request: Request) -> None:
     try:
         require_token(request, None)
     except HTTPException as e:
+        if request.headers.get("hx-request") == "true":
+            # htmx would follow a 303 and swap the login page into the table body
+            raise HTTPException(401, headers={"HX-Redirect": "/ui/login"}) from e
         raise HTTPException(303, headers={"Location": "/ui/login"}) from e
 
 
@@ -50,7 +60,6 @@ async def login_form(request: Request):
     )
 
 
-COOKIE_MAX_AGE = 7 * 24 * 3600
 MAX_FAILED_LOGINS = 5
 LOGIN_WINDOW = 60.0
 _failed_logins: dict[
@@ -82,11 +91,11 @@ async def login(request: Request, token: Annotated[str, Form()]):
     )
     out.set_cookie(
         TOKEN_COOKIE,
-        token,
+        make_session(),
         httponly=True,
         samesite="strict",
         secure=https,
-        max_age=COOKIE_MAX_AGE,
+        max_age=SESSION_MAX_AGE,
     )
     return out
 
@@ -227,7 +236,7 @@ async def act_one(
             request,
             "_notice_row.html",
             {
-                "msg": f"Could not {action} {Path(str(row.source_path)).name}: it is {row.state.value}."
+                "msg": f"Could not {action} {Path(str(row.source_path)).name}: {await orch.refusal(item_id, action)}."
             },
         )
     return Response(status_code=200)  # htmx swaps the row away

@@ -104,7 +104,7 @@ async def test_post_without_hx_request_is_415(client):
 
 async def test_unauthenticated_post_never_reaches_the_handler(client):
     r = await client.post("/ui/items/x/approve", headers=HX)
-    assert r.status_code == 303
+    assert r.status_code == 401 and r.headers["hx-redirect"] == "/ui/login"
 
 
 # ---- headers / CSP (#92) --------------------------------------------------
