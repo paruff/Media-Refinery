@@ -113,20 +113,24 @@ async def _output_matches_plan(session, plan, src, output_file) -> bool:
     """
     import asyncio
     import hashlib
+    from pathlib import Path
 
     from sqlalchemy import select
 
     from app.models.saga import SagaFileMoveLog, SagaLogStatus
 
-    committed = await session.scalar(
-        select(SagaFileMoveLog.id).where(
+    # A committed log is trusted without re-reading the file: the rename is atomic and the
+    # log is only committed after it. Paths are compared resolved, not as spelled.
+    dests = await session.scalars(
+        select(SagaFileMoveLog.dest_path).where(
             SagaFileMoveLog.plan_id == plan.id,
-            SagaFileMoveLog.dest_path == str(output_file),
             SagaFileMoveLog.status == SagaLogStatus.committed,
         )
     )
-    if committed is not None:
-        return True
+    resolved = await asyncio.to_thread(output_file.resolve)
+    for d in dests:
+        if await asyncio.to_thread(Path(d).resolve) == resolved:
+            return True
     if plan.needs_transcode:
         return False
 
@@ -142,6 +146,28 @@ async def _output_matches_plan(session, plan, src, output_file) -> bool:
     return await asyncio.to_thread(digest, output_file) == await asyncio.to_thread(
         digest, src
     )
+
+
+async def _settle_existing_output(session, plan, src, output_file) -> None:
+    """Complete the plan if the output is its own result, else fail it and raise."""
+    from sqlalchemy import update
+
+    from app.models.media import NormalizationPlan as DBPlan
+    from app.models.media import PlanStatus
+
+    logger = logging.getLogger("CeleryWorker")
+    log = None
+    if await _output_matches_plan(session, plan, src, output_file):
+        logger.info(f"{output_file} already produced; plan {plan.id} done")
+        values: dict = {"plan_status": PlanStatus.completed}
+    else:
+        log = f"{output_file} exists but is not the output of plan {plan.id}"
+        logger.error(log)
+        values = {"plan_status": PlanStatus.failed, "execution_log": log}
+    await session.execute(update(DBPlan).where(DBPlan.id == plan.id).values(**values))
+    await session.commit()
+    if log:
+        raise FileExistsError(log)
 
 
 def _execute_normalization_plan(plan_dict):
@@ -186,21 +212,17 @@ def _execute_normalization_plan(plan_dict):
     async def do_work():
         await init_db()
         async with AsyncSessionLocal() as session:
+            # Hashing multi-GB files happens before taking the lock (a published output is
+            # complete: the rename is atomic) so it cannot time out concurrent workers.
+            if await asyncio.to_thread(output_file.exists):
+                return await _settle_existing_output(session, plan, src, output_file)
+
             with lock.acquire(timeout=10):
-                # Checked under the lock so two workers cannot both pass it (TOCTOU).
+                # Re-checked under the lock so two workers cannot both pass it (TOCTOU).
                 if await asyncio.to_thread(output_file.exists):
-                    if not await _output_matches_plan(session, plan, src, output_file):
-                        raise FileExistsError(
-                            f"{output_file} exists but is not the output of plan {plan.id}"
-                        )
-                    logger.info(f"{output_file} already produced; plan {plan.id} done")
-                    await session.execute(
-                        update(DBPlan)
-                        .where(DBPlan.id == plan.id)
-                        .values(plan_status=PlanStatus.completed)
+                    return await _settle_existing_output(
+                        session, plan, src, output_file
                     )
-                    await session.commit()
-                    return
 
                 await session.execute(
                     update(DBPlan)

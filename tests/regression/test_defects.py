@@ -393,10 +393,56 @@ async def test_prune_old_errors_keeps_media_item_rows(async_session):
 
 
 # --- B2: idempotent execution under the lock ---------------------------------
-def test_b2_existing_identical_output_is_completed_without_rewrite(tmp_path):
+def _db_plan(plan):
+    """Insert the DB row the executor updates; return a reader for (status, log)."""
+    from app.core.database import AsyncSessionLocal, init_db
+    from app.models.media import NormalizationPlan
+
+    async def insert():
+        await init_db()
+        async with AsyncSessionLocal() as s:
+            s.add(
+                NormalizationPlan(
+                    id=plan["id"],
+                    media_item_id=plan["media_item_id"],
+                    target_path=plan["target_path"],
+                    ffmpeg_args=[],
+                    original_hash="h",
+                )
+            )
+            await s.commit()
+
+    async def read():
+        async with AsyncSessionLocal() as s:
+            row = await s.get(NormalizationPlan, plan["id"])
+            await s.refresh(row)
+            return row.plan_status.value, row.execution_log
+
+    asyncio.run(insert())
+    return lambda: asyncio.run(read())
+
+
+@pytest.fixture
+def b2_plan(tmp_path):
+    from sqlalchemy import text
+
+    from app.core.database import AsyncSessionLocal, init_db
+
+    async def clear():
+        await init_db()
+        async with AsyncSessionLocal() as s:
+            await s.execute(text("DELETE FROM normalization_plans"))
+            await s.commit()
+
+    asyncio.run(clear())
+    return tmp_path
+
+
+def test_b2_existing_identical_output_is_completed_without_rewrite(b2_plan):
     from app.services.execution_service import _execute_normalization_plan
 
-    plan, src = _plan(tmp_path)
+    plan, src = _plan(b2_plan)
+    status = _db_plan(plan)
     out = Path(plan["target_path"])
     out.parent.mkdir()
     out.write_bytes(src.read_bytes())
@@ -406,12 +452,14 @@ def test_b2_existing_identical_output_is_completed_without_rewrite(tmp_path):
 
     assert out.read_bytes() == b"source bytes"
     assert out.stat().st_mtime_ns == before
+    assert status()[0] == "completed"
 
 
-def test_b2_different_preexisting_output_is_an_error_not_success(tmp_path):
+def test_b2_different_preexisting_output_fails_the_plan(b2_plan):
     from app.services.execution_service import _execute_normalization_plan
 
-    plan, _ = _plan(tmp_path)
+    plan, _ = _plan(b2_plan)
+    status = _db_plan(plan)
     out = Path(plan["target_path"])
     out.parent.mkdir()
     out.write_bytes(b"someone else's file")
@@ -419,13 +467,12 @@ def test_b2_different_preexisting_output_is_an_error_not_success(tmp_path):
     with pytest.raises(FileExistsError):
         _execute_normalization_plan(plan)
     assert out.read_bytes() == b"someone else's file"
+    state, log = status()
+    assert state == "failed"
+    assert "not the output of plan" in log
 
 
-def test_b2_rerun_after_committed_transcode_skips_ffmpeg(tmp_path, mocker):
-    from app.services.execution_service import _execute_normalization_plan
-
-    plan, _ = _plan(tmp_path, needs_transcode=True)
-
+def _fake_ffmpeg(mocker):
     async def fake_exec(*args, **kwargs):
         Path(args[-1]).write_bytes(b"encoded")
         proc = MagicMock()
@@ -433,11 +480,54 @@ def test_b2_rerun_after_committed_transcode_skips_ffmpeg(tmp_path, mocker):
         proc.communicate = AsyncMock(return_value=(b"", b""))
         return proc
 
-    run = mocker.patch("asyncio.create_subprocess_exec", side_effect=fake_exec)
+    return mocker.patch("asyncio.create_subprocess_exec", side_effect=fake_exec)
+
+
+def test_b2_rerun_after_committed_transcode_skips_ffmpeg(b2_plan, mocker):
+    from app.services.execution_service import _execute_normalization_plan
+
+    plan, _ = _plan(b2_plan, needs_transcode=True)
+    status = _db_plan(plan)
+    run = _fake_ffmpeg(mocker)
     _execute_normalization_plan(plan)
     _execute_normalization_plan(plan)
 
     assert run.call_count == 1
+    assert status()[0] == "completed"
+
+
+def test_b2_committed_saga_matches_through_a_different_path_spelling(b2_plan, mocker):
+    from app.services.execution_service import _execute_normalization_plan
+
+    plan, _ = _plan(b2_plan, needs_transcode=True)
+    status = _db_plan(plan)
+    run = _fake_ffmpeg(mocker)
+    _execute_normalization_plan(plan)
+    # Same file, spelled with a `..` detour.
+    out = Path(plan["target_path"])
+    _execute_normalization_plan(
+        {**plan, "target_path": str(out.parent / ".." / out.parent.name / out.name)}
+    )
+
+    assert run.call_count == 1
+    assert status()[0] == "completed"
+
+
+def test_b2_stale_tmp_from_a_crash_is_overwritten(b2_plan):
+    from app.services.execution_service import _execute_normalization_plan
+
+    plan, _ = _plan(b2_plan)
+    status = _db_plan(plan)
+    out = Path(plan["target_path"])
+    out.parent.mkdir()
+    stale = out.with_name(f"{out.stem}.tmp{out.suffix}")
+    stale.write_bytes(b"half written")
+
+    _execute_normalization_plan(plan)
+
+    assert out.read_bytes() == b"source bytes"
+    assert not stale.exists()
+    assert status()[0] == "completed"
 
 
 @pytest.mark.asyncio
