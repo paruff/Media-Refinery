@@ -45,3 +45,4 @@ def test_reporting_service_summary(monkeypatch):
     assert summary.validated_success_rate == 60.0
     assert "Error 1" in summary.error_log
     assert summary.storage_bytes == 123456789
+    assert any("skipped as duplicates" in w for w in summary.warnings)

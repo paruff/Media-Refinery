@@ -127,6 +127,18 @@ class ReportingService:
             .all()
         )
         warnings = list(dict.fromkeys([w for w in warning_rows if w]))[:10]
+        # Same-album duplicates are skipped; surface the count so the user can decide (#178)
+        dup_skipped = await self.db.scalar(
+            select(func.count())
+            .select_from(MediaItem)
+            .where(MediaItem.state == "error")
+            .where(MediaItem.error_log.like("Duplicate % fingerprint detected%"))
+        )
+        if dup_skipped:
+            warnings.append(
+                f"{dup_skipped} item(s) skipped as duplicates by fingerprint within"
+                " the same album; review them and keep or delete the extras."
+            )
         # Storage impact (sum of file sizes if available)
         size_rows = (
             await self.db.execute(
