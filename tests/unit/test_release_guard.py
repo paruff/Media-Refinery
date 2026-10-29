@@ -1,12 +1,18 @@
 """G12 review: a release tag must be a version tag on main matching pyproject.toml."""
 
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 GUARD = Path(__file__).resolve().parents[2] / "scripts" / "release_guard.sh"
-pytestmark = pytest.mark.unit
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.skipif(
+        shutil.which("git") is None, reason="git not installed (the CI image has none)"
+    ),
+]
 
 
 def git(repo, *args):
