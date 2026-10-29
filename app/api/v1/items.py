@@ -114,11 +114,12 @@ async def get_item(
 
 async def _transition(item_id: str, action: str, session: AsyncSession, orch):
     item = await _item(session, item_id)
-    if not await getattr(orch, action)(item_id):
-        raise HTTPException(
-            409, f"Cannot {action}: {await orch.refusal(item_id, action)}"
-        )
+    done = await getattr(orch, action)(item_id)
     await session.refresh(item)
+    if not done:
+        raise HTTPException(
+            409, f"Cannot {action}: {await orch.refusal(item_id, action, item)}"
+        )
     return Transition(id=item_id, state=FileState(str(item.state.value)))
 
 

@@ -236,7 +236,7 @@ async def act_one(
             request,
             "_notice_row.html",
             {
-                "msg": f"Could not {action} {Path(str(row.source_path)).name}: {await orch.refusal(item_id, action)}."
+                "msg": f"Could not {action} {Path(str(row.source_path)).name}: {await orch.refusal(item_id, action, row)}."
             },
         )
     return Response(status_code=200)  # htmx swaps the row away
