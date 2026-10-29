@@ -266,10 +266,11 @@ class PipelineOrchestrator:
     async def _source_exists(item) -> bool:
         return await asyncio.to_thread(Path(str(item.source_path)).is_file)
 
-    async def refusal(self, item_id: str, action: str) -> str:
-        """Why `action` was refused, for the 409/notice text (failure path only; one extra read)."""
-        async with self.session_factory() as session:
-            item = await session.get(MediaItem, item_id)
+    async def refusal(self, item_id: str, action: str, item=None) -> str:
+        """Why `action` was refused, for the 409/notice text. Pass a freshly loaded `item` to skip the read."""
+        if item is None:
+            async with self.session_factory() as session:
+                item = await session.get(MediaItem, item_id)
         if item is None:
             return "no such item"
         if (
