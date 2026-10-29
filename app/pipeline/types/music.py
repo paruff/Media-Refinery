@@ -117,6 +117,7 @@ class MusicStrategy(MediaStrategy):
             "tags": tags,
             "score": found[0] if found else None,
             "needs_review": review,
+            "unavailable": unavailable,
         }
         item.enrichment_data = json.dumps(meta)
         if o.identifier:
@@ -145,7 +146,11 @@ class MusicStrategy(MediaStrategy):
         item.enrichment_data = json.dumps(meta)
         review = ""
         if meta["music"]["needs_review"]:
-            review = f"review_required: match score {meta['music']['score']}"
+            review = (
+                "review_required: AcoustID/MusicBrainz rate limited, re-run identify"
+                if meta["music"].get("unavailable")
+                else f"review_required: match score {meta['music']['score']}"
+            )
             o._emit("review", item.id, "degraded", review)
         return None, review
 
