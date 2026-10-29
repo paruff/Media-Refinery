@@ -405,3 +405,18 @@ async def test_concurrent_target_race_is_plan_conflict_not_error(env, monkeypatc
     states = sorted(i.state.value for i in await _items(factory))
     assert states == ["planned", "quarantined"]
     assert any("plan_conflict" in (i.error_log or "") for i in await _items(factory))
+
+
+async def test_many_concurrent_same_target_tracks_never_error(env):
+    cfg, factory = env
+    for n in range(6):
+        _twin_mp3(cfg, f"t{n}.mp3", 300 + 50 * n)
+    await import_input(cfg, factory)
+    await PipelineOrchestrator(factory, cfg).run_until_idle()
+    items = await _items(factory)
+    assert {i.state for i in items} == {FileState.planned}, [i.error_log for i in items]
+    async with factory() as s:
+        targets = (
+            (await s.execute(select(NormalizationPlan.target_path))).scalars().all()
+        )
+    assert len(set(targets)) == 6

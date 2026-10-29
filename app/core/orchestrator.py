@@ -90,6 +90,7 @@ class PipelineOrchestrator:
         notifier=None,
     ):
         self.session_factory = session_factory
+        self.plan_lock = asyncio.Lock()  # serializes PLAN's target check + insert
         self.cfg = config
         self.enricher = (
             enricher  # VideoEnricher (TMDB/TVDB) or None = guessit names only
