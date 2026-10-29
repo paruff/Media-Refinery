@@ -1,6 +1,7 @@
 """G7 review: mixed-format merge, part gaps, chapter bounds, R-PIPE-4 classification."""
 
 import json
+import shutil
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -126,3 +127,36 @@ async def test_long_untagged_audio_is_classified_as_an_audiobook(tmp_path):
     async with factory() as s:
         assert (await s.get(MediaItem, "i")).media_type == MediaType.audiobook
     await engine.dispose()
+
+
+# ---- P2 minors ------------------------------------------------------------
+def test_multi_file_cue_yields_no_chapters():
+    from app.media.audiobook import parse_cue
+
+    cue = 'FILE "a.mp3" MP3\n TRACK 01 AUDIO\n  INDEX 01 00:00:00\nFILE "b.mp3" MP3\n TRACK 02 AUDIO\n  INDEX 01 00:00:00\n'
+    assert parse_cue(cue, 100.0) == []
+
+
+def test_newline_in_a_name_goes_through_the_concat_filter():
+    from app.media.audiobook import has_newline
+
+    assert has_newline(["/a/ok.mp3", "/a/bad\nname.mp3"])
+    assert not has_newline(["/a/ok.mp3"])
+    args, n, _ = concat_inputs({"files": ["/a/x\ny.mp3"], "mixed": True}, "/l.txt")
+    assert "-filter_complex" in args and n == 1
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_tag_m4b_keeps_a_png_cover_as_png(tmp_path):
+    from mutagen.mp4 import MP4, MP4Cover
+
+    from app.media.audiobook import tag_m4b
+    from tests.pipeline_helpers import _ffmpeg
+
+    m4b = tmp_path / "b.m4b"
+    _ffmpeg(
+        "-f", "lavfi", "-i", "sine=duration=1", "-c:a", "aac", "-f", "ipod", str(m4b)
+    )
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 20
+    tag_m4b(m4b, {"title": "T", "author": "A"}, png)
+    assert MP4(m4b)["covr"][0].imageformat == MP4Cover.FORMAT_PNG

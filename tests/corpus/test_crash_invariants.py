@@ -31,12 +31,25 @@ from tests.pipeline_helpers import (
 
 pytestmark = [pytest.mark.corpus, pytest.mark.integration, pytest.mark.asyncio]
 
+
+def _book(folder: Path) -> list[Path]:
+    folder.mkdir(parents=True)
+    return [
+        make_mp3(
+            folder / f"{n}.mp3", freq=300 + n * 100, album="Crash Book", artist="C"
+        )
+        for n in (1, 2)
+    ]
+
+
 KINDS = {
     "music": lambda d: make_mp3(
         d / "a.mp3", artist="X", album="Y", title="Z", track="1"
     ),
     "movie": lambda d: make_mkv(d / "Crash Movie (2020).mkv"),
     "ebook": lambda d: make_epub(d / "crash.epub", "Crash Book", "Crash Author"),
+    # a two-file book: the lead carries the merge, the other file follows it into the archive
+    "audiobook": lambda d: _book(d / "Audiobooks" / "Crash Book"),
 }
 # music and ebook are byte-exact; a remuxed MKV embeds a muxing date, and Calibre's database
 # and OPF files embed timestamps, so those are compared by name and checked another way
@@ -45,6 +58,12 @@ EXACT = {"music"}
 REQUIRED = {
     "music": {"commit:before", "move:before", "archive_original:after", "ffmpeg:after"},
     "movie": {"commit:before", "move:before", "archive_original:after", "ffmpeg:after"},
+    "audiobook": {
+        "commit:before",
+        "archive_original:after",
+        "concat:before",
+        "concat:after",
+    },
     "ebook": {
         "commit:before",
         "archive_original:after",
@@ -112,6 +131,11 @@ class Injector:
             "calibredb_add",
         ):  # the Calibre add step is the ebook publish
             mp.setattr(ebook_media, fn, self.wrap_async(fn, getattr(ebook_media, fn)))
+        mp.setattr(  # the merge/concat step is the audiobook build
+            audiobook.AudiobookStrategy,
+            "build",
+            self.wrap_async("concat", audiobook.AudiobookStrategy.build),
+        )
         mp.setattr(
             PipelineOrchestrator,
             "_run_ffmpeg",
@@ -174,31 +198,38 @@ async def _scenario(base: Path, kind: str, target: int | None, ref=None):
     restart once if it crashed. Returns (injector, cfg, factory, source sha, states at crash, engine, problems at crash)."""
     cfg = make_config(base)
     engine, factory = await make_session_factory(base)
-    src = KINDS[kind](cfg.input_dir)
-    original = hashlib.sha256(src.read_bytes()).hexdigest()
+    made = KINDS[kind](cfg.input_dir)
+    originals = [hashlib.sha256(p.read_bytes()).hexdigest() for p in _listed(made)]
     inj = Injector(target)
     with pytest.MonkeyPatch.context() as m:
         inj.install(m)
         with contextlib.suppress(Crash):
             await _drive(cfg, factory)
     crash_states = await _states(factory)
-    at_crash = _problems(cfg, original, crash_states, final=False, ref=ref, exact=exact)
+    at_crash = _problems(
+        cfg, originals, crash_states, final=False, ref=ref, exact=exact
+    )
     if target is not None:
         await _drive(cfg, factory)  # restart: a fresh process
-    return inj, cfg, factory, original, crash_states, engine, at_crash
+    return inj, cfg, factory, originals, crash_states, engine, at_crash
 
 
-def _problems(cfg, original, states, final, ref=None, exact=True) -> list[str]:
+def _listed(made) -> list[Path]:
+    return list(made) if isinstance(made, list) else [made]
+
+
+def _problems(cfg, originals, states, final, ref=None, exact=True) -> list[str]:
     out = []
     held = [
         h
         for root in (cfg.input_dir, cfg.archive_dir)
         for h in (_files(root).values() if root.exists() else [])
     ]
-    if held.count(original) != 1:
-        out.append(
-            f"source not held exactly once in input/archive: {held.count(original)}"
-        )
+    for original in originals:
+        if held.count(original) != 1:
+            out.append(
+                f"source not held exactly once in input/archive: {held.count(original)}"
+            )
     lib = _files(cfg.music_root.parent, exact)
     if ref is not None:
         for rel, sha in lib.items():
@@ -210,7 +241,7 @@ def _problems(cfg, original, states, final, ref=None, exact=True) -> list[str]:
         if final and lib != ref:
             out.append(f"did not converge: {sorted(lib)} != {sorted(ref)}")
     if final:
-        if len(states) != 1 or states[0] != FileState.validated:
+        if len(states) != len(originals) or set(states) != {FileState.validated}:
             out.append(f"final states {states}")
         if cfg.quarantine_dir.exists() and _files(cfg.quarantine_dir):
             out.append("quarantine not empty")
@@ -227,19 +258,19 @@ async def test_crash_at_every_step_preserves_invariants(tmp_path, kind, monkeypa
     inj, cfg, factory, _, _, engine, _ = await _scenario(tmp_path / "ref", kind, None)
     exact = kind in EXACT
     ref = _files(cfg.music_root.parent, exact)
-    assert ref and await _states(factory) == [FileState.validated]
+    assert ref and set(await _states(factory)) == {FileState.validated}
     await engine.dispose()
     names = inj.names
     assert REQUIRED[kind] <= set(names), REQUIRED[kind] - set(names)
 
     failures, seen = [], set()
     for k in range(len(names)):
-        _, cfg, factory, original, crash_states, engine, problems = await _scenario(
+        _, cfg, factory, originals, crash_states, engine, problems = await _scenario(
             tmp_path / f"crash{k}", kind, k, ref
         )
         seen.update(crash_states)
         problems += _problems(
-            cfg, original, await _states(factory), final=True, ref=ref, exact=exact
+            cfg, originals, await _states(factory), final=True, ref=ref, exact=exact
         )
         problems += await _published_matches_record(cfg, factory)
         before = _files(cfg.music_root.parent, exact)

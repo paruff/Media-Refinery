@@ -56,7 +56,10 @@ def _stamp(text: str) -> float:
 
 
 def parse_cue(text: str, total: float) -> list[dict]:
-    """Chapters from a single-file CUE sheet; INDEX 01 starts a track."""
+    """Chapters from a single-file CUE sheet; INDEX 01 starts a track. A sheet naming more than
+    one FILE has per-file timestamps we would misread, so it yields no chapters."""
+    if sum(raw.strip().startswith("FILE ") for raw in text.splitlines()) > 1:
+        return []
     starts: list[tuple[str, float]] = []
     title = ""
     for raw in text.splitlines():
@@ -98,6 +101,11 @@ def ffmetadata(chapters: list[dict]) -> str:
         out += [f"START={round(c['start'] * 1000)}", f"END={round(c['end'] * 1000)}"]
         out.append(f"title={esc(c['title'])}")
     return "\n".join(out) + "\n"
+
+
+def has_newline(files: list[str]) -> bool:
+    """The concat demuxer list is line based, so such names go through the concat filter."""
+    return any("\n" in f or "\r" in f for f in files)
 
 
 def concat_list(files: list[str]) -> str:
@@ -175,7 +183,10 @@ def _year(value: str | None) -> str | None:
     return match.group(0) if match else None
 
 
-async def _single_file_chapters(path: Path, probe: dict, total: float, title: str):
+async def _single_file_chapters(
+    path: Path, probe: dict, total: float, title: str
+) -> tuple[list[dict], bool]:
+    """(chapters, detection_failed): failed means silencedetect timed out or errored."""
     if probe.get("chapters"):
         return [
             {
@@ -184,18 +195,20 @@ async def _single_file_chapters(path: Path, probe: dict, total: float, title: st
                 "end": float(c["end_time"]),
             }
             for n, c in enumerate(probe["chapters"], 1)
-        ]
+        ], False
     cue = path.with_suffix(".cue")
-    if cue.is_file():
-        return parse_cue(cue.read_text(errors="replace"), total)
-    _, _, err = await run_tool(
+    if cue.is_file() and (
+        chapters := parse_cue(cue.read_text(errors="replace"), total)
+    ):
+        return chapters, False
+    rc, _, err = await run_tool(
         ["ffmpeg", "-nostdin", "-v", "info", "-i", str(path), "-af", SILENCE, *NULL],
         3600,
     )
     chapters = chapters_from_silence(err, total)
     if len(chapters) == 1:
         chapters[0]["title"] = title
-    return chapters
+    return chapters, rc != 0
 
 
 async def describe_book(files: list[Path], fallback_title: str) -> dict:
@@ -216,8 +229,11 @@ async def describe_book(files: list[Path], fallback_title: str) -> dict:
         or fallback_title
     )
     total = sum(durations)
+    chapters_failed = False
     if len(files) == 1:
-        chapters = await _single_file_chapters(files[0], probes[0], total, title)
+        chapters, chapters_failed = await _single_file_chapters(
+            files[0], probes[0], total, title
+        )
     else:
         starts, at = [], 0.0
         for f, p, d in zip(files, probes, durations, strict=True):
@@ -229,7 +245,8 @@ async def describe_book(files: list[Path], fallback_title: str) -> dict:
         (s.get("codec_name"), s.get("sample_rate"), s.get("channels")) for s in streams
     }
     return {
-        "mixed": len(signatures) > 1,
+        "mixed": len(signatures) > 1 or has_newline([str(f) for f in files]),
+        "chapters_failed": chapters_failed,
         "sample_rate": int(streams[0].get("sample_rate") or 44100),
         "channels": min(int(streams[0].get("channels") or 2), 2),
         "gaps": part_gaps(files),
@@ -277,5 +294,7 @@ def tag_m4b(path: Path, book: dict, cover: bytes | None) -> None:
         if book.get(key):
             audio[FREEFORM + name] = [str(book[key]).encode()]
     if cover:
-        audio["covr"] = [MP4Cover(cover, imageformat=MP4Cover.FORMAT_JPEG)]
+        png = cover[:4] == b"\x89PNG"
+        fmt = MP4Cover.FORMAT_PNG if png else MP4Cover.FORMAT_JPEG
+        audio["covr"] = [MP4Cover(cover, imageformat=fmt)]
     audio.save()

@@ -27,6 +27,17 @@ from app.pipeline.types.music import album_pending
 from app.services.music_id import local_cover
 
 
+def _is_late(item, lead, members) -> bool:
+    """True when a file turns up after its book was planned (it is not in the lead's member
+    list) or built (some other file of the folder is already validated)."""
+    if any(m.state == FileState.validated and m.id != item.id for m in members):
+        return item.state != FileState.validated
+    if lead.id == item.id:
+        return False
+    book = load_meta(lead).get("book")
+    return book is not None and item.id not in book["members"]
+
+
 class AudiobookStrategy(MediaStrategy):
     @staticmethod
     def unit(o, path) -> Path:
@@ -39,7 +50,10 @@ class AudiobookStrategy(MediaStrategy):
             return False, ""
         unit = book_dir(str(item.source_path), o.cfg.input_dir)
         rows = await session.execute(
-            select(MediaItem).where(MediaItem.media_type == MediaType.audiobook)
+            select(MediaItem).where(
+                MediaItem.media_type == MediaType.audiobook,
+                MediaItem.source_path.startswith(str(unit)),
+            )
         )
         members = sorted(
             (
@@ -50,6 +64,12 @@ class AudiobookStrategy(MediaStrategy):
             key=lambda m: natural_key(str(m.source_path)),
         )
         lead = members[0]
+        if _is_late(item, lead, members):
+            # R-PIPE-6: the book was already planned or built without this file; never a new book
+            item.state = FileState.quarantined
+            item.error_log = f"late_part: book already built from {lead.id}"
+            await session.commit()
+            return True, ""
         if lead.id != item.id:
             if lead.state in (FileState.error, FileState.quarantined):
                 item.state = FileState.quarantined
@@ -58,13 +78,15 @@ class AudiobookStrategy(MediaStrategy):
                 return True, ""
             return False, ""
         meta = load_meta(item)
-        meta["book"] = await describe_book(
-            [Path(str(m.source_path)) for m in members], unit.name
-        )
-        meta["book"]["members"] = [m.id for m in members[1:]]
-        item.enrichment_data = json.dumps(meta)
+        files = [str(m.source_path) for m in members]
+        if meta.get("book", {}).get("files") != files:  # a retry reuses the description
+            meta["book"] = await describe_book([Path(f) for f in files], unit.name)
+            meta["book"]["members"] = [m.id for m in members[1:]]
+            item.enrichment_data = json.dumps(meta)
         if meta["book"]["gaps"]:
             flag_review(item, "missing_parts")
+        if meta["book"].get("chapters_failed"):
+            flag_review(item, "chapter_detection_failed")
         return None, ""
 
     async def build(self, o, item, plan, source: Path, tmp: Path):

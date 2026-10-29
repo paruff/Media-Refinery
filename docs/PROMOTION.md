@@ -1,6 +1,6 @@
 # Promoting a parked media type
 
-`music` and `ebook` are on by default (`ENABLED_TYPES`). Video, TV and audiobooks are experimental and
+`music`, `ebook` and `audiobook` are on by default (`ENABLED_TYPES`). Video and TV are experimental and
 off. Promote **one type at a time**, by passing every gate below, then change the default and README.
 
 ## Checklist (the lead-type bar)
@@ -21,8 +21,8 @@ off. Promote **one type at a time**, by passing every gate below, then change th
 | Type | Status | Why |
 |------|--------|-----|
 | music | promoted (lead) | meets all gates (G16) |
-| audiobooks | stays experimental | no corpus or crash-invariant coverage; open Important items in #100 (chapter-start/duration verification, late-part and gap detection R-PIPE-6) |
+| audiobooks | promoted (beta) | meets all gates (P2): `tests/corpus/test_audiobook_corpus.py`, audiobook crash sweep (merge/concat step), late-part and gap review, #100 items done or deferred in writing; Audiobookshelf notify call proved against the real server by the nightly `make contract-servers` |
 | ebooks | promoted (beta) | meets all gates (P1): `tests/corpus/test_ebook_corpus.py`, ebook crash sweep, `fetch_ebook_metadata.txt` fixture, #101 minors done; needs calibre + epubcheck (in the image) |
 | movies / TV | stays experimental | no corpus coverage; TMDB/TVDB contracts not recorded; minors in #97/#98 open |
 
-Next candidate: audiobooks (corpus suite, crash invariants and its Important items in #100).
+Next candidate: movies / TV (corpus suite, TMDB/TVDB contracts, minors in #97/#98).
