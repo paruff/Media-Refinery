@@ -155,8 +155,10 @@ docker-test: ## run the CI test job inside the image (real ffmpeg; no local inst
 	  'cp -r /src /w && cd /w && rm -rf .venv && pip install -q --no-deps --require-hashes -r requirements-dev.txt \
 	  && playwright install --with-deps chromium >/dev/null \
 	  && mkdir -p input staging output data \
-	  && pytest tests/unit tests/integration tests/contracts -n auto --dist loadfile -p no:cacheprovider --timeout=120 -ra --cov=app --cov-report=term --cov-fail-under=$${COV_MIN:-80}; \
-	  rc=$$?; behave tests/features || rc=1; exit $$rc'
+	  && pytest tests/unit tests/integration -n auto --dist loadfile -p no:cacheprovider --timeout=120 -ra --cov=app --cov-report=term --cov-fail-under=$${COV_MIN:-80}; \
+	  rc=$$?; behave tests/features || rc=1; \
+	  pytest tests/corpus -m corpus -p no:cacheprovider --timeout=900 -ra || rc=1; \
+	  pytest tests/contracts/test_fixtures.py tests/acceptance tests/regression -p no:cacheprovider --timeout=300 -ra || rc=1; exit $$rc'
 
 corpus-test: ## G15 messy-library corpus, crash injection and plan report inside the image
 	docker build -t media-refinery:ci .

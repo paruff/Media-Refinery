@@ -20,6 +20,26 @@ pre-commit install
 Useful targets: `make unit`, `make integration`, `make features`, `make coverage`,
 `make run`, `make docker-test`, `make ui-test`, `make ci`.
 
+`make docker-test` is authoritative: it runs the same suites as the CI `test` job (unit,
+integration, behave, corpus, contract fixtures, acceptance, regression) with real ffmpeg and the
+80 % coverage floor. Host `make test` skips ffmpeg-dependent tests, so green there is not CI green.
+`make ci` = `make precom` + `make docker-test` + `make compose-check`.
+
+The `# noqa` count may only shrink (`tests/unit/test_noqa_ratchet.py`): lower `BASELINE` when you
+remove one. Requirements drift: `make deps-lock` re-locks everything; review the diff.
+
+## Security scans: ignoring a finding
+
+`security.yml` (pip-audit, Trivy, gitleaks) is blocking. Prefer upgrading or pinning. If a finding
+has no fix or does not apply, ignore it narrowly, with a reason and an expiry (re-check by then):
+
+- pip-audit: add `--ignore-vuln GHSA-xxxx-xxxx-xxxx` to the step, with a comment
+  `# reason; expires YYYY-MM-DD`.
+- Trivy: add the ID to `.trivyignore` at the repo root (`CVE-YYYY-NNNN exp:YYYY-MM-DD`, with a
+  `#` comment line above it giving the reason) and set `trivyignores: .trivyignore` on the
+  trivy-action step. Trivy ignores an entry after its `exp:` date, so it fails loudly again.
+- gitleaks: use `.gitleaksignore` (fingerprints) for a verified false positive only.
+
 ## Testing
 
 ```text
@@ -74,7 +94,7 @@ The nightly workflow re-measures this and uploads `throughput.json`.
 
 ## Observability
 
-Logs are structured with `item_id` and `run_id`. `/health` and `/ready` are the probes.
+Logs are structured with `item_id` and `run_id`. `/health` and `/ready` are the probes; the image `HEALTHCHECK` probes `/ready`.
 Prometheus metrics (`media_refinery_items{state,type}`) are at `GET /api/v1/metrics` (bearer token required).
 
 ## FAQ
