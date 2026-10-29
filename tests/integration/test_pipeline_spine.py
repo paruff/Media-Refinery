@@ -387,3 +387,36 @@ async def test_missing_work_file_at_publish_is_reexecuted(env):
     await orch.run_until_idle()
     (item,) = await _items(factory)
     assert item.state == FileState.validated, item.error_log
+
+
+async def test_concurrent_target_race_is_plan_conflict_not_error(env, monkeypatch):
+    from app.pipeline import plan
+
+    cfg, factory = env
+    _twin_mp3(cfg, "a.mp3", 440)
+    _twin_mp3(cfg, "b.mp3", 880)
+    await import_input(cfg, factory)
+
+    async def blind(session, target_path):  # both workers pass the pre-check
+        return []
+
+    monkeypatch.setattr(plan, "_held", blind)
+    await PipelineOrchestrator(factory, cfg).run_until_idle()
+    states = sorted(i.state.value for i in await _items(factory))
+    assert states == ["planned", "quarantined"]
+    assert any("plan_conflict" in (i.error_log or "") for i in await _items(factory))
+
+
+async def test_many_concurrent_same_target_tracks_never_error(env):
+    cfg, factory = env
+    for n in range(6):
+        _twin_mp3(cfg, f"t{n}.mp3", 300 + 50 * n)
+    await import_input(cfg, factory)
+    await PipelineOrchestrator(factory, cfg).run_until_idle()
+    items = await _items(factory)
+    assert {i.state for i in items} == {FileState.planned}, [i.error_log for i in items]
+    async with factory() as s:
+        targets = (
+            (await s.execute(select(NormalizationPlan.target_path))).scalars().all()
+        )
+    assert len(set(targets)) == 6

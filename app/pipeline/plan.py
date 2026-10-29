@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.planning import IMAGE_SUBS, build_plan, is_audio_only
 from app.core.tools import run_tool
@@ -60,46 +61,56 @@ async def run(o, item_id) -> bool:
             item.state, item.error_log = FileState.error, str(e)
             await session.commit()
             return True
-        held = await _held(session, spec.target_path)
-        if item.media_type == MediaType.music and any(
-            p.plan_status != PlanStatus.failed and p.media_item_id != item.id
-            for p in held
-        ):
-            # untagged same-title tracks share a name: keep both, tell them apart by content id
-            target = Path(spec.target_path)
-            spec = replace(
-                spec,
-                target_path=str(
-                    target.with_name(
-                        f"{target.stem} [{str(item.id)[:8]}]{target.suffix}"
-                    )
-                ),
-            )
-            held = await _held(session, spec.target_path)
-        # a failed plan keeps its history but releases the target (unique)
-        for old in held:
-            if old.plan_status == PlanStatus.failed:
-                old.target_path = f"{old.target_path}#failed-{old.id}"
-        await session.flush()
-        if any(p.plan_status != PlanStatus.failed for p in held):
-            item.state, item.error_log = (
-                FileState.quarantined,
-                f"plan_conflict: {spec.target_path}",
-            )
-            await session.commit()
-            return True
-        session.add(
-            NormalizationPlan(
-                media_item_id=item.id,
-                target_path=spec.target_path,
-                ffmpeg_args=spec.ffmpeg_args,
-                # item ids are the sha256 of the content (watcher.content_hash)
-                original_hash=str(item.id),
-                needs_transcode=spec.needs_transcode,
-                needs_rename=True,
-                execution_log=review,
-            )
-        )
-        item.state = FileState.planned
-        await session.commit()
+        async with o.plan_lock:  # check + insert must be atomic across concurrent items
+            await _claim_target(session, item, spec, review)
     return True
+
+
+async def _quarantine_conflict(session, item, target_path: str) -> None:
+    item.state, item.error_log = FileState.quarantined, f"plan_conflict: {target_path}"
+    await session.commit()
+
+
+async def _claim_target(session, item, spec, review) -> None:
+    """Plan the item at spec.target_path, or quarantine it as plan_conflict."""
+    held = await _held(session, spec.target_path)
+    if item.media_type == MediaType.music and any(
+        p.plan_status != PlanStatus.failed and p.media_item_id != item.id for p in held
+    ):
+        # untagged same-title tracks share a name: keep both, tell them apart by content id
+        target = Path(spec.target_path)
+        spec = replace(
+            spec,
+            target_path=str(
+                target.with_name(f"{target.stem} [{str(item.id)[:8]}]{target.suffix}")
+            ),
+        )
+        held = await _held(session, spec.target_path)
+    # a failed plan keeps its history but releases the target (unique)
+    for old in held:
+        if old.plan_status == PlanStatus.failed:
+            old.target_path = f"{old.target_path}#failed-{old.id}"
+    await session.flush()
+    if any(p.plan_status != PlanStatus.failed for p in held):
+        await _quarantine_conflict(session, item, spec.target_path)
+        return
+    session.add(
+        NormalizationPlan(
+            media_item_id=item.id,
+            target_path=spec.target_path,
+            ffmpeg_args=spec.ffmpeg_args,
+            # item ids are the sha256 of the content (watcher.content_hash)
+            original_hash=str(item.id),
+            needs_transcode=spec.needs_transcode,
+            needs_rename=True,
+            execution_log=review,
+        )
+    )
+    item.state = FileState.planned
+    item_id = item.id  # rollback expires `item`; reading it afterwards would lazy-load
+    try:
+        await session.commit()
+    except IntegrityError:  # backstop: another process claimed the target
+        await session.rollback()
+        item = await session.get(MediaItem, item_id, populate_existing=True)
+        await _quarantine_conflict(session, item, spec.target_path)
