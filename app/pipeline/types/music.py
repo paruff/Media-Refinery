@@ -57,7 +57,7 @@ def unsupported_audio(stream: dict) -> str:
     codec = str(stream.get("codec_name") or "")
     raw = str(stream.get("bits_per_raw_sample") or "")
     bits = int(raw) if raw.isdigit() else 0  # 0/N/A for lossy codecs
-    if codec.startswith("dsd"):
+    if codec.startswith("dsd") or codec in ("pcm_u8", "pcm_s8"):
         return f"unsupported_audio: {codec}"
     if bits and (bits <= 8 or bits > 24):
         return f"unsupported_audio: {bits}-bit"
@@ -234,7 +234,9 @@ class MusicStrategy(MediaStrategy):
                 if cover is None
                 else "cover below 500px kept as-is",
             )
-        elif not is_jpeg(await asyncio.to_thread(embedded_cover, source)):
+        elif (
+            raw := await asyncio.to_thread(embedded_cover, source)
+        ) is not None and not is_jpeg(raw):
             o._emit("cover", item.id, "degraded", "cover re-encoded to JPEG")
         tags = {**meta["tags"], "cover": cover}
         # tags from an identified release replace the file's; otherwise merge into them

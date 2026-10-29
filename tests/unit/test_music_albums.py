@@ -213,6 +213,7 @@ async def test_embedded_artist_is_used_when_there_is_no_album_artist_tag():
         ({"codec_name": "flac", "bits_per_raw_sample": "32"}, True),
         ({"codec_name": "pcm_u8", "bits_per_raw_sample": "8"}, True),
         ({"codec_name": "dsd_lsbf_planar"}, True),
+        ({"codec_name": "pcm_u8", "bits_per_raw_sample": "N/A"}, True),
         ({}, False),
     ],
 )
