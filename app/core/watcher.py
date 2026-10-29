@@ -52,12 +52,12 @@ def content_hash(path: str) -> str:
 
 
 def _stat_signature(path: str):
-    """(size, mtime) or None if the file is gone. Blocking: call via to_thread."""
+    """(size, mtime_ns, inode) or None if the file is gone. Blocking: call via to_thread."""
     try:
         st = os.stat(path)
     except FileNotFoundError:
         return None
-    return st.st_size, st.st_mtime
+    return st.st_size, st.st_mtime_ns, st.st_ino
 
 
 class DebounceHandler(FileSystemEventHandler):
@@ -184,6 +184,12 @@ class InputWatcher:
         queued_at = self.processing_queue.get(path)
         try:
             await self.insert_if_new(path)
+        except FileChangedError:
+            # Still being written: not a failure, so it does not use the retry budget.
+            self.logger.warning(
+                f"{path} changed while hashing; waiting for it to settle"
+            )
+            return  # stays queued; the stability window restarts
         except Exception:
             self.logger.exception(f"Failed to import {path}")
             if self._schedule_retry(path, attempts, retry_at):
