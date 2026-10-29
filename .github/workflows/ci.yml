@@ -194,9 +194,18 @@ jobs:
           bad = {k: v["result"] for k, v in json.load(sys.stdin).items() if v["result"] != "success"}
           sys.exit(f"not green: {bad}" if bad else 0)'
 
+  security:
+    # The canary must not publish while secret/dependency scans are red (security.yml is also
+    # a required check on its own; this reuses it so the canary can depend on it).
+    name: Security scans (main only)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: ./.github/workflows/security.yml
+    permissions:
+      contents: read
+
   docker-canary:
     name: Publish canary image (main only)
-    needs: [gate]
+    needs: [gate, security]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
