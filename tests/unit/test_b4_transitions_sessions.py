@@ -181,8 +181,9 @@ async def test_garbage_cookie_values_do_not_500(client):
     for bad in ("", ".", "x.y", "9" * 40 + ".00"):
         r = await client.get("/ui/queue", cookies={"mr_token": bad})
         assert r.status_code == 303
-    raw = {"Cookie": "mr_token=1.é".encode("latin-1")}
-    assert (await client.get("/ui/queue", headers=raw)).status_code == 303
+    for value in ("1.é", "\xb2.x"):  # \xb2 passes str.isdigit() but not int()
+        raw = {"Cookie": f"mr_token={value}".encode("latin-1")}
+        assert (await client.get("/ui/queue", headers=raw)).status_code == 303
 
 
 @pytest.mark.asyncio
