@@ -156,3 +156,21 @@ async def test_bulk_approve_all_ok_shows_no_warning(client):
         "/ui/review/approve", data={"ids": ["ok.mp3"]}, cookies=cookies, headers=HX
     )
     assert r.status_code == 200 and "skipped" not in r.text
+
+
+async def test_login_cookie_flags_logout_and_throttle(client):
+    ok = await client.post(
+        "/ui/login", data={"token": TOKEN}, headers={"X-Forwarded-Proto": "https"}
+    )
+    cookie = ok.headers["set-cookie"].lower()
+    assert "secure" in cookie and "max-age=" in cookie and "httponly" in cookie
+    out = await client.post("/ui/logout")
+    assert out.status_code == 303 and "max-age=0" in out.headers["set-cookie"].lower()
+    for _ in range(5):
+        assert (
+            await client.post("/ui/login", data={"token": "bad"})
+        ).status_code == 401
+    assert (await client.post("/ui/login", data={"token": TOKEN})).status_code == 429
+    from app.ui.routes import _failed_logins
+
+    _failed_logins.clear()

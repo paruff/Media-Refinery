@@ -1,5 +1,6 @@
 """G10 web UI: server-rendered Jinja2 views with htmx actions over the shared services."""
 
+import time
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
@@ -49,14 +50,51 @@ async def login_form(request: Request):
     )
 
 
+COOKIE_MAX_AGE = 7 * 24 * 3600
+MAX_FAILED_LOGINS = 5
+LOGIN_WINDOW = 60.0
+_failed_logins: dict[
+    str, list[float]
+] = {}  # ponytail: per-process, per client IP; shared store if multi-worker
+
+
+def _login_throttled(ip: str) -> bool:
+    now = time.monotonic()
+    recent = [t for t in _failed_logins.get(ip, []) if now - t < LOGIN_WINDOW]
+    _failed_logins[ip] = recent
+    return len(recent) >= MAX_FAILED_LOGINS
+
+
 @router.post("/login")
 async def login(request: Request, token: Annotated[str, Form()]):
+    ip = request.client.host if request.client else "?"
+    if _login_throttled(ip):
+        raise HTTPException(429, "Too many failed logins; wait a minute")
     if not token_matches(token, settings.API_TOKEN):
+        _failed_logins[ip].append(time.monotonic())
         return templates.TemplateResponse(
             request, "login.html", {"nav": None, "bad": True}, status_code=401
         )
     out = RedirectResponse("/ui/queue", status_code=303)
-    out.set_cookie(TOKEN_COOKIE, token, httponly=True, samesite="strict")
+    https = (
+        request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto") == "https"
+    )
+    out.set_cookie(
+        TOKEN_COOKIE,
+        token,
+        httponly=True,
+        samesite="strict",
+        secure=https,
+        max_age=COOKIE_MAX_AGE,
+    )
+    return out
+
+
+@router.post("/logout")
+async def logout():
+    out = RedirectResponse("/ui/login", status_code=303)
+    out.delete_cookie(TOKEN_COOKIE)
     return out
 
 

@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     API_HOST: str = Field(
         "127.0.0.1", validation_alias=AliasChoices("MR_API_HOST", "API_HOST")
     )
+    # Opt-in Host allow-list (DNS-rebinding guard), e.g. MR_ALLOWED_HOSTS='["localhost","media.lan"]'.
+    ALLOWED_HOSTS: list[str] = Field(
+        ["*"], validation_alias=AliasChoices("MR_ALLOWED_HOSTS", "ALLOWED_HOSTS")
+    )
     API_TOKEN: str = Field(
         "", validation_alias=AliasChoices("MR_API_TOKEN", "API_TOKEN")
     )
