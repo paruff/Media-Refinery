@@ -160,3 +160,83 @@ def test_tag_m4b_keeps_a_png_cover_as_png(tmp_path):
     png = b"\x89PNG\r\n\x1a\n" + b"0" * 20
     tag_m4b(m4b, {"title": "T", "author": "A"}, png)
     assert MP4(m4b)["covr"][0].imageformat == MP4Cover.FORMAT_PNG
+
+
+def test_audio_args_re_encodes_he_aac_instead_of_copying():
+    from app.media.audiobook import audio_args
+
+    he = {
+        "codec_name": "aac",
+        "profile": "HE-AAC",
+        "sample_rate": "44100",
+        "channels": 2,
+    }
+    assert audio_args([he])[:3] == ["-vn", "-c:a", "aac"]
+    lc = {**he, "profile": "LC"}
+    assert audio_args([lc]) == ["-vn", "-c:a", "copy"]
+
+
+@pytest.mark.asyncio
+async def test_a_zero_expected_duration_fails_instead_of_using_the_source():
+    ok = AsyncMock(return_value=(0, "", ""))
+    with (
+        patch("app.core.verify.run_tool", ok),
+        patch("app.core.verify.probe_duration", AsyncMock(side_effect=[5.0])),
+        patch("app.core.verify.sha256_file", return_value="x"),
+    ):
+        checks, _, reason = await verify.verify_output("/s", "/o", True, 0.0, None)
+    assert reason == "duration_mismatch"
+    assert any(c["name"] == "duration" and not c["passed"] for c in checks)
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_series_atoms_round_trip_for_audiobookshelf(tmp_path):
+    from mutagen.mp4 import MP4
+
+    from app.media.audiobook import FREEFORM, tag_m4b
+    from tests.pipeline_helpers import _ffmpeg
+
+    m4b = tmp_path / "b.m4b"
+    _ffmpeg(
+        "-f", "lavfi", "-i", "sine=duration=1", "-c:a", "aac", "-f", "ipod", str(m4b)
+    )
+    book = {"title": "T", "author": "A", "series": "Saga", "sequence": "3"}
+    tag_m4b(m4b, book, None)
+    got = MP4(m4b)
+    assert bytes(got[FREEFORM + "SERIES"][0]) == b"Saga"
+    assert bytes(got[FREEFORM + "SERIES-PART"][0]) == b"3"
+
+
+@pytest.mark.asyncio
+async def test_a_follower_of_a_failed_lead_is_quarantined_as_book_failed(tmp_path):
+    from types import SimpleNamespace
+
+    from app.pipeline.types.audiobook import AudiobookStrategy
+
+    cfg = make_config(tmp_path)
+    engine, factory = await make_session_factory(tmp_path)
+    folder = cfg.input_dir / "Book"
+    folder.mkdir()
+    async with factory() as s:
+        for name, state in (
+            ("01.mp3", FileState.error),
+            ("02.mp3", FileState.enriched),
+        ):
+            (folder / name).write_bytes(name.encode())
+            s.add(
+                MediaItem(
+                    id=name,
+                    source_path=str(folder / name),
+                    state=state,
+                    media_type=MediaType.audiobook,
+                )
+            )
+        await s.commit()
+        follower = await s.get(MediaItem, "02.mp3")
+        done, _ = await AudiobookStrategy().prepare_plan(
+            SimpleNamespace(cfg=cfg), s, follower
+        )
+    assert done is True
+    assert follower.state == FileState.quarantined
+    assert follower.error_log == "book_failed: 01.mp3"
+    await engine.dispose()

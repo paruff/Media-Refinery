@@ -152,7 +152,10 @@ def audio_args(streams: list[dict]) -> list[str]:
     sig = {
         (s.get("codec_name"), s.get("sample_rate"), s.get("channels")) for s in streams
     }
-    if len(sig) == 1 and next(iter(sig))[0] == "aac":
+    plain_lc = all(
+        s.get("profile", "LC") == "LC" for s in streams
+    )  # HE-AAC is re-encoded
+    if len(sig) == 1 and next(iter(sig))[0] == "aac" and plain_lc:
         return ["-vn", "-c:a", "copy"]
     channels = min(int(streams[0].get("channels") or 2), 2)
     rates = [int(s["bit_rate"]) // 1000 for s in streams if s.get("bit_rate")]
