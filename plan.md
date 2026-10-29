@@ -293,3 +293,60 @@ its base branch never reaches `main`; this happened to #116).
 | G18 Decompose the orchestrator | #126 |
 | G19 Positioning, onboarding, operability | #127 |
 | G20 Review backlog burn-down and promotion checklist | #128 |
+
+---
+
+## Phase 3 — Promote the parked types to beta
+
+Beta music is tracked in B1–B7 (#144–#150). Each parked type below is promoted **one at a time**
+by passing every gate in [docs/PROMOTION.md](docs/PROMOTION.md): corpus suite, idempotence, crash
+invariants, provider contracts, Important review items closed, docs. Order is by how close each type
+already is, and each goal depends on the previous one landing on `main`.
+
+```text
+B7 beta (music) ─▶ P1 ebooks ─▶ P2 audiobooks ─▶ P3 video (movies) ─▶ P4 TV
+```
+
+### P1 — Ebooks to beta (closest: all Important items in #101 are ticked)
+
+**Scope:** corpus: epub/pdf/mobi/azw3 inputs, DRM'd AZW3, duplicate ISBNs, missing metadata, corrupt zip, titles with `&` and unicode. Close the #101 minors: write publisher/pubdate/cover, harden `parse_meta` and `epub_text_length` (`BadZipFile`, memory), replace `hash(title)` in `make_epub`. Tests for PDF input, `fetch_meta`, `calibredb_add` failure and duplicate, epubcheck failure, AZW3 DRM. Crash invariants cover the Calibre add step (library lock, SIGTERM-first timeout). Recorded `fetch-ebook-metadata` fixture. Calibre in the image (or a documented sidecar). Idempotence: re-ingest of an already-added book is a no-op.
+**Done when:** the ebook corpus suite and crash invariants pass in `make docker-test`; #101 is ticked; the PROMOTION.md checklist for ebooks is fully ticked and the status table flips to promoted.
+
+```text
+/goal P1 from plan.md: promote ebooks by the PROMOTION.md checklist — done when the ebook corpus, idempotence and crash-invariant suites are green and #101 is ticked.
+```
+
+### P2 — Audiobooks to beta
+
+**Scope:** fix the open Important items in #100: chapter-start monotonicity and last-end ≤ duration + tolerance in VERIFY; late parts and gaps (1,2,4) go to review (R-PIPE-6) instead of a new book. Corpus: multi-file books, mixed MP3/M4A and sample rates, gaps, late part, M4B input, CUE and silence-detected chapters, untagged long audio, multi-book author folder, podcasts that must not classify as audiobooks. Minors: JPEG-only cover assumption, multi-FILE CUE, silencedetect timeout, `concat_list` newlines, repeated `describe_book`. Audiobookshelf contract fixture (G17 workflow). Crash invariants for the merge/concat step.
+**Done when:** audiobook corpus and invariants green; #100 ticked; PROMOTION.md ticked.
+
+```text
+/goal P2 from plan.md: promote audiobooks by the PROMOTION.md checklist — done when the audiobook corpus, idempotence and crash-invariant suites are green and #100 is ticked.
+```
+
+### P3 — Video (movies) to beta
+
+**Scope:** shared video foundation for P3 and P4. Close #96 (failed repair leaves `*_fixed`, fall back to original; cached empty `available_encoders()`; hardware paths set `-pix_fmt`/`-profile:v` for Samsung direct-play; unique `_fixed` names) and #97 minors (Atmos mapped twice, cover art re-encoded, single failure recording site, quarantine trace status and rotation). Fix the #108 video fingerprint gaps (VFR frame count, fail fast when `cv2` missing). Corpus: multi-audio and subtitle MKVs, truncated and corrupt files, 10-bit HDR source, Atmos, cover-art streams, long files for timeout scaling. Real-ffmpeg tests for each. TMDB contract fixture; movie title/year ambiguity goes to review. VMAF failure other than missing libvmaf must not pass silently.
+**Done when:** movie corpus, idempotence and crash invariants green; #96, #97 and the #108 video items ticked.
+
+```text
+/goal P3 from plan.md: promote movies by the PROMOTION.md checklist — done when the movie corpus, idempotence and crash-invariant suites are green and #96/#97 are ticked.
+```
+
+### P4 — TV to beta
+
+**Depends on:** P3 (video encode path).
+**Scope:** close #98 minors: `_probe_streams` must not swallow ffprobe failures into the generic path; main-language stereo downmix; episode-title confinement test and comment. Corpus: `S01E01`/`1x01`/dated and anime naming, missing season, specials, multi-episode files, wrong-show ambiguity, hostile titles. TVDB fixture and token-refresh, 401, 429 tests; key-not-in-logs test. Idempotence on renamed re-ingest.
+**Done when:** TV corpus, idempotence and invariants green; #98 ticked; PROMOTION.md status flips for series.
+
+```text
+/goal P4 from plan.md: promote TV by the PROMOTION.md checklist — done when the TV corpus, idempotence and crash-invariant suites are green and #98 is ticked.
+```
+
+### Phase 3 tracking
+
+| Goal | Issue |
+|---|---|
+| B1–B7 beta (music) | #144–#150 |
+| P1–P4 | create when B7 is done |
