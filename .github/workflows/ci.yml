@@ -93,7 +93,7 @@ jobs:
         run: >-
           uv run --no-sync pytest tests/unit tests/integration -n auto
           -p no:cacheprovider --timeout=120 -ra
-          --cov=app --cov-report=term --cov-report=xml --cov-fail-under=80
+          --cov=app --cov-report=term --cov-report=xml --cov-fail-under=99
       - name: BDD features
         run: uv run --no-sync behave tests/features
       - name: Messy-library corpus and crash-injection invariants
