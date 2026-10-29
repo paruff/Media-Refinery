@@ -131,7 +131,7 @@ repos:
         stages: [commit-msg]
         args: ["feat", "fix", "refactor", "docs", "test", "chore", "perf", "ci", "build", "revert"]
 
-  # ---- pre-push: tests that need the project environment -----------------
+  # ---- unit tests on every commit (~40s); CI/`make hooks-run` skip it ----
   - repo: local
     hooks:
       - id: pytest-unit
@@ -140,4 +140,4 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        stages: [pre-push]
+        stages: [pre-commit]
