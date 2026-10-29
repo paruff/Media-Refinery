@@ -66,6 +66,11 @@ async def run(o, item_id) -> bool:
     return True
 
 
+async def _quarantine_conflict(session, item, target_path: str) -> None:
+    item.state, item.error_log = FileState.quarantined, f"plan_conflict: {target_path}"
+    await session.commit()
+
+
 async def _claim_target(session, item, spec, review) -> None:
     """Plan the item at spec.target_path, or quarantine it as plan_conflict."""
     held = await _held(session, spec.target_path)
@@ -87,11 +92,7 @@ async def _claim_target(session, item, spec, review) -> None:
             old.target_path = f"{old.target_path}#failed-{old.id}"
     await session.flush()
     if any(p.plan_status != PlanStatus.failed for p in held):
-        item.state, item.error_log = (
-            FileState.quarantined,
-            f"plan_conflict: {spec.target_path}",
-        )
-        await session.commit()
+        await _quarantine_conflict(session, item, spec.target_path)
         return
     session.add(
         NormalizationPlan(
@@ -111,8 +112,4 @@ async def _claim_target(session, item, spec, review) -> None:
     except IntegrityError:  # backstop: another process claimed the target
         await session.rollback()
         item = await session.get(MediaItem, item.id, populate_existing=True)
-        item.state, item.error_log = (
-            FileState.quarantined,
-            f"plan_conflict: {spec.target_path}",
-        )
-        await session.commit()
+        await _quarantine_conflict(session, item, spec.target_path)
