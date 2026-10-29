@@ -189,4 +189,11 @@ async def test_review_row_shows_source_technical_summary_and_planned_actions(cli
         await s.commit()
     page = (await client.get("/ui/review", cookies=cookies)).text
     assert "mp3 · mp3" in page
-    assert "transcode" in page and "retag" in page
+    assert "transcode, retag" in page
+
+
+async def test_review_row_without_probe_data_or_flags_falls_back(client):
+    cookies = await _login(client)
+    await _seed("a.mp3", FileState.planned)
+    page = (await client.get("/ui/review", cookies=cookies)).text
+    assert "no probe data" in page and "copy / remux" in page

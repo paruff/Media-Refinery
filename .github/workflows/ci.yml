@@ -89,6 +89,8 @@ jobs:
       - name: Create media directories
         run: mkdir -p input staging output output/movies output/series output/music data
       - name: Unit + integration tests with coverage
+        # --dist loadfile: the Playwright file runs on one worker, so Chromium instances run
+        # one at a time instead of one per worker (memory on small runners).
         # Floor per spec NF-3.
         run: >-
           uv run --no-sync pytest tests/unit tests/integration -n auto --dist loadfile
@@ -222,5 +224,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE }}:canary
+          # own scope so canary and release builds do not evict each other's (or the PR) cache
           cache-from: type=gha,scope=canary
           cache-to: type=gha,scope=canary,mode=max

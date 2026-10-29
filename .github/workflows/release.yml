@@ -55,6 +55,7 @@ jobs:
           provenance: mode=max
           sbom: true
           tags: ${{ env.IMAGE }}:${{ env.CANDIDATE }}
+          # own scope so release builds do not evict the PR/canary cache
           cache-from: type=gha,scope=release
           cache-to: type=gha,scope=release,mode=max
       - name: Compose smoke on that digest (amd64)
