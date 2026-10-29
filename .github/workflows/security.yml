@@ -1,7 +1,8 @@
 name: Security
 
 # Vulnerability databases change daily, so these scans are NOT part of the
-# deterministic CI gate, but every scan here blocks: a red run means fix or pin, not ignore.
+# deterministic CI gate, but the secret and dependency scans are required checks on main
+# (branch protection): a red run means fix or pin, not ignore.
 on:
   push:
     branches: [main]
