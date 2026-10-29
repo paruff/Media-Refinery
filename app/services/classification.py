@@ -133,6 +133,7 @@ class ClassificationService:
                 enrichment_data = {
                     "artist": tags.get("artist", [None])[0],
                     "album": tags.get("album", [None])[0],
+                    "album_artist": tags.get("albumartist", [None])[0],
                     "track_title": tags.get("title", [None])[0],
                     "track_number": None,
                 }

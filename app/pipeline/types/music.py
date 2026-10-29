@@ -49,8 +49,10 @@ class MusicStrategy(MediaStrategy):
         embedded tags stay and the plan needs a human."""
         meta = load_meta(item)
         tags = {
-            "artist": item.artist,
-            "album": item.album,
+            # classification keeps the embedded artist/album in enrichment_data, not the columns
+            "artist": item.artist or meta.get("artist"),
+            "album": item.album or meta.get("album"),
+            "album_artist": meta.get("album_artist"),
             "title": item.title or meta.get("track_title"),
             "year": item.year,
             "track_number": meta.get("track_number"),
