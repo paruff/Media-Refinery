@@ -168,6 +168,9 @@ def test_session_key_is_domain_separated_from_raw_token(monkeypatch):
     issued = str(int(time.time()))
     raw = hmac.new(TOKEN.encode(), issued.encode(), hashlib.sha256).hexdigest()
     assert not auth.session_valid(f"{issued}.{raw}")
+    key = hmac.new(TOKEN.encode(), b"mr-ui-session-v1", hashlib.sha256).digest()
+    exact = hmac.new(key, issued.encode(), hashlib.sha256).hexdigest()
+    assert auth.session_valid(f"{issued}.{exact}")
     assert auth.session_valid(auth.make_session())
 
 
