@@ -33,6 +33,11 @@ EXTRA_KEYS = (
 )
 
 
+def _vals(v: Any) -> list[str]:
+    """Multi-valued tags (several artist credits) keep every value."""
+    return [str(x) for x in v] if isinstance(v, (list, tuple)) else [str(v)]
+
+
 class TaggingService:
     """
     Service to apply canonical music metadata to FLAC, MP3, and M4A files using mutagen.
@@ -97,7 +102,7 @@ class TaggingService:
         }
         for k, v in tag_map.items():
             if k in meta and meta[k] is not None:
-                audio[v] = [str(meta[k])]
+                audio[v] = _vals(meta[k])
         if meta.get("cover"):
             audio.clear_pictures()
             audio.add_picture(self._flac_picture(meta["cover"]))
@@ -122,8 +127,8 @@ class TaggingService:
             audio.add(TALB(encoding=3, text=meta["album"]))
         if "title" in meta:
             audio.add(TIT2(encoding=3, text=meta["title"]))
-        if "year" in meta:
-            audio.add(TDRC(encoding=3, text=str(meta["year"])))
+        if date := meta.get("release_date") or meta.get("year"):
+            audio.add(TDRC(encoding=3, text=str(date)))
         if "track_number" in meta:
             track = str(meta["track_number"])
             if "track_total" in meta:
@@ -138,7 +143,7 @@ class TaggingService:
             audio.add(TCON(encoding=3, text=meta["genre"]))
         for key in EXTRA_KEYS:
             if key in meta:
-                audio.add(TXXX(encoding=3, desc=key.upper(), text=str(meta[key])))
+                audio.add(TXXX(encoding=3, desc=key.upper(), text=_vals(meta[key])))
         if meta.get("cover"):
             audio.delall("APIC")
             audio.add(
@@ -161,10 +166,11 @@ class TaggingService:
             "genre": "\xa9gen",
             **{k: f"----:com.apple.iTunes:{k.upper()}" for k in EXTRA_KEYS},
         }
+        meta = {**meta, "year": meta.get("release_date") or meta.get("year")}
         for k, v in tag_map.items():
             if k in meta and meta[k] is not None:
                 if v.startswith("----"):
-                    audio[v] = [str(meta[k]).encode("utf-8")]
+                    audio[v] = [x.encode("utf-8") for x in _vals(meta[k])]
                 elif v in ("trkn", "disk"):
                     # MP4 expects tuples for track/disc
                     if k == "track_number":

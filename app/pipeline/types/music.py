@@ -10,7 +10,12 @@ from sqlalchemy import select
 
 from app.models.media import FileState, MediaItem, MediaType
 from app.pipeline.types.base import MediaStrategy, flag_review, load_meta
-from app.services.music_id import local_cover, write_album_cover
+from app.services.music_id import (
+    embedded_cover,
+    jpeg_cover,
+    local_cover,
+    write_album_cover,
+)
 from app.services.replaygain import measure
 from app.services.tagging_service import TaggingService
 
@@ -166,8 +171,16 @@ class MusicStrategy(MediaStrategy):
             if o.identifier
             else asyncio.to_thread(local_cover, source)
         )
-        if cover is None:
-            o._emit("cover", item.id, "skipped", "no usable cover (>=500px)")
+        if cover is None:  # below 500 px: keep what the file had rather than drop it
+            cover = await asyncio.to_thread(
+                lambda: jpeg_cover(embedded_cover(source), min_px=1)
+            )
+            o._emit(
+                "cover",
+                item.id,
+                "skipped" if cover is None else "degraded",
+                "no usable cover (>=500px)",
+            )
         tags = {**meta["tags"], "cover": cover}
         # tags from an identified release replace the file's; otherwise merge into them
         clean = item.release_mbid is not None

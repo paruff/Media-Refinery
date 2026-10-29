@@ -207,7 +207,7 @@ def step_tags(context):
         missing = [k for k in R_MUSIC_2 if not tags.get(k)]
         assert not missing, (path.name, missing, tags)
         assert tags["ALBUM"] == "Test Album" and tags["ALBUMARTIST"] == "Test Artist"
-        assert tags["DATE"] == "2021" and tags["GENRE"] == "indie"
+        assert tags["DATE"] == "2021-05-01" and tags["GENRE"] == "indie"
         assert tags["MUSICBRAINZ_ALBUMID"] == "rel-1"
         assert tags["MUSICBRAINZ_ALBUMARTISTID"] == "artist-1"
         assert tags["REPLAYGAIN_TRACK_GAIN"].endswith(" dB")

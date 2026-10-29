@@ -47,8 +47,8 @@ def fpcalc(path: str) -> tuple[int, str] | None:
         return None
 
 
-def jpeg_cover(data: bytes | None) -> bytes | None:
-    """Re-encode to JPEG; None if unreadable or smaller than 500 px. Shrinks to <= 2 MB."""
+def jpeg_cover(data: bytes | None, min_px: int = MIN_COVER_PX) -> bytes | None:
+    """Re-encode to JPEG; None if unreadable or smaller than `min_px`. Shrinks to <= 2 MB."""
     if not data:
         return None
     try:
@@ -59,7 +59,7 @@ def jpeg_cover(data: bytes | None) -> bytes | None:
     img = img.convert("RGB")
     for scale in (1.0, 0.75, 0.5):
         size = (int(img.width * scale), int(img.height * scale))
-        if min(size) < MIN_COVER_PX:
+        if min(size) < min_px:
             break
         resized = img if scale == 1.0 else img.resize(size)
         for quality in (92, 80, 65):
@@ -98,11 +98,11 @@ def local_cover(path: str | Path) -> bytes | None:
 def write_album_cover(track: Path) -> bool:
     """cover.jpg next to a published track, taken from the picture embedded in it."""
     target = track.parent / COVER_NAME
-    if target.exists():
-        return True
     data = embedded_cover(track)
     if data is None:
-        return False
+        return target.exists()
+    if target.exists() and target.read_bytes() == data:
+        return True  # a stale cover.jpg is replaced by the published track's art
     tmp = target.with_name(f".{COVER_NAME}.tmp")
     tmp.write_bytes(data)
     tmp.replace(target)
@@ -203,8 +203,11 @@ class MusicIdentifier:
                     "genre": genres[0]["name"] if genres else None,
                     "musicbrainz_trackid": recording_id,
                     "musicbrainz_albumid": release["id"],
-                    "musicbrainz_artistid": credit[0]["artist"]["id"],
-                    "musicbrainz_albumartistid": album_credit[0]["artist"]["id"],
+                    "musicbrainz_artistid": [c["artist"]["id"] for c in credit],
+                    "musicbrainz_albumartistid": [
+                        c["artist"]["id"] for c in album_credit
+                    ],
+                    "release_date": release.get("date"),
                 }
                 return {k: v for k, v in tags.items() if v is not None}
         return None

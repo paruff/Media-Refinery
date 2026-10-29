@@ -77,11 +77,12 @@ async def test_identify_maps_release_to_r_music_2_tags():
         "disc_number": 1,
         "disc_total": 2,
         "year": "2021",
+        "release_date": "2021-05-01",
         "genre": "indie",
         "musicbrainz_trackid": "rec-1",
         "musicbrainz_albumid": "rel-1",
-        "musicbrainz_artistid": "a-9",
-        "musicbrainz_albumartistid": "art-1",
+        "musicbrainz_artistid": ["a-9", "a-8"],
+        "musicbrainz_albumartistid": ["art-1"],
     }
 
 
@@ -151,3 +152,16 @@ async def test_flac_test_failure_fails_verify(monkeypatch, tmp_path):
     out.write_bytes(b"x")
     _, _, reason = await verify.verify_output(str(out), str(out), True)
     assert reason == "flac_test_failed" and "flac" in calls
+
+
+@pytest.mark.asyncio
+async def test_musicbrainz_requests_are_spaced_by_the_real_interval():
+    import time
+
+    ident = identifier()
+    ident._mb_interval = 0.3
+    t = time.monotonic()
+    await ident._release("rel-1")
+    ident._releases.clear()
+    await ident._release("rel-1")
+    assert time.monotonic() - t >= 0.3
