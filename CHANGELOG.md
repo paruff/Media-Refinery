@@ -3,6 +3,9 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+## [0.3.0-rc.2]
+- Fix: sidecar images (cover.jpg etc.) are no longer ingested as media (#173); watcher import retries back off exponentially, giving up is an ERROR, and stat errors no longer kill the loop (#168); beta trial run 3 on a real library in `docs/BETA_TRIAL.md`
 - Beta gate (B7): real-library trial (`scripts/beta_trial.sh`, report in `docs/BETA_TRIAL.md`); fix: unidentified music was filed under Unknown Artist/Unknown Album despite embedded ARTIST/ALBUM tags
 - CI: the compose smoke test (all five media types via doctor, plan, approve) now runs on every PR and push to main, and gates the canary image; single required check `CI gate` (`scripts/protect_main.sh`) aggregates hooks, tests, build and smoke; offline contract-fixture, acceptance and regression suites join the test job; Codecov upload and badge replaced by the enforced 80% floor and a coverage artifact; README badge black→ruff; `make fmt` uses ruff; new `docs/VERIFICATION.md`
 - Onboarding (G19): README positioning (who it is for, what it is not, vs Tdarr/*arr/beets/Picard/Calibre), `refinery doctor` preflight, compose now passes `.env` API keys/server URLs/`ENABLED_TYPES` into the container (#106), `Settings` ignores unknown `.env` keys, `/api/v1/metrics` adds `media_refinery_quarantined_items` and `media_refinery_stage_duration_seconds_{sum,count}`, UI Summary shows quarantine reasons with a suggested action; smoke test now runs doctor and plan

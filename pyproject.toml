@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "media_refinery"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 description = "Self-hosted, non-destructive media normalizer: watches a drop folder and converts music, audiobooks, movies, TV and ebooks to one verified canonical format per type, then publishes to Plex, Jellyfin, Audiobookshelf or Calibre."
 readme = "README.md"
 requires-python = ">=3.14"
