@@ -149,11 +149,14 @@ class _Pacer:
     def __init__(self, interval: float, sleep: Callable[[float], Awaitable[None]]):
         self.interval, self._sleep = interval, sleep
         self._lock = asyncio.Lock()
-        self._last = 0.0
+        self._last: float | None = None
 
     async def wait(self) -> None:
         async with self._lock:
-            if (gap := self._last + self.interval - time.monotonic()) > 0:
+            if (
+                self._last is not None
+                and (gap := self._last + self.interval - time.monotonic()) > 0
+            ):
                 await self._sleep(gap)
             self._last = time.monotonic()
 
