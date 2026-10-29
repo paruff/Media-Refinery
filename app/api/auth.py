@@ -31,9 +31,11 @@ def token_matches(supplied: str, expected: str) -> bool:
 
 
 def _sign(issued: str) -> str:
-    return hmac.new(
-        settings.API_TOKEN.encode(), issued.encode(), hashlib.sha256
-    ).hexdigest()
+    # Domain-separated key: the cookie MAC never uses the raw bearer token as its key.
+    key = hmac.new(
+        settings.API_TOKEN.encode(), b"mr-ui-session-v1", hashlib.sha256
+    ).digest()
+    return hmac.new(key, issued.encode(), hashlib.sha256).hexdigest()
 
 
 def make_session() -> str:
@@ -43,7 +45,11 @@ def make_session() -> str:
 
 
 def session_valid(value: str) -> bool:
-    """Signed with the API token (rotating it logs everyone out) and expires after SESSION_MAX_AGE."""
+    """Keyed from the API token (rotating it logs everyone out) and expires after SESSION_MAX_AGE.
+
+    There is no server-side revocation: a stolen cookie is valid until the token is rotated or
+    SESSION_MAX_AGE passes (absolute, not sliding).
+    """
     issued, _, sig = value.partition(".")
     if not (
         settings.API_TOKEN

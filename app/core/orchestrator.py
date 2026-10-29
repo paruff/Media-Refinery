@@ -236,10 +236,13 @@ class PipelineOrchestrator:
     async def retry(self, item_id: str) -> bool:
         """Re-queue a failed/quarantined item from the start; its source must still exist."""
         async with self.session_factory() as session:
-            item = await session.get(MediaItem, item_id)
-            if item is None or not await self._source_exists(item):
-                return False
+            # Claim first: the write lock is then held across the source check, so the check
+            # judges the state we actually transition. Rolled back explicitly if it's gone.
             if not await self._claim(session, item_id, RETRYABLE, FileState.pending):
+                return False
+            item = await session.get(MediaItem, item_id)
+            if not await self._source_exists(item):
+                await session.rollback()
                 return False
             plan = await session.execute(
                 select(NormalizationPlan).where(
@@ -251,7 +254,8 @@ class PipelineOrchestrator:
             await session.execute(
                 update(MediaItem).where(MediaItem.id == item_id).values(error_log=None)
             )
-            # before the commit: once the item is pending again the pipeline may start using the dir
+            # Deliberately inside the write txn (briefly holds the sqlite write lock): after the
+            # commit the item is pending and the pipeline may start using the dir.
             await asyncio.to_thread(
                 shutil.rmtree, self.cfg.work_dir / item_id, ignore_errors=True
             )
@@ -263,7 +267,7 @@ class PipelineOrchestrator:
         return await asyncio.to_thread(Path(str(item.source_path)).is_file)
 
     async def refusal(self, item_id: str, action: str) -> str:
-        """Why `action` was refused, for the 409/notice text."""
+        """Why `action` was refused, for the 409/notice text (failure path only; one extra read)."""
         async with self.session_factory() as session:
             item = await session.get(MediaItem, item_id)
         if item is None:

@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Fix (B4 follow-ups, #171): UI session cookies use a domain-separated HMAC key (existing sessions are logged out once); `retry` claims before checking the source; `.part`/`.tmp` exclusion matches the file suffix only (`report.partial.txt` is no longer skipped); test that `approve` skips review-flagged items
 
 ## [0.3.0-rc.2]
 - Fix: sidecar images (cover.jpg etc.) are no longer ingested as media (#173); watcher import retries back off exponentially, giving up is an ERROR, and stat errors no longer kill the loop (#168); beta trial run 3 on a real library in `docs/BETA_TRIAL.md`

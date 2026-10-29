@@ -10,7 +10,8 @@ from watchdog.observers import Observer
 
 from app.models.media import FileState, MediaItem, MediaType
 
-EXCLUDE_PATTERNS = (".DS_Store", ".tmp", ".part")
+EXCLUDE_NAMES = (".ds_store",)
+EXCLUDE_SUFFIXES = (".tmp", ".part")  # suffix only: `report.partial.txt` is a real file
 SIDECAR_IMAGES = (
     ".jpg",
     ".jpeg",
@@ -23,9 +24,8 @@ SIDECAR_IMAGES = (
 def is_excluded(path) -> bool:
     """Match the file name only: a parent directory called `x.tmp-album` must not hide its files."""
     name = os.path.basename(str(path))
-    return name.lower().endswith(SIDECAR_IMAGES) or any(
-        p in name for p in EXCLUDE_PATTERNS
-    )
+    lower = name.lower()
+    return lower.endswith(SIDECAR_IMAGES + EXCLUDE_SUFFIXES) or lower in EXCLUDE_NAMES
 
 
 STABILITY_WINDOW = 5  # seconds size+mtime must stay unchanged (R-PIPE-3)

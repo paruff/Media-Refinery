@@ -115,6 +115,13 @@ async def test_retry_409_names_missing_source_not_just_state(client):
 
 
 @pytest.mark.asyncio
+async def test_retry_with_missing_source_leaves_state_unchanged(client):
+    await _seed("gone.mp3", FileState.error, "/definitely/not/here.mp3")
+    assert await app.state.orchestrator.retry("gone.mp3") is False
+    assert await _state("gone.mp3") == FileState.error
+
+
+@pytest.mark.asyncio
 async def test_ui_retry_notice_says_source_missing_not_quarantined(client):
     await _seed("gone.mp3", FileState.quarantined, "/definitely/not/here.mp3")
     cookies = await _login(client)
@@ -127,6 +134,41 @@ def test_exclude_patterns_ignore_parent_directory_names():
     assert not is_excluded("/music/.tmp-album/song.mp3")
     assert not is_excluded("/music/Best.part.1/song.mp3")
     assert is_excluded("/music/a/song.mp3.part") and is_excluded("/m/.DS_Store")
+
+
+def test_exclusion_matches_name_suffix_not_substring():
+    assert not is_excluded("/docs/report.partial.txt")
+    assert not is_excluded("/docs/a.tmpl")
+    assert is_excluded("/m/Song.MP3.TMP")
+
+
+@pytest.mark.asyncio
+async def test_refinery_approve_skips_review_flagged_unless_included(client):
+    from app.services.refinery import Refinery
+
+    await _seed("ok.mp3", FileState.planned)
+    await _seed("flag.mp3", FileState.planned)
+    async with app.state.factory() as s:
+        (await s.get(MediaItem, "flag.mp3")).enrichment_data = '{"review": ["x"]}'
+        await s.commit()
+    ref = Refinery(app.state.orchestrator)
+    ids = ["ok.mp3", "flag.mp3"]
+    assert await ref.approve(ids, skip_review=True) == 1
+    assert await _state("flag.mp3") == FileState.planned
+    assert await ref.approve(ids, skip_review=False) == 1
+    assert await _state("flag.mp3") == FileState.approved
+
+
+def test_session_key_is_domain_separated_from_raw_token(monkeypatch):
+    import hashlib
+    import hmac
+    import time
+
+    monkeypatch.setattr(settings, "API_TOKEN", TOKEN)
+    issued = str(int(time.time()))
+    raw = hmac.new(TOKEN.encode(), issued.encode(), hashlib.sha256).hexdigest()
+    assert not auth.session_valid(f"{issued}.{raw}")
+    assert auth.session_valid(auth.make_session())
 
 
 # ---- CLI approve needs an explicit flag for review-flagged items (#102) ----
