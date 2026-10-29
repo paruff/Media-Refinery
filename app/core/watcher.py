@@ -31,7 +31,11 @@ def is_excluded(path) -> bool:
 STABILITY_WINDOW = 5  # seconds size+mtime must stay unchanged (R-PIPE-3)
 POLL_INTERVAL = 1  # seconds between stability passes
 HASH_CHUNK = 1024 * 1024
-MAX_IMPORT_ATTEMPTS = 3  # a failing import is retried this many times, then dropped
+MAX_IMPORT_ATTEMPTS = 5  # a failing import is retried this many times, then dropped
+RETRY_BACKOFF = 30  # seconds before the first retry; doubles per failed attempt
+
+
+_UNREADABLE = object()
 
 
 class FileChangedError(Exception):
@@ -151,37 +155,66 @@ class InputWatcher:
         """
         seen = {}  # path -> (signature, monotonic time it was first seen with it)
         attempts = {}  # path -> failed import count
+        retry_at = {}  # path -> monotonic time before which it is not retried
         while True:
             for path in list(self.processing_queue):
-                signature = await asyncio.to_thread(_stat_signature, path)
+                if retry_at.get(path, 0.0) > time.monotonic():
+                    continue  # backing off after a failed import
+                signature = await self._signature(path, retry_at)
+                if signature is _UNREADABLE:
+                    continue
                 if signature is None:
                     self.processing_queue.pop(path, None)
                     seen.pop(path, None)
                     attempts.pop(path, None)
+                    retry_at.pop(path, None)
                     continue
                 last_signature, since = seen.get(path, (None, 0.0))
                 now = time.monotonic()
                 if signature != last_signature:
                     seen[path] = (signature, now)
                 elif now - since >= STABILITY_WINDOW:
-                    queued_at = self.processing_queue.get(path)
                     seen.pop(
                         path, None
                     )  # a retry or re-event waits out the window again
-                    try:
-                        await self.insert_if_new(path)
-                    except Exception:
-                        attempts[path] = attempts.get(path, 0) + 1
-                        self.logger.exception(
-                            f"Failed to import {path} (attempt {attempts[path]})"
-                        )
-                        if attempts[path] < MAX_IMPORT_ATTEMPTS:
-                            continue  # stays queued for a retry
-                    # Drop only if no new event arrived during the import.
-                    if self.processing_queue.get(path) == queued_at:
-                        self.processing_queue.pop(path, None)
-                    attempts.pop(path, None)
+                    await self._import_stable(path, attempts, retry_at)
             await asyncio.sleep(POLL_INTERVAL)
+
+    async def _import_stable(self, path, attempts, retry_at) -> None:
+        queued_at = self.processing_queue.get(path)
+        try:
+            await self.insert_if_new(path)
+        except Exception:
+            self.logger.exception(f"Failed to import {path}")
+            if self._schedule_retry(path, attempts, retry_at):
+                return  # stays queued for a retry
+        # Drop only if no new event arrived during the import.
+        if self.processing_queue.get(path) == queued_at:
+            self.processing_queue.pop(path, None)
+        attempts.pop(path, None)
+        retry_at.pop(path, None)
+
+    async def _signature(self, path, retry_at):
+        """(size, mtime), None if gone, or _UNREADABLE (retried later; never kills the loop)."""
+        try:
+            return await asyncio.to_thread(_stat_signature, path)
+        except OSError:  # e.g. PermissionError
+            self.logger.exception(f"Cannot stat {path}; will retry")
+            retry_at[path] = time.monotonic() + RETRY_BACKOFF
+            return _UNREADABLE
+
+    def _schedule_retry(self, path, attempts, retry_at) -> bool:
+        """Count a failed import; True while attempts remain (with exponential backoff)."""
+        attempts[path] = attempts.get(path, 0) + 1
+        if attempts[path] < MAX_IMPORT_ATTEMPTS:
+            delay = RETRY_BACKOFF * 2 ** (attempts[path] - 1)
+            retry_at[path] = time.monotonic() + delay
+            return True
+        self.logger.error(
+            f"giving up on {path} after {attempts[path]} attempts; "
+            "it is imported again after a restart"
+        )
+        return False
 
     async def insert_if_new(self, path):
         return await import_file(
