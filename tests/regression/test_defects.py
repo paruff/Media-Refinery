@@ -105,8 +105,9 @@ async def test_d2_multiple_duplicate_matches_do_not_raise(
 # --- D3 ---------------------------------------------------------------------
 def _write_video(folder, frame_for):
     """Write 50 frames as a PNG sequence (cv2 reads `f_%03d.png` as a video; no ffmpeg needed)."""
-    cv2 = pytest.importorskip("cv2")
-    np = pytest.importorskip("numpy")
+    import cv2  # hard imports: a missing dep must fail D3, never skip it
+    import numpy as np
+
     folder.mkdir()
     for i in range(50):
         frame = np.zeros((64, 64, 3), dtype=np.uint8)  # black leader
@@ -389,3 +390,51 @@ async def test_prune_old_errors_keeps_media_item_rows(async_session):
 
     count = (await async_session.execute(select(func.count(MediaItem.id)))).scalar_one()
     assert count == 1
+
+
+# --- B2: idempotent execution under the lock ---------------------------------
+def test_b2_existing_identical_output_is_completed_without_rewrite(tmp_path):
+    from app.services.execution_service import _execute_normalization_plan
+
+    plan, src = _plan(tmp_path)
+    out = Path(plan["target_path"])
+    out.parent.mkdir()
+    out.write_bytes(src.read_bytes())
+    before = out.stat().st_mtime_ns
+
+    _execute_normalization_plan(plan)
+
+    assert out.read_bytes() == b"source bytes"
+    assert out.stat().st_mtime_ns == before
+
+
+def test_b2_different_preexisting_output_is_an_error_not_success(tmp_path):
+    from app.services.execution_service import _execute_normalization_plan
+
+    plan, _ = _plan(tmp_path)
+    out = Path(plan["target_path"])
+    out.parent.mkdir()
+    out.write_bytes(b"someone else's file")
+
+    with pytest.raises(FileExistsError):
+        _execute_normalization_plan(plan)
+    assert out.read_bytes() == b"someone else's file"
+
+
+def test_b2_rerun_after_committed_transcode_skips_ffmpeg(tmp_path, mocker):
+    from app.services.execution_service import _execute_normalization_plan
+
+    plan, _ = _plan(tmp_path, needs_transcode=True)
+
+    async def fake_exec(*args, **kwargs):
+        Path(args[-1]).write_bytes(b"encoded")
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    run = mocker.patch("asyncio.create_subprocess_exec", side_effect=fake_exec)
+    _execute_normalization_plan(plan)
+    _execute_normalization_plan(plan)
+
+    assert run.call_count == 1
