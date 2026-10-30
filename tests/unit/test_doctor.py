@@ -1,5 +1,7 @@
 """G19: `refinery doctor` preflight."""
 
+import os
+
 import httpx
 import pytest
 from typer.testing import CliRunner
@@ -18,6 +20,10 @@ def _cfg(tmp_path, **kw):
     return Settings(**d, **kw)
 
 
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root can write /proc/nope, so the unwritable path check cannot fail",
+)
 @pytest.mark.asyncio
 async def test_missing_tool_unwritable_path_and_dead_server_fail(tmp_path, monkeypatch):
     monkeypatch.setattr(
