@@ -51,3 +51,23 @@ def test_a_failure_resets_the_recovery_streak():
     lim.record(False)
     lim.record(True), lim.record(True)
     assert lim.limit == 1
+
+
+def test_orchestrator_records_one_execute_outcome_per_item():
+    from unittest.mock import MagicMock
+
+    from app.core.orchestrator import PipelineOrchestrator
+
+    o = PipelineOrchestrator.__new__(PipelineOrchestrator)
+    o._recorded, o._exec, o.trace, o.logger = (
+        set(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+    )
+    o._exec.record.return_value = None
+    o._record_execute(False, "a")
+    o._record_execute(False, "a")  # _guarded after execute.run already recorded it
+    assert o._exec.record.call_count == 1
+    o._record_execute(False, "b")
+    assert o._exec.record.call_count == 2

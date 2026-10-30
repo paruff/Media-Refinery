@@ -1,6 +1,7 @@
 """probe -> classify -> repair -> smart bitrate -> encode, in one call."""
 
 import logging
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
@@ -42,7 +43,17 @@ def convert_video(
     needs_repair = dispatcher.needs_repair(classify_video(stream)) and (
         classify_video(stream) != "h264" or src.suffix.lower() == ".avi"
     )
-    source = dispatcher.dispatch(src, stream, dry_run) if needs_repair else src
+    source = src
+    if needs_repair:
+        try:
+            source = dispatcher.dispatch(src, stream, dry_run)
+        except (subprocess.CalledProcessError, OSError) as exc:
+            # a broken repair must not fail a file the encoder may still read
+            logger.warning(
+                "Repair of %s failed (%s); encoding the original", src.name, exc
+            )
+            if on_event:
+                on_event("repair", "failed", "fell_back_to_original")
 
     sm = SmartMode()
     bitrate = sm.scale_bitrate(stream, sm.get_bitrate(stream, info.get("format")))

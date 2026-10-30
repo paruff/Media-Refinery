@@ -28,7 +28,7 @@ class TestRepairMpeg:
         with patch("subprocess.run", return_value=mock_result):
             result = repair_mpeg(input_path)
 
-        assert result.name == "video_fixed.mkv"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".mkv"
 
 
 class TestRepairMpeg2:
@@ -46,7 +46,7 @@ class TestRepairMpeg2:
         with patch("subprocess.run", return_value=mock_result):
             result = repair_mpeg2(input_path)
 
-        assert result.name == "video_fixed.mkv"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".mkv"
 
 
 class TestRepairWmv:
@@ -64,7 +64,7 @@ class TestRepairWmv:
         with patch("subprocess.run", return_value=mock_result):
             result = repair_wmv(input_path)
 
-        assert result.name == "video_fixed.mkv"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".mkv"
 
 
 class TestRepairXvid:
@@ -82,7 +82,7 @@ class TestRepairXvid:
         with patch("subprocess.run", return_value=mock_result):
             result = repair_xvid(input_path)
 
-        assert result.name == "video_fixed.avi"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".avi"
 
 
 class TestRepairH264Avi:
@@ -100,7 +100,7 @@ class TestRepairH264Avi:
         with patch("subprocess.run", return_value=mock_result):
             result = repair_h264_avi(input_path)
 
-        assert result.name == "video_fixed.mkv"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".mkv"
 
 
 class TestRepairDispatcher:
@@ -150,7 +150,7 @@ class TestRepairDispatcher:
         with patch("subprocess.run", return_value=mock_result):
             result = dispatcher.dispatch(input_path, stream)
 
-        assert result.name == "video_fixed.mkv"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".mkv"
 
     def test_dispatch_mpeg2(self):
         """Test dispatch for MPEG-2."""
@@ -166,7 +166,7 @@ class TestRepairDispatcher:
         with patch("subprocess.run", return_value=mock_result):
             result = dispatcher.dispatch(input_path, stream)
 
-        assert result.name == "video_fixed.mkv"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".mkv"
 
     def test_dispatch_wmv(self):
         """Test dispatch for WMV."""
@@ -182,7 +182,7 @@ class TestRepairDispatcher:
         with patch("subprocess.run", return_value=mock_result):
             result = dispatcher.dispatch(input_path, stream)
 
-        assert result.name == "video_fixed.mkv"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".mkv"
 
     def test_dispatch_xvid(self):
         """Test dispatch for XviD."""
@@ -198,7 +198,7 @@ class TestRepairDispatcher:
         with patch("subprocess.run", return_value=mock_result):
             result = dispatcher.dispatch(input_path, stream)
 
-        assert result.name == "video_fixed.avi"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".avi"
 
     def test_dispatch_h264_avi(self):
         """Test dispatch for H.264-in-AVI."""
@@ -214,7 +214,7 @@ class TestRepairDispatcher:
         with patch("subprocess.run", return_value=mock_result):
             result = dispatcher.dispatch(input_path, stream)
 
-        assert result.name == "video_fixed.mkv"
+        assert result.name.startswith("video_fixed_") and result.suffix == ".mkv"
 
     def test_dispatch_no_repair_needed(self):
         """Test dispatch for codec that doesn't need repair."""
@@ -225,3 +225,39 @@ class TestRepairDispatcher:
         result = dispatcher.dispatch(input_path, stream)
 
         assert result == input_path
+
+
+def test_failed_repair_leaves_no_partial_fixed_file(tmp_path):
+    import subprocess
+
+    import pytest
+
+    def fail(cmd, **_):
+        Path(cmd[-1]).write_bytes(b"partial")
+        raise subprocess.CalledProcessError(1, cmd)
+
+    with (
+        patch("app.media.video._run.subprocess.run", side_effect=fail),
+        pytest.raises(subprocess.CalledProcessError),
+    ):
+        repair_mpeg(Path("/test/video.mpg"), work_dir=tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_fixed_names_are_unique(tmp_path):
+    with patch("subprocess.run", return_value=Mock(returncode=0, stdout="", stderr="")):
+        a = repair_mpeg(Path("/t/v.mpg"), work_dir=tmp_path)
+        b = repair_mpeg(Path("/t/v.mpg"), work_dir=tmp_path)
+    assert a != b
+
+
+def test_repairs_keep_every_stream():
+    from app.media.video import repair
+
+    assert repair._COPY[:2] == ["-map", "0"]  # not just the first video and audio
+    with patch(
+        "subprocess.run", return_value=Mock(returncode=0, stdout="", stderr="")
+    ) as run:
+        repair_xvid(Path("/t/v.avi"))
+    cmd = run.call_args[0][0]
+    assert "0:a?" in cmd  # all audio, so a second or Atmos track is not dropped

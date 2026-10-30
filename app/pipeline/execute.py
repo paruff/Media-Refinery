@@ -57,11 +57,11 @@ async def run(o, item_id) -> bool:
         if rc != 0:
             tmp.unlink(missing_ok=True)
             await o._quarantine(session, item, "convert_failed", err.strip()[:500])
-            o._record_execute(False)
+            o._record_execute(False, item_id)
             return True
         tmp.replace(o._work(item_id, Path(str(plan.target_path)).suffix))
         item.state = FileState.executed
         await session.commit()
         o._emit("execute", item_id, "success")
-        o._record_execute(True)
+        o._record_execute(True, item_id)
     return True

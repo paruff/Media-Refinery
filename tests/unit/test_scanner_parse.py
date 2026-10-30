@@ -63,3 +63,17 @@ async def test_run_unknown_id_and_missing_file(async_session):
     await scanner.run(item.id)
     assert item.state == FileState.error
     assert item.error_log == "File not found."
+
+
+def test_cover_art_stream_does_not_replace_the_film_video_codec():
+    from types import SimpleNamespace
+
+    from app.core.scanner import ScannerService
+
+    item = SimpleNamespace()
+    data = {"streams": [
+        {"codec_type": "video", "codec_name": "mpeg4", "width": 160},
+        {"codec_type": "video", "codec_name": "mjpeg", "disposition": {"attached_pic": 1}},
+    ], "format": {}}  # fmt: skip
+    ScannerService(None)._parse_and_update(item, data)
+    assert item.video_codec == "mpeg4" and item.video_width == 160

@@ -10,6 +10,9 @@ logger = logging.getLogger("QualityGuard")
 class QualityMetrics(BaseModel):
     vmaf: float | None = None
     psnr: float | None = None
+    error: str | None = (
+        None  # set when VMAF could not be measured for a reason other than no libvmaf
+    )
 
 
 async def run_vmaf_ffmpeg(src: str, dst: str) -> QualityMetrics:
@@ -38,7 +41,11 @@ async def run_vmaf_ffmpeg(src: str, dst: str) -> QualityMetrics:
         )
         _, err = await proc.communicate()
         if proc.returncode != 0:
-            raise RuntimeError(f"ffmpeg vmaf failed: {err.decode()}")
+            text = err.decode(errors="replace")
+            if "libvmaf" in text and ("No such filter" in text or "not found" in text):
+                logger.warning("ffmpeg has no libvmaf; quality check unavailable")
+                return QualityMetrics()
+            raise RuntimeError(f"ffmpeg vmaf failed: {text[-300:]}")
         # Parse VMAF/PSNR from log
         import json
 
@@ -46,6 +53,6 @@ async def run_vmaf_ffmpeg(src: str, dst: str) -> QualityMetrics:
         vmaf = data["pooled_metrics"]["vmaf"]["mean"]
         psnr = data["pooled_metrics"]["psnr"]["mean"]
         return QualityMetrics(vmaf=vmaf, psnr=psnr)
-    except Exception:
+    except Exception as exc:
         logger.exception("VMAF/PSNR check failed")
-        return QualityMetrics()
+        return QualityMetrics(error=str(exc)[:300])

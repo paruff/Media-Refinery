@@ -47,3 +47,28 @@ def test_fingerprint_video_failure():
         mock_cv2.return_value = mock_cap
         fp = FingerprintService.fingerprint_video("test.mp4")
         assert fp is None
+
+
+def test_vfr_file_without_frame_count_is_fingerprinted_by_time():
+    imagehash_module = MagicMock()
+    imagehash_module.phash.return_value = "ph"
+    with (
+        patch("cv2.VideoCapture") as mock_cv2,
+        patch("cv2.cvtColor"),
+        patch("PIL.Image.fromarray"),
+        patch.dict("sys.modules", {"imagehash": imagehash_module}),
+        patch.object(FingerprintService, "_container_duration", return_value=20.0),
+    ):
+        cap = MagicMock()
+        cap.get.return_value = 0  # CAP_PROP_FRAME_COUNT and FPS both unusable
+        cap.read.return_value = (True, "frame")
+        mock_cv2.return_value = cap
+        assert FingerprintService.fingerprint_video("v.mkv") == "20-ph-ph-ph-ph-ph"
+    assert cap.set.call_count == 5
+
+
+def test_require_video_support_fails_fast_when_cv2_missing():
+    import pytest
+
+    with patch.dict("sys.modules", {"cv2": None}), pytest.raises(RuntimeError):
+        FingerprintService.require_video_support()

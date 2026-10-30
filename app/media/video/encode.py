@@ -1,6 +1,5 @@
 import logging
 import re
-from functools import lru_cache
 from pathlib import Path
 
 from ._run import run
@@ -32,13 +31,29 @@ HARDWARE_ENCODERS: dict[str, list[tuple[str, list[str], list[str]]]] = {
 }
 
 
-@lru_cache(maxsize=1)
+_listed: list[frozenset[str]] = []  # one entry once ffmpeg has answered
+_broken: set[str] = (
+    set()
+)  # listed but failed on this host (no device): not retried per file
+
+
+def reset_encoder_cache() -> None:
+    _listed.clear()
+    _broken.clear()
+
+
 def available_encoders() -> frozenset[str]:
-    """Encoder names this ffmpeg build lists (empty when ffmpeg cannot run)."""
+    """Encoder names this ffmpeg build lists (empty when ffmpeg cannot run).
+
+    An empty answer is not cached, so a transient failure does not disable hardware for good.
+    """
+    if _listed:
+        return _listed[0]
     result = run(["ffmpeg", "-hide_banner", "-encoders"], timeout=30)
     if result is None or result.returncode != 0:
         return frozenset()
-    return frozenset(re.findall(r"^ V\S*\s+(\S+)", result.stdout, re.M))
+    _listed.append(frozenset(re.findall(r"^ V\S*\s+(\S+)", result.stdout, re.M)))
+    return _listed[0]
 
 
 def _command(
@@ -47,18 +62,16 @@ def _command(
 ) -> list[str | Path]:  # fmt: skip
     video = ["-c:v", encoder, "-b:v", f"{bitrate_kbps}k"]
     if software:
-        video += [
-            "-preset",
-            "veryfast",
-            "-pix_fmt",
-            "yuv420p",
-        ]  # R-VIDEO-1 High profile
-    # movies2vlib track rule: explicit maps, AAC + E-AC3 (+ copied Atmos), subtitles kept
-    tracks = (
-        ["-map", "0:V", "-map", "0:s?", *video, *audio, "-c:s", "copy"]
-        if audio
-        else [*video, "-c:a", "aac", "-b:a", "192k"]
-    )
+        video += ["-preset", "veryfast"]
+    # R-VIDEO-1 / Samsung direct-play on every path: 8-bit 4:2:0, High (h264) or Main (hevc);
+    # a 10-bit source is narrowed here. VAAPI converts to nv12 in its filter chain instead.
+    if not post:
+        video += ["-pix_fmt", "yuv420p"]
+    video += ["-profile:v", "main" if "hevc" in encoder or "265" in encoder else "high"]
+    # movies2vlib track rule: explicit maps, AAC + E-AC3 (+ copied Atmos), subtitles kept;
+    # 0:V skips attached cover art so it is not re-encoded as video
+    audio = audio or ["-map", "0:a:0?", "-c:a:0", "aac", "-b:a:0", "192k"]
+    tracks = ["-map", "0:V", "-map", "0:s?", *video, *audio, "-c:s", "copy"]
     return ["ffmpeg", "-y", "-nostdin", *pre, "-i", path, *post, *tracks, target]
 
 
@@ -85,7 +98,7 @@ def encode(
 
     listed = available_encoders()
     for encoder, pre, post in HARDWARE_ENCODERS[codec]:
-        if encoder not in listed:
+        if encoder not in listed or encoder in _broken:
             continue
         logger.info("Encoding %s with %s at %skbps", path.name, encoder, bitrate_kbps)
         result = run(
@@ -93,6 +106,7 @@ def encode(
         )
         if result is not None and result.returncode == 0:
             return
+        _broken.add(encoder)
         logger.warning("%s failed, trying next encoder", encoder)
 
     software = SOFTWARE_ENCODERS[codec]

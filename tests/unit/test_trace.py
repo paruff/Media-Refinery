@@ -42,3 +42,17 @@ def test_unwritable_trace_is_logged_not_fatal(tmp_path):
     blocker = tmp_path / "file"
     blocker.write_text("x")
     TraceWriter(blocker / "trace.jsonl", "r").emit("e", "i", "started")
+
+
+def test_trace_rotates_past_the_size_cap(tmp_path):
+    w = TraceWriter(tmp_path / "trace.jsonl", "r", max_bytes=200)
+    for n in range(10):
+        w.emit("e", str(n), "started", "x" * 50)
+    assert (tmp_path / "trace.jsonl.1").exists()
+    assert (tmp_path / "trace.jsonl").stat().st_size < 600
+
+
+def test_quarantined_is_a_valid_status(tmp_path):
+    w = TraceWriter(tmp_path / "t.jsonl", "r")
+    w.emit("quarantine", "i", "quarantined", "convert_failed")
+    assert '"quarantined"' in (tmp_path / "t.jsonl").read_text()

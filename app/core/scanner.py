@@ -66,7 +66,9 @@ class ScannerService:
                 stdout, stderr = await proc.communicate()
                 if proc.returncode != 0:
                     item.state = FileState.error
-                    item.error_log = stderr.decode()
+                    item.error_log = (
+                        stderr.decode().strip() or "ffprobe could not read the file"
+                    )
                     await session.commit()
                     return
                 data = json.loads(stdout.decode())
@@ -104,6 +106,8 @@ class ScannerService:
                 }
 
                 flags = detector.scan_metadata_dict(metadata)
+                if not _is_audio_only(data) and not item.video_fingerprint:
+                    flags.append("unfingerprinted")  # duplicate detection did not run
 
                 # Filename checks
                 basename = os.path.basename(path)
@@ -155,8 +159,13 @@ class ScannerService:
         item.container = data.get("format", {}).get("format_name")
         # Streams
         streams = data.get("streams", [])
+        seen_video = False
         for stream in streams:
             if stream.get("codec_type") == "video":
+                # the film is the first real video stream; cover art must not overwrite it
+                if stream.get("disposition", {}).get("attached_pic") or seen_video:
+                    continue
+                seen_video = True
                 item.video_codec = stream.get("codec_name")
                 item.video_width = stream.get("width")
                 item.video_height = stream.get("height")
