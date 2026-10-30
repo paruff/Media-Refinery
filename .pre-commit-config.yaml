@@ -61,9 +61,9 @@ repos:
         files: ^app/
         additional_dependencies:
           - "pydantic==2.14.1"
-          - "pydantic-settings==2.16.0"
-          - "sqlalchemy[mypy]==2.1.5"
-          - "fastapi==0.148.0"
+          - "pydantic-settings==2.16.1"
+          - "sqlalchemy[mypy]==2.1.6"
+          - "fastapi==0.161.1"
           - "watchdog==6.0.0"
           - "types-PyYAML==6.0.12.20260906"
 
