@@ -23,8 +23,14 @@ def audio_args(streams: list[dict[str, Any]]) -> list[str]:
     movies2vlib also always synthesised a 640k E-AC3 track; spec R-VIDEO-1 only copies
     existing E-AC3, so that transcode is dropped (it fails Samsung-safe profiles).
     """
-    args = ["-map", "0:a:0?", "-c:a:0", "aac", "-b:a:0", "192k"]
     index = atmos_stream_index(streams)
+    first = next(
+        (s["index"] for s in streams if s.get("codec_type", "audio") == "audio"), None
+    )
+    if index is not None and index == first:
+        # the Atmos track leads: copy it once instead of also encoding an AAC duplicate
+        return ["-map", f"0:{index}", "-c:a:0", "copy"]
+    args = ["-map", "0:a:0?", "-c:a:0", "aac", "-b:a:0", "192k"]
     if index is not None:
         args += ["-map", f"0:{index}", "-c:a:1", "copy"]
     return args

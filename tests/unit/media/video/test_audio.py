@@ -37,3 +37,9 @@ def test_audio_args_copy_atmos_track_as_second_output():
 
 def test_audio_args_without_atmos_has_no_copy_track():
     assert "copy" not in audio_args([AAC, PLAIN_EAC3])
+
+
+def test_atmos_as_first_track_is_mapped_once():
+    first = {**ATMOS_PROFILE, "index": 1}
+    args = audio_args([first, {**AAC, "index": 2}])
+    assert args == ["-map", "0:1", "-c:a:0", "copy"]

@@ -35,6 +35,7 @@ from app.models.saga import SagaFileMoveLog, SagaLogStatus
 from app.pipeline import classify, execute, plan, publish, verify
 from app.pipeline.config import PipelineConfig
 from app.pipeline.types.base import needs_review
+from app.services.fingerprint_service import FingerprintService
 from app.services.notify import Notifier
 
 STAGE_ORDER = (
@@ -106,6 +107,9 @@ class PipelineOrchestrator:
         )
         self.running = False
         self.stage_seconds: dict[str, tuple[float, int]] = {}  # stage -> (total, runs)
+        self._execute_ok: dict[
+            str, bool
+        ] = {}  # per-item EXECUTE outcome, recorded by _guarded
         self._io = asyncio.Semaphore(config.max_concurrent_io)
         self._exec = AdaptiveLimiter(
             config.max_concurrent_execute, config.throttle_after_failures
@@ -121,6 +125,8 @@ class PipelineOrchestrator:
 
     # ---- loop -----------------------------------------------------------
     async def run_forever(self):
+        if self.cfg.enabled_types & {"movie", "series"}:
+            FingerprintService.require_video_support()  # fail at startup, not per file
         self.running = True
         await self.recover()
         while self.running:
@@ -292,10 +298,13 @@ class PipelineOrchestrator:
             except Exception as e:
                 self.logger.exception(f"Pipeline failed for {item_id}")
                 if state == FileState.approved:
-                    self._record_execute(False)
+                    self._execute_ok[item_id] = False
                 await self._mark(item_id, FileState.error, str(e))
                 return True
             finally:
+                # the single place EXECUTE outcomes reach the throttle; bad input records nothing
+                if state == FileState.approved and item_id in self._execute_ok:
+                    self._record_execute(self._execute_ok.pop(item_id))
                 total, count = self.stage_seconds.get(state.value, (0.0, 0))
                 self.stage_seconds[state.value] = (
                     total + time.monotonic() - start,
@@ -354,7 +363,7 @@ class PipelineOrchestrator:
         shutil.rmtree(self.cfg.work_dir / str(item.id), ignore_errors=True)
         await session.commit()
         self.logger.warning(f"Quarantined {item.id} ({reason}): {detail}")
-        self._emit("quarantine", item.id, "success", reason)
+        self._emit("quarantine", item.id, "quarantined", reason)
 
     def _work(self, item_id, ext="") -> Path:
         return self.cfg.work_dir / str(item_id) / f"out{ext}"

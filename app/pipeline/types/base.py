@@ -93,6 +93,9 @@ def video_reencoded(item, plan) -> bool:
 async def vmaf_check(source: str, out: str, checks: list[dict]) -> str | None:
     """Sampled VMAF, only for re-encodes. No libvmaf in ffmpeg = recorded, not failed."""
     metrics = await run_vmaf_ffmpeg(source, out)
+    if metrics.error:  # a measurement that broke is not "unavailable": fail loudly
+        checks.append({"name": "vmaf", "passed": False, "detail": metrics.error})
+        return "vmaf_failed"
     ok = metrics.vmaf is None or metrics.vmaf >= MIN_VMAF
     detail = "unavailable" if metrics.vmaf is None else f"vmaf {metrics.vmaf:.1f}"
     checks.append({"name": "vmaf", "passed": ok, "detail": detail})

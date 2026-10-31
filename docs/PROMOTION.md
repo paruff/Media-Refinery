@@ -23,6 +23,7 @@ off. Promote **one type at a time**, by passing every gate below, then change th
 | music | promoted (lead) | meets all gates (G16) |
 | audiobooks | promoted (beta) | meets all gates (P2; the `audio_args` HE-AAC, zero-duration and series-atom minors are done too): `tests/corpus/test_audiobook_corpus.py`, audiobook crash sweep (merge/concat step), late-part and gap review, #100 Important items and minors done (series atoms are asserted by round trip; the real server check is the nightly job); Audiobookshelf notify call proved against the real server by the nightly `make contract-servers` |
 | ebooks | promoted (beta) | meets all gates (P1): `tests/corpus/test_ebook_corpus.py`, ebook crash sweep, `fetch_ebook_metadata.txt` fixture, #101 minors done; needs calibre + epubcheck (in the image) |
-| movies / TV | stays experimental | no corpus coverage; TMDB/TVDB contracts not recorded; minors in #97/#98 open |
+| movies | promoted (beta) | meets all gates (P3): `tests/corpus/test_movie_corpus.py`, movie crash sweep, `tmdb_search_movie.json` fixture, #96/#97 and the #108 video items done |
+| TV | stays experimental | no corpus coverage; TVDB contract not recorded; minors in #98 open |
 
-Next candidate: movies / TV (corpus suite, TMDB/TVDB contracts, minors in #97/#98).
+Next candidate: TV (corpus suite, TVDB contract, minors in #98).

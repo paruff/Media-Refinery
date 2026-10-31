@@ -1,5 +1,6 @@
 import logging
 import tempfile
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -22,18 +23,25 @@ def _remux(
     work_dir: Path | None, dry_run: bool,
 ) -> Path:  # fmt: skip
     work_dir = work_dir or _default_work_dir()
-    out = work_dir / f"{path.stem}_fixed{suffix}"
+    out = (
+        work_dir / f"{path.stem}_fixed_{uuid.uuid4().hex[:8]}{suffix}"
+    )  # unique per run
     if dry_run:
         logger.info("[DRY-RUN] Would repair %s: %s -> %s", label, path, out)
         return out
     logger.info("Repairing %s: %s", label, path.name)
     work_dir.mkdir(parents=True, exist_ok=True)
-    run(["ffmpeg", "-y", "-nostdin", *pre, "-i", path, *post, out], check=True)
+    try:
+        run(["ffmpeg", "-y", "-nostdin", *pre, "-i", path, *post, out], check=True)
+    except BaseException:
+        out.unlink(missing_ok=True)  # never leave a partial *_fixed behind
+        raise
     logger.info("%s repair complete: %s", label, out.name)
     return out
 
 
-_COPY = ["-c:v", "copy", "-c:a", "copy"]
+# every stream survives the remux (extra audio, Atmos, subtitles); data streams are dropped
+_COPY = ["-map", "0", "-map", "-0:d", "-ignore_unknown", "-c", "copy"]
 
 
 def repair_mpeg(
@@ -63,7 +71,7 @@ def repair_xvid(
         "XviD",
         ".avi",
         [],
-        ["-c", "copy", "-bsf:v", "mpeg4_unpack_bframes"],
+        ["-map", "0:V", "-map", "0:a?", "-c", "copy", "-bsf:v", "mpeg4_unpack_bframes"],
         work_dir,
         dry_run,
     )

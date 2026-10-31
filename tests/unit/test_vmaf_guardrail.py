@@ -51,3 +51,19 @@ async def test_vmaf_guardrail_pass(monkeypatch):
     assert result.plan_status == PlanStatus.completed
     assert result.quality_metrics["vmaf"] == 95.0
     assert result.ffmpeg_args["bitrate"] == "1000"
+
+
+@pytest.mark.asyncio
+async def test_vmaf_measurement_error_fails_the_check():
+    from unittest.mock import patch
+
+    from app.pipeline.types.base import vmaf_check
+    from app.services.quality_guard_service import QualityMetrics
+
+    checks: list[dict] = []
+    with patch(
+        "app.pipeline.types.base.run_vmaf_ffmpeg",
+        return_value=QualityMetrics(error="boom"),
+    ):
+        assert await vmaf_check("a", "b", checks) == "vmaf_failed"
+    assert checks[0]["passed"] is False

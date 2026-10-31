@@ -20,6 +20,7 @@ Status = Literal[
     "dry_run",
     "inconclusive",
     "flagged",
+    "quarantined",
 ]
 
 
@@ -36,10 +37,16 @@ class TraceEvent(BaseModel):
     detail: str = ""
 
 
+MAX_TRACE_BYTES = 10 * 1024 * 1024  # rotated to <name>.1 beyond this (one generation)
+
+
 class TraceWriter:
-    def __init__(self, path: Path, run_id: str) -> None:
+    def __init__(
+        self, path: Path, run_id: str, max_bytes: int = MAX_TRACE_BYTES
+    ) -> None:
         self.path = path
         self.run_id = run_id
+        self.max_bytes = max_bytes
 
     def emit(self, event: str, item_id: str, status: Status, detail: str = "") -> None:
         """Append one event. A trace that cannot be written is logged, never fatal."""
@@ -53,6 +60,8 @@ class TraceWriter:
         ).model_dump_json()
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
+            if self.path.exists() and self.path.stat().st_size >= self.max_bytes:
+                self.path.replace(self.path.with_name(self.path.name + ".1"))
             with self.path.open("a", encoding="utf-8") as f:
                 f.write(line + "\n")
         except OSError:

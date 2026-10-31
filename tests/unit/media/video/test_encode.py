@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from app.media.video.encode import available_encoders, encode
+from app.media.video.encode import available_encoders, encode, reset_encoder_cache
 
 IN, OUT = Path("/test/input.mkv"), Path("/test/output.mkv")
 LISTING = " V....D libx264              libx264 H.264\n V....D h264_nvenc           NVIDIA NVENC\n A....D aac   AAC\n"
@@ -68,19 +68,19 @@ class TestEncode:
 
 
 def test_available_encoders_parses_listing():
-    available_encoders.cache_clear()
+    reset_encoder_cache()
     with patch(
         "subprocess.run", return_value=Mock(returncode=0, stdout=LISTING, stderr="")
     ):
         assert available_encoders() == {"libx264", "h264_nvenc"}
-    available_encoders.cache_clear()
+    reset_encoder_cache()
 
 
 def test_available_encoders_empty_without_ffmpeg():
-    available_encoders.cache_clear()
+    reset_encoder_cache()
     with patch("subprocess.run", side_effect=FileNotFoundError):
         assert available_encoders() == frozenset()
-    available_encoders.cache_clear()
+    reset_encoder_cache()
 
 
 def test_attached_cover_art_is_not_mapped_as_video():
@@ -97,3 +97,51 @@ def test_attached_cover_art_is_not_mapped_as_video():
         ["-map", "0:a:0?"],
     )
     assert "0:V" in cmd and "0:v" not in cmd
+
+
+def test_empty_encoder_listing_is_not_cached():
+    reset_encoder_cache()
+    with patch("subprocess.run", side_effect=FileNotFoundError):
+        assert available_encoders() == frozenset()
+    with patch(
+        "subprocess.run", return_value=Mock(returncode=0, stdout=LISTING, stderr="")
+    ):
+        assert "h264_nvenc" in available_encoders()
+    reset_encoder_cache()
+
+
+def test_deviceless_hardware_encoder_is_tried_once_per_process():
+    reset_encoder_cache()
+    _encode({"h264_nvenc"}, [Mock(returncode=1), Mock(returncode=0)])
+    run = _encode({"h264_nvenc"}, [Mock(returncode=0)])
+    assert "libx264" in run.call_args[0][0] and run.call_count == 1
+    reset_encoder_cache()
+
+
+@pytest.mark.parametrize("encoder", ["h264_videotoolbox", "h264_nvenc", "libx264"])
+def test_every_h264_path_sets_8bit_high_profile(encoder):
+    from app.media.video.encode import _command
+
+    cmd = _command(IN, OUT, 1000, encoder, [], [], encoder == "libx264", None)
+    assert cmd[cmd.index("-pix_fmt") + 1] == "yuv420p"
+    assert cmd[cmd.index("-profile:v") + 1] == "high"
+
+
+def test_hevc_uses_main_profile():
+    from app.media.video.encode import _command
+
+    cmd = _command(IN, OUT, 1000, "hevc_nvenc", [], [], False, None)
+    assert cmd[cmd.index("-profile:v") + 1] == "main"
+
+
+def test_a_bad_input_does_not_blacklist_the_hardware_encoder():
+    reset_encoder_cache()
+    # hardware and software both fail: the input is bad, not the device
+    with pytest.raises(Exception, match="returned non-zero"):
+        _encode(
+            {"h264_nvenc"},
+            [Mock(returncode=1), Mock(returncode=1, stdout="", stderr="x")],
+        )
+    run = _encode({"h264_nvenc"}, [Mock(returncode=0)])
+    assert "h264_nvenc" in run.call_args[0][0]
+    reset_encoder_cache()

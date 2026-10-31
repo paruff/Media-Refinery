@@ -51,3 +51,16 @@ def test_a_failure_resets_the_recovery_streak():
     lim.record(False)
     lim.record(True), lim.record(True)
     assert lim.limit == 1
+
+
+def test_record_execute_feeds_the_throttle():
+    from unittest.mock import MagicMock
+
+    from app.core.orchestrator import PipelineOrchestrator
+
+    o = PipelineOrchestrator.__new__(PipelineOrchestrator)
+    o._exec, o.trace, o.logger = MagicMock(), MagicMock(), MagicMock()
+    o._exec.record.return_value = 2
+    o._record_execute(False)
+    o._exec.record.assert_called_once_with(False)
+    assert o.trace.emit.call_args[0][:3] == ("workers.throttle", "", "degraded")

@@ -78,3 +78,20 @@ def test_atmos_index_comes_from_the_file_actually_encoded():
     ):
         convert_video(SRC, DST, WORK)
     assert "0:2" in enc.call_args.kwargs["audio_args"]
+
+
+def test_failed_repair_falls_back_to_encoding_the_original():
+    import subprocess
+
+    events = []
+    with (
+        patch("app.media.video.convert.probe", return_value=INFO),
+        patch(
+            "app.media.video.convert.RepairDispatcher.dispatch",
+            side_effect=subprocess.CalledProcessError(1, "ffmpeg"),
+        ),
+        patch("app.media.video.convert.encode") as enc,
+    ):
+        convert_video(SRC, DST, WORK, on_event=lambda *a: events.append(a))
+    assert enc.call_args[0][0] == SRC
+    assert ("repair", "failed", "fell_back_to_original") in events
