@@ -47,7 +47,7 @@ def convert_video(
     if needs_repair:
         try:
             source = dispatcher.dispatch(src, stream, dry_run)
-        except (subprocess.CalledProcessError, OSError) as exc:
+        except (subprocess.SubprocessError, OSError) as exc:
             # a broken repair must not fail a file the encoder may still read
             logger.warning(
                 "Repair of %s failed (%s); encoding the original", src.name, exc

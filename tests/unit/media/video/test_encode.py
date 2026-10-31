@@ -132,3 +132,16 @@ def test_hevc_uses_main_profile():
 
     cmd = _command(IN, OUT, 1000, "hevc_nvenc", [], [], False, None)
     assert cmd[cmd.index("-profile:v") + 1] == "main"
+
+
+def test_a_bad_input_does_not_blacklist_the_hardware_encoder():
+    reset_encoder_cache()
+    # hardware and software both fail: the input is bad, not the device
+    with pytest.raises(Exception, match="returned non-zero"):
+        _encode(
+            {"h264_nvenc"},
+            [Mock(returncode=1), Mock(returncode=1, stdout="", stderr="x")],
+        )
+    run = _encode({"h264_nvenc"}, [Mock(returncode=0)])
+    assert "h264_nvenc" in run.call_args[0][0]
+    reset_encoder_cache()

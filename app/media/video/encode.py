@@ -97,6 +97,7 @@ def encode(
         return
 
     listed = available_encoders()
+    failed: list[str] = []
     for encoder, pre, post in HARDWARE_ENCODERS[codec]:
         if encoder not in listed or encoder in _broken:
             continue
@@ -106,7 +107,7 @@ def encode(
         )
         if result is not None and result.returncode == 0:
             return
-        _broken.add(encoder)
+        failed.append(encoder)
         logger.warning("%s failed, trying next encoder", encoder)
 
     software = SOFTWARE_ENCODERS[codec]
@@ -115,3 +116,6 @@ def encode(
         _command(path, target, bitrate_kbps, software, [], [], True, audio_args),
         check=True,
     )
+    _broken.update(
+        failed
+    )  # software worked, so the hardware encoders (not the input) failed
