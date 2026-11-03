@@ -119,7 +119,7 @@ exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
 exclude_dirs = ["tests", "features", ".venv", "alembic/versions"]
 
 [tool.codespell]
-skip = "*.lock,*.sqlite,coverage.xml,./.git,./testdata,./sample_media,./docs/legacy"
+skip = "*.lock,*.sqlite,coverage.xml,./.git,./testdata,./docs/legacy"
 ignore-words-list = "ser,te,fo,nd,ot,ans,astroid"
 check-hidden = false
 

@@ -420,3 +420,23 @@ async def test_many_concurrent_same_target_tracks_never_error(env):
             (await s.execute(select(NormalizationPlan.target_path))).scalars().all()
         )
     assert len(set(targets)) == 6
+
+
+async def test_replan_of_item_with_existing_plan_is_not_plan_conflict(env):
+    """#189: a second PLAN of the same item reuses its draft plan, not a UNIQUE backstop."""
+    cfg, factory = env
+    _twin_mp3(cfg, "a.mp3", 440)
+    await import_input(cfg, factory)
+    orch = PipelineOrchestrator(factory, cfg)
+    await orch.run_until_idle()
+    async with factory() as s:
+        item = (await s.execute(select(MediaItem))).scalars().one()
+        item.state = (
+            FileState.enriched
+        )  # re-enter PLAN with the draft plan still present
+        await s.commit()
+    await orch.run_until_idle()
+    (item,) = await _items(factory)
+    assert item.state == FileState.planned, item.error_log
+    async with factory() as s:
+        assert len((await s.execute(select(NormalizationPlan))).scalars().all()) == 1

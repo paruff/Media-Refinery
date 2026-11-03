@@ -10,7 +10,6 @@ data
 logs
 tests
 testdata
-sample_media
 docs
 *.db
 *.log
