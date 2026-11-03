@@ -99,5 +99,5 @@ Prometheus metrics (`media_refinery_items{state,type}`) are at `GET /api/v1/metr
 
 ## FAQ
 
-- **Where do I put media for testing?** Generate fixtures; `sample_media/` holds a few tiny samples.
+- **Where do I put media for testing?** Generate fixtures; `tests/corpus` builds them on demand.
 - **How do I report a security issue?** See [SECURITY.md](../SECURITY.md).

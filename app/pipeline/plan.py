@@ -82,8 +82,36 @@ async def _quarantine_conflict(session, item, target_path: str) -> None:
     await session.commit()
 
 
+async def _replan(session, item, spec, review) -> bool:
+    """An item has at most one plan (media_item_id is unique): refresh a draft or failed one in place (#189)."""
+    mine = (
+        await session.execute(
+            select(NormalizationPlan).where(NormalizationPlan.media_item_id == item.id)
+        )
+    ).scalar_one_or_none()
+    if mine is None:
+        return False
+    if mine.plan_status not in (PlanStatus.draft, PlanStatus.failed):
+        # approved/executing/completed: not ours to rewrite
+        item.state = FileState.quarantined
+        item.error_log = "plan_exists: item already has a plan past draft"
+        await session.commit()
+        return True
+    others = [p for p in await _held(session, spec.target_path) if p.id != mine.id]
+    if any(p.plan_status != PlanStatus.failed for p in others):
+        return False  # another item holds the new target: normal conflict path
+    mine.target_path, mine.ffmpeg_args = spec.target_path, spec.ffmpeg_args
+    mine.needs_transcode, mine.execution_log = spec.needs_transcode, review
+    mine.plan_status = PlanStatus.draft
+    item.state = FileState.planned
+    await session.commit()
+    return True
+
+
 async def _claim_target(session, item, spec, review) -> None:
     """Plan the item at spec.target_path, or quarantine it as plan_conflict."""
+    if await _replan(session, item, spec, review):
+        return
     held = await _held(session, spec.target_path)
     if item.media_type == MediaType.music and any(
         p.plan_status != PlanStatus.failed and p.media_item_id != item.id for p in held
@@ -121,7 +149,9 @@ async def _claim_target(session, item, spec, review) -> None:
     item_id = item.id  # rollback expires `item`; reading it afterwards would lazy-load
     try:
         await session.commit()
-    except IntegrityError:  # backstop: another process claimed the target
+    except IntegrityError as e:  # backstop: another process claimed the target
+        if "target_path" not in str(e.orig):  # only that constraint is a conflict
+            raise
         await session.rollback()
         item = await session.get(MediaItem, item_id, populate_existing=True)
         await _quarantine_conflict(session, item, spec.target_path)
