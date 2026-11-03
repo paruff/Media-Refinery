@@ -18,8 +18,8 @@ Plex, Jellyfin, Audiobookshelf or Music Assistant to rescan. Originals are never
 Self-hosters with a messy pile of downloads and a Plex, Jellyfin, Audiobookshelf or Music Assistant
 server who want every file converted to one canonical, *verified* format and published into a clean
 library, with a human approving the plan first. **Music is the supported lead type** and **ebooks,
-audiobooks and movies are supported (beta)**; ebooks need Calibre (in the image). TV is experimental and
-off until you list them in `ENABLED_TYPES`.
+audiobooks, movies and TV are supported (beta)**; ebooks need Calibre (in the image). Any type can be
+turned off by leaving it out of `ENABLED_TYPES`.
 
 ## What it is not
 

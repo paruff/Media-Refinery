@@ -164,3 +164,70 @@ def test_review_flags_block_auto_approval():
     assert not PipelineOrchestrator._needs_review(
         MediaItem(id="j", enrichment_data="{}")
     )
+
+
+# ---- TV: wrong-show ambiguity, persistent 401, errors never leak the key --------
+async def test_two_shows_with_one_name_and_no_year_need_review():
+    def handler(request):
+        if request.url.path.endswith("/login"):
+            return httpx.Response(200, json={"data": {"token": "t"}})
+        if request.url.path.endswith("/search"):
+            return httpx.Response(
+                200,
+                json={"data": [
+                    {"tvdb_id": "1", "name": "The Office", "year": "2001"},
+                    {"tvdb_id": "2", "name": "The Office", "year": "2005"},
+                ]},
+            )  # fmt: skip
+        return httpx.Response(200, json={"data": {"episodes": [{"name": "Pilot"}]}})
+
+    match = await enricher(handler).episode("The Office", None, 1, 1)
+    assert match is not None and not match.confident
+    assert (await enricher(handler).episode("The Office", 2005, 1, 1)).confident
+
+
+async def test_tvdb_401_after_a_fresh_login_gives_up_without_looping():
+    calls = {"login": 0}
+
+    def handler(request):
+        calls["login"] += request.url.path.endswith("/login")
+        if request.url.path.endswith("/login"):
+            return httpx.Response(200, json={"data": {"token": "t"}})
+        return httpx.Response(401)
+
+    assert await enricher(handler).episode("Show", 2020, 1, 1) is None
+    assert calls["login"] == 2
+
+
+@pytest.mark.parametrize("status", [401, 429, 500])
+async def test_tvdb_failure_does_not_log_the_key(caplog, status):
+    import logging
+
+    def handler(request):
+        return httpx.Response(status, request=request)
+
+    with caplog.at_level(logging.DEBUG):
+        assert (
+            await enricher(handler, tvdb="tvdb-secret-key").episode("S", 1, 1, 1)
+            is None
+        )
+    assert "TVDB lookup failed" in caplog.text
+    assert "tvdb-secret-key" not in caplog.text
+
+
+async def test_plan_stage_errors_when_ffprobe_cannot_read_the_video(monkeypatch):
+    import app.pipeline.plan as plan
+
+    async def fail(cmd, timeout):
+        return 1, "", "Invalid data found"
+
+    monkeypatch.setattr(plan, "run_tool", fail)
+    with pytest.raises(ValueError, match="ffprobe failed: Invalid data"):
+        await plan._probe_streams("/x.mkv")
+
+    async def empty(cmd, timeout):
+        return 0, '{"streams": []}', ""
+
+    monkeypatch.setattr(plan, "run_tool", empty)
+    with pytest.raises(ValueError, match="no streams"):
+        await plan._probe_streams("/x.mkv")
