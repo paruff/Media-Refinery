@@ -138,7 +138,6 @@ async def import_input(cfg: PipelineConfig, session_factory) -> list[str]:
 
     watcher.db_session_factory = session_factory
     watcher.logger = logging.getLogger("test")
-    watcher.coordinator = None
     ids = []
     for p in sorted(cfg.input_dir.rglob("*")):
         if p.is_file():

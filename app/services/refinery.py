@@ -10,7 +10,12 @@ from app.core.config import settings
 from app.core.orchestrator import PipelineConfig, PipelineOrchestrator
 from app.core.tools import run_tool
 from app.core.verify import sha256_file
-from app.core.watcher import import_file, is_excluded
+from app.core.watcher import (
+    FileChangedError,
+    _stat_signature,
+    import_file,
+    is_excluded,
+)
 from app.models.media import (
     FileState,
     MediaItem,
@@ -65,14 +70,36 @@ class Refinery:
         self.cfg = orchestrator.cfg
         self.logger = logging.getLogger("Refinery")
 
-    async def ingest(self, path: Path) -> list[str]:
-        """Import every stable file under `path` as a pending item; return their ids."""
-        files = await asyncio.to_thread(_files_under, path)
+    async def ingest(self, path: Path, settle: float = 0.0) -> list[str]:
+        """Import every stable file under `path` as a pending item; return their ids.
+
+        With `settle` (a live drop folder), files that changed during that many seconds are
+        skipped: the watcher imports them once they stop changing. Without it, `path` is
+        assumed to be at rest (CLI); a file that changes mid-hash is still skipped.
+        """
+        files = [
+            f
+            for f in await asyncio.to_thread(_files_under, path)
+            if f.is_file() and not is_excluded(f)
+        ]
+        if settle:
+            before = {
+                f: await asyncio.to_thread(_stat_signature, str(f)) for f in files
+            }
+            await asyncio.sleep(settle)
+            files = [
+                f
+                for f in files
+                if await asyncio.to_thread(_stat_signature, str(f)) == before[f]
+            ]
         ids = []
         for f in files:
-            if not f.is_file() or is_excluded(f):
+            try:
+                item_id = await import_file(str(f), self.factory, self.logger)
+            except FileChangedError, FileNotFoundError:
+                self.logger.warning("Skipping %s: still changing or gone", f)
                 continue
-            if item_id := await import_file(str(f), self.factory, self.logger):
+            if item_id:
                 ids.append(item_id)
         return ids
 

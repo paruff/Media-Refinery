@@ -90,7 +90,7 @@ The nightly workflow re-measures this and uploads `throughput.json`.
 
 - Concurrency is bounded per stage; the adaptive throttle halves workers after consecutive failures.
 - Keep `/work` on fast storage and on the same filesystem as `/output`.
-- Encode settings (including hardware acceleration) come from the device profiles in `profiles/`.
+- Video encoding picks the first working encoder, hardware if the container can see it (`docker-compose.hwaccel.yml`).
 
 ## Observability
 

@@ -85,7 +85,7 @@ class DebounceHandler(FileSystemEventHandler):
         self._enqueue(event.dest_path)
 
 
-async def import_file(path, db_session_factory, logger, coordinator=None):
+async def import_file(path, db_session_factory, logger):
     """Insert one pending item for `path`; return its id, or None for a duplicate."""
     before = await asyncio.to_thread(_stat_signature, path)
     file_hash = await asyncio.to_thread(content_hash, path)
@@ -119,13 +119,11 @@ async def import_file(path, db_session_factory, logger, coordinator=None):
         )
         await session.commit()
         logger.info(f"Inserted new file: {path}")
-        if coordinator:
-            await coordinator.enqueue(file_hash)
         return file_hash
 
 
 class InputWatcher:
-    def __init__(self, input_dir, db_session_factory, logger=None, coordinator=None):
+    def __init__(self, input_dir, db_session_factory, logger=None):
         self.input_dir = input_dir
         self.db_session_factory = db_session_factory
         self.logger = logger or logging.getLogger("InputWatcher")
@@ -133,7 +131,6 @@ class InputWatcher:
         self.loop = asyncio.get_running_loop()
         self.observer = Observer()
         self.handler = DebounceHandler(self.processing_queue, self.loop)
-        self.coordinator = coordinator
         self._tasks = []
 
     async def startup_scan(self):
@@ -223,9 +220,7 @@ class InputWatcher:
         return False
 
     async def insert_if_new(self, path):
-        return await import_file(
-            path, self.db_session_factory, self.logger, self.coordinator
-        )
+        return await import_file(path, self.db_session_factory, self.logger)
 
     def run(self):
         """Start watching. Non-blocking; call from the event-loop thread."""

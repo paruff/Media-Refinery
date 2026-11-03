@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: list[str] = Field(
         ["*"], validation_alias=AliasChoices("MR_ALLOWED_HOSTS", "ALLOWED_HOSTS")
     )
+    # Behind a reverse proxy every request has the proxy's address: with this on, the login
+    # throttle keys on the last X-Forwarded-For entry (the one the proxy appended).
+    TRUST_FORWARDED_FOR: bool = False
     API_TOKEN: str = Field(
         "", validation_alias=AliasChoices("MR_API_TOKEN", "API_TOKEN")
     )

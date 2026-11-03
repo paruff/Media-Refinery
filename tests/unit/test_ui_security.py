@@ -38,7 +38,7 @@ async def client(tmp_path, monkeypatch):
     app.state.orchestrator = PipelineOrchestrator(factory, cfg)
     app.state.factory = factory
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+    async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as c:
         yield c
     app.dependency_overrides.clear()
     del app.state.orchestrator
@@ -197,3 +197,24 @@ async def test_review_row_without_probe_data_or_flags_falls_back(client):
     await _seed("a.mp3", FileState.planned)
     page = (await client.get("/ui/review", cookies=cookies)).text
     assert "no probe data" in page and "copy / remux" in page
+
+
+def test_login_throttle_forgets_idle_addresses_and_can_key_on_forwarded_for(
+    monkeypatch,
+):
+    from types import SimpleNamespace
+
+    from app.ui import routes
+
+    routes._failed_logins.clear()
+    routes._failed_logins["1.2.3.4"] = [-1000.0]  # long expired
+    assert routes._login_throttled("1.2.3.4") is False
+    assert "1.2.3.4" not in routes._failed_logins
+
+    request = SimpleNamespace(
+        headers={"x-forwarded-for": "6.6.6.6, 9.9.9.9"},
+        client=SimpleNamespace(host="10.0.0.1"),
+    )
+    assert routes._client_ip(request) == "10.0.0.1"  # not trusted by default
+    monkeypatch.setattr(routes.settings, "TRUST_FORWARDED_FOR", True)
+    assert routes._client_ip(request) == "9.9.9.9"  # what our proxy appended

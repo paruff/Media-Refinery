@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api.auth import check_bind_security, require_token
+from app.api.auth import check_bind_security, is_loopback, require_token
 from app.api.v1.items import router as items_router
 from app.api.v1.ops import router as ops_router
 from app.api.v1.ops import secured as ops_secured_router
@@ -46,6 +46,12 @@ def configure_logging() -> None:
     logger.setLevel(logging.INFO)
 
 
+def _log_worker_exit(task: asyncio.Task) -> None:
+    """The worker only ends on shutdown; any other exit must be loud, /ready then fails."""
+    if not task.cancelled() and (exc := task.exception()):
+        logger.error("Pipeline worker stopped", exc_info=exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
@@ -55,9 +61,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         AsyncSessionLocal, PipelineConfig.from_settings(), logger=logger
     )
     worker = asyncio.create_task(orchestrator.run_forever())
+    worker.add_done_callback(_log_worker_exit)
     watcher = InputWatcher(settings.INPUT_DIR, AsyncSessionLocal, logger=logger)
     watcher.run()  # non-blocking; must run on the loop thread
     app.state.orchestrator = orchestrator
+    app.state.worker = worker
     app.state.watcher = watcher
     try:
         yield
@@ -90,7 +98,15 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+def allowed_hosts() -> list[str]:
+    """A loopback bind has no token, so by default only loopback Host names are served: a
+    DNS-rebinding page (evil.example -> 127.0.0.1) is then refused. Set MR_ALLOWED_HOSTS to widen."""
+    if settings.ALLOWED_HOSTS == ["*"] and is_loopback(settings.API_HOST):
+        return ["localhost", "127.0.0.1", "[::1]"]
+    return settings.ALLOWED_HOSTS
+
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
 
 app.include_router(
     ops_router, include_in_schema=False

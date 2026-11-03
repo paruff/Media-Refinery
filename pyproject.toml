@@ -21,23 +21,31 @@ classifiers = [
 	"Topic :: Multimedia",
 ]
 
+dependencies = [
+	"aiosqlite",
+	"alembic",
+	"fastapi",
+	"guessit",
+	"httpx",
+	"imagehash",
+	"jinja2",
+	"mutagen",
+	"opencv-python-headless",
+	"pillow",
+	"pydantic",
+	"pydantic-settings",
+	"python-multipart",
+	"rich",
+	"sqlalchemy[asyncio]",
+	"typer",
+	"uvicorn",
+	"watchdog",
+]
+
 [project.urls]
 Homepage = "https://github.com/paruff/Media-Refinery"
 Documentation = "https://github.com/paruff/Media-Refinery/tree/main/docs"
 Issues = "https://github.com/paruff/Media-Refinery/issues"
-
-
-dependencies = [
-	"pydantic>=2.0",
-	"typer>=0.9.0",
-	"rich>=13.0.0",
-	"pytest>=7.0.0",
-	"fastapi>=0.110.0",
-	"uvicorn>=0.29.0",
-	"pydantic-settings>=2.2.1",
-	"sqlalchemy>=2.0.0",
-	"aiosqlite>=0.20.0"
-]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

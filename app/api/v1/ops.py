@@ -7,13 +7,14 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_orchestrator, json_only
 from app.core.database import get_async_session
 from app.core.orchestrator import PipelineOrchestrator
+from app.core.watcher import STABILITY_WINDOW
 from app.models.media import MediaItem
 from app.services.doctor import is_writable
 from app.services.refinery import Refinery
@@ -45,11 +46,16 @@ async def health(
 
 @router.get("/ready", tags=["health"])
 async def ready(
+    request: Request,
     response: Response,
     session: Annotated[AsyncSession, Depends(get_async_session)],
     orch: Annotated[PipelineOrchestrator, Depends(get_orchestrator)],
 ):
-    checks: dict[str, bool] = {"ffmpeg": shutil.which("ffmpeg") is not None}
+    worker = getattr(request.app.state, "worker", None)
+    checks: dict[str, bool] = {
+        "ffmpeg": shutil.which("ffmpeg") is not None,
+        "pipeline": worker is None or not worker.done(),
+    }
     try:
         await session.execute(text("SELECT 1"))
         checks["database"] = True
@@ -66,7 +72,7 @@ async def ready(
 
 @secured.post("/scan", dependencies=[Depends(json_only)], tags=["ops"])
 async def scan(orch: Annotated[PipelineOrchestrator, Depends(get_orchestrator)]):
-    ids = await Refinery(orch).ingest(orch.cfg.input_dir)
+    ids = await Refinery(orch).ingest(orch.cfg.input_dir, settle=STABILITY_WINDOW)
     return {"imported": len(ids)}
 
 

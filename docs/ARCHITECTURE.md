@@ -27,7 +27,7 @@ checks), with `quarantined` and `error` as exits.
 | `app/core/watcher.py` | watchdog `InputWatcher`; waits for file stability, imports by content hash. |
 | `app/core/scanner.py`, `pipeline.py`, `orchestrator.py` | ffprobe scan, per-stage bounded workers, stage driver. |
 | `app/core/planning.py`, `publish.py`, `verify.py` | plan building, atomic publish (work → library), verification checks. |
-| `app/core/throttle.py`, `supervisor.py`, `tools.py` | adaptive worker throttle, crash recovery, subprocess wrapper (argument lists, timeouts). |
+| `app/core/throttle.py`, `tools.py` | adaptive worker throttle, subprocess wrapper (argument lists, timeouts). |
 | `app/services/` | enrichment (TMDB, TVDB, MusicBrainz/AcoustID), per-type planners, tagging, subtitles, VMAF guardrail, duplicate detection, server notify. |
 | `app/media/video/` | probe, health check, repair, encode/profile logic for movies and TV. |
 | `app/media/audiobook.py`, `ebook.py` | audiobook (M4B) and ebook (Calibre) handling. |

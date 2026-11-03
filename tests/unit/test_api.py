@@ -41,7 +41,7 @@ async def client(tmp_path, monkeypatch):
     app.state.orchestrator = PipelineOrchestrator(factory, cfg)
     app.state.factory = factory
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+    async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as c:
         yield c
     app.dependency_overrides.clear()
     del app.state.orchestrator
@@ -73,6 +73,7 @@ async def test_health_ready_and_metrics(client):
     assert ready.status_code in (200, 503)
     assert set(ready.json()["checks"]) == {
         "ffmpeg",
+        "pipeline",
         "database",
         "library_roots_writable",
     }
@@ -147,7 +148,8 @@ async def test_mutations_are_json_only(client):
     assert (await client.post("/api/v1/scan")).status_code == 415
 
 
-async def test_scan_imports_input(client):
+async def test_scan_imports_input(client, monkeypatch):
+    monkeypatch.setattr("app.api.v1.ops.STABILITY_WINDOW", 0)
     cfg = app.state.orchestrator.cfg
     (cfg.input_dir / "s.mp3").write_bytes(b"audio")
     r = await client.post("/api/v1/scan", headers=JSON, json={})
@@ -190,3 +192,35 @@ async def test_openapi_snapshot():
     if os.getenv("UPDATE_SNAPSHOT") or not SNAPSHOT.exists():
         SNAPSHOT.write_text(schema)
     assert schema == SNAPSHOT.read_text()
+
+
+async def test_ready_fails_when_the_pipeline_worker_has_died(client):
+    import asyncio
+
+    async def boom():
+        raise RuntimeError("worker died")
+
+    worker = asyncio.create_task(boom())
+    await asyncio.wait([worker])
+    app.state.worker = worker
+    try:
+        r = await client.get("/api/v1/ready")
+    finally:
+        del app.state.worker
+    assert r.status_code == 503
+    assert r.json()["checks"]["pipeline"] is False
+
+
+async def test_retry_puts_a_health_check_quarantined_original_back(client):
+    cfg = app.state.orchestrator.cfg
+    src = cfg.input_dir / "bad.mp3"
+    held = cfg.quarantine_dir / "healthcheck_failed" / "bad.mp3-bad.mp3"
+    held.parent.mkdir(parents=True)
+    held.write_bytes(b"repaired")
+    await _seed(FileState.quarantined, "bad.mp3")
+    async with app.state.factory() as s:
+        (await s.get(MediaItem, "bad.mp3")).source_path = str(src)
+        await s.commit()
+    r = await client.post("/api/v1/items/bad.mp3/retry", headers=JSON, json={})
+    assert r.json()["state"] == "pending"
+    assert src.read_bytes() == b"repaired" and not held.exists()

@@ -37,7 +37,7 @@ async def client(tmp_path, monkeypatch):
     app.state.orchestrator = PipelineOrchestrator(factory, make_config(tmp_path))
     app.state.factory = factory
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://t"
+        transport=httpx.ASGITransport(app=app), base_url="http://localhost"
     ) as c:
         yield c
     app.dependency_overrides.clear()

@@ -70,17 +70,27 @@ _failed_logins: dict[
 def _login_throttled(ip: str) -> bool:
     now = time.monotonic()
     recent = [t for t in _failed_logins.get(ip, []) if now - t < LOGIN_WINDOW]
-    _failed_logins[ip] = recent
+    if recent:
+        _failed_logins[ip] = recent
+    else:
+        _failed_logins.pop(ip, None)  # idle addresses must not pile up
     return len(recent) >= MAX_FAILED_LOGINS
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if settings.TRUST_FORWARDED_FOR and forwarded:
+        return forwarded.split(",")[-1].strip()
+    return request.client.host if request.client else "?"
 
 
 @router.post("/login")
 async def login(request: Request, token: Annotated[str, Form()]):
-    ip = request.client.host if request.client else "?"
+    ip = _client_ip(request)
     if _login_throttled(ip):
         raise HTTPException(429, "Too many failed logins; wait a minute")
     if not token_matches(token, settings.API_TOKEN):
-        _failed_logins[ip].append(time.monotonic())
+        _failed_logins.setdefault(ip, []).append(time.monotonic())
         return templates.TemplateResponse(
             request, "login.html", {"nav": None, "bad": True}, status_code=401
         )

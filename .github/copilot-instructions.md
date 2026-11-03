@@ -9,7 +9,6 @@
 - FastAPI (API layer)
 - Pydantic (configuration & validation)
 - SQLAlchemy + Alembic (database & migrations)
-- Celery + Redis (distributed task execution, optional)
 - Pytest + Behave (testing)
 - Docker (containerization)
 
@@ -42,7 +41,6 @@ media-refinery/
 │   └── features/         # BDD tests (Gherkin/Behave)
 ├── alembic/              # Database migrations
 ├── docs/                 # Documentation
-├── profiles/             # Processing profiles (encoding configs)
 ├── sample_media/         # Test media files
 └── work/                 # Runtime artifacts (logs, db, temp files)
 ```

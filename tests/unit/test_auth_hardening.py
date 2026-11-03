@@ -19,7 +19,7 @@ def exposed(monkeypatch):
 
 def client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://t"
+        transport=httpx.ASGITransport(app=app), base_url="http://localhost"
     )
 
 

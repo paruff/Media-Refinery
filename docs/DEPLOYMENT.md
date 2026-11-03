@@ -39,7 +39,9 @@ passed into the container. To set any other option, add it under `environment:` 
 - `AUTO_APPROVE_TYPES` (`music`, `movie`, `series`, `audiobook`, `ebook`), `DRY_RUN`
 - Server rescan (Jellyfin/Audiobookshelf proved nightly, Plex untested in CI, **Music Assistant experimental**: the `music/sync` call is unverified against a real instance), each optional: `PLEX_URL`/`PLEX_TOKEN`/`PLEX_SECTIONS`, `JELLYFIN_URL`/`JELLYFIN_API_KEY`, `ABS_URL`/`ABS_TOKEN`/`ABS_LIBRARY_ID`, `MUSIC_ASSISTANT_URL`/`MUSIC_ASSISTANT_TOKEN`, and `NOTIFY_PATH_MAP` (JSON, container path to the path the server sees, e.g. `{"/output/Music":"/data/music"}`; Plex and Jellyfin scan by their own paths)
 
-All names are defined in `app/core/config.py`. The Celery/Redis distributed mode is not supported.
+- Behind a reverse proxy: a bind on `127.0.0.1` needs no token, so a proxy in front of it would expose the API without one. Set `MR_API_HOST=0.0.0.0` (the compose default, which requires `MR_API_TOKEN`), and list the public name in `MR_ALLOWED_HOSTS` (JSON, e.g. `["media.lan"]`). On a loopback bind only `localhost`, `127.0.0.1` and `[::1]` are served by default.
+
+All names are defined in `app/core/config.py`.
 
 ## Operations
 
@@ -54,7 +56,7 @@ includes `compose-check`.
 
 ## Troubleshooting
 
-- **`/ready` fails:** a library root is not writable by `PUID:PGID`.
+- **`/ready` fails:** a library root is not writable by `PUID:PGID`, or the `pipeline` check is false because the worker stopped (see the log for "Pipeline worker stopped"; restart the container).
 - **Compose refuses to start:** `MR_API_TOKEN` is unset.
 - **Nothing happens to a file:** it is still inside the stability window, or a plan is waiting for approval in the UI.
 - **Music held for review:** AcoustID score below `ACOUSTID_MIN_SCORE`, or `ACOUSTID_API_KEY` not set in the container environment.
