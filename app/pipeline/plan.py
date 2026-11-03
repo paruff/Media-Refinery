@@ -23,13 +23,17 @@ from app.pipeline.types.base import load_meta
 
 
 async def _probe_streams(source: str) -> list[dict]:
-    rc, out, _ = await run_tool(
+    """Streams of a video; raises ValueError when ffprobe cannot read it (never the unchecked path)."""
+    rc, out, err = await run_tool(
         ["ffprobe", "-v", "error", "-show_streams", "-of", "json", source], 120
     )
     try:
-        return json.loads(out).get("streams", []) if rc == 0 else []
+        streams = json.loads(out).get("streams", []) if rc == 0 else []
     except ValueError:
-        return []
+        streams = []
+    if not streams:
+        raise ValueError(f"ffprobe failed: {(err or 'no streams').strip()[:200]}")
+    return streams
 
 
 async def _held(session, target_path: str) -> list:
@@ -50,9 +54,16 @@ async def run(o, item_id) -> bool:
         if flags := load_meta(item).get("review"):
             review = f"review_required: {', '.join(flags)}"
             o._emit("review", item_id, "degraded", review)
-        streams = (
-            [] if is_audio_only(item) else await _probe_streams(str(item.source_path))
-        )
+        try:
+            streams = (
+                []
+                if is_audio_only(item)
+                else await _probe_streams(str(item.source_path))
+            )
+        except ValueError as e:
+            item.state, item.error_log = FileState.error, str(e)
+            await session.commit()
+            return True
         if any(s.get("codec_name") in IMAGE_SUBS for s in streams):
             o._emit("subtitle.image", item_id, "flagged", "kept_as_is")
         try:

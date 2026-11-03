@@ -111,28 +111,38 @@ def video_conformant(stream: dict | None, fallback_codec: str = "") -> bool:
 
 
 def _audio_args(audio: list[dict]) -> list[str]:
-    """AAC stereo for every device, surround AC3/E-AC3 copied; DTS/TrueHD/etc. -> AAC stereo."""
+    """AAC stereo for every device, surround AC3/E-AC3 copied; DTS/TrueHD/etc. -> AAC stereo.
+
+    When every track is copied surround, a stereo AAC downmix of the main track (the default
+    disposition, else the first) is added.
+    """
     if not audio:
         return []
     args: list[str] = []
-    out = 0
+    stereo_aac = False
     for i, s in enumerate(audio):
         codec, channels = (
             (s.get("codec_name") or "").lower(),
             int(s.get("channels") or 2),
         )
         if codec in {"ac3", "eac3"} or (codec == "aac" and channels <= 2):
-            args += ["-map", f"0:a:{i}", f"-c:a:{out}", "copy"]
+            args += ["-map", f"0:a:{i}", f"-c:a:{i}", "copy"]
+            stereo_aac = stereo_aac or codec == "aac"
         else:
-            args += ["-map", f"0:a:{i}", f"-c:a:{out}", "aac", f"-ac:a:{out}", "2"]
-            args += [f"-b:a:{out}", "192k"]
-        out += 1
-    if not any(
-        (s.get("codec_name") or "").lower() == "aac"
-        and int(s.get("channels") or 2) <= 2
-        for s in audio
-    ) and not any(a == "aac" for a in args):
-        args += ["-map", "0:a:0", f"-c:a:{out}", "aac", f"-ac:a:{out}", "2"]
+            args += ["-map", f"0:a:{i}", f"-c:a:{i}", "aac", f"-ac:a:{i}", "2"]
+            args += [f"-b:a:{i}", "192k"]
+            stereo_aac = True
+    if not stereo_aac:
+        main = next(
+            (
+                i
+                for i, s in enumerate(audio)
+                if (s.get("disposition") or {}).get("default")
+            ),
+            0,
+        )
+        out = len(audio)
+        args += ["-map", f"0:a:{main}", f"-c:a:{out}", "aac", f"-ac:a:{out}", "2"]
         args += [f"-b:a:{out}", "192k"]
     return args
 
@@ -199,6 +209,8 @@ def _video(item: MediaItem, roots: dict[str, str], streams: list[dict]) -> PlanS
             show_dir += f" {{tvdb-{meta['tvdb_id']}}}"
         name = f"{sanitize_component(str(show))} - {code}"
         if item.episode_title:
+            # provider text, appended unsanitised on purpose: confine() sanitizes the whole
+            # component and rejects an escape (see test_hostile_episode_title_stays_confined)
             name += f" - {item.episode_title}"
         path = confine(
             roots["series"], str(show_dir), f"Season {season:02d}", f"{name}.mkv"

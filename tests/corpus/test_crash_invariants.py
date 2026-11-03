@@ -47,6 +47,7 @@ KINDS = {
         d / "a.mp3", artist="X", album="Y", title="Z", track="1"
     ),
     "movie": lambda d: make_mkv(d / "Crash Movie (2020).mkv"),
+    "series": lambda d: make_mkv(d / "Crash Show S01E01.mkv"),
     "ebook": lambda d: make_epub(d / "crash.epub", "Crash Book", "Crash Author"),
     # a two-file book: the lead carries the merge, the other file follows it into the archive
     "audiobook": lambda d: _book(d / "Audiobooks" / "Crash Book"),
@@ -58,6 +59,12 @@ EXACT = {"music"}
 REQUIRED = {
     "music": {"commit:before", "move:before", "archive_original:after", "ffmpeg:after"},
     "movie": {"commit:before", "move:before", "archive_original:after", "ffmpeg:after"},
+    "series": {
+        "commit:before",
+        "move:before",
+        "archive_original:after",
+        "ffmpeg:after",
+    },
     "audiobook": {
         "commit:before",
         "archive_original:after",

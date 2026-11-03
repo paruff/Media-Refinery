@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -114,3 +115,52 @@ def test_music_layout_disc_prefix_only_for_multi_disc(tmp_path):
     assert plan(1).target_path.endswith("Artist/Album (2021)/03 - Song.flac")
     assert plan(2).target_path.endswith("Artist/Album (2021)/2-03 - Song.flac")
     assert plan(1).ffmpeg_args == ["-map", "0:a", "-c", "copy"]
+
+
+def _surround(codec="ac3", **extra):
+    return {"codec_name": codec, "channels": 6, **extra}
+
+
+def test_stereo_downmix_uses_the_default_track_not_the_first():
+    from app.core.planning import _audio_args
+
+    args = _audio_args([_surround(), _surround(disposition={"default": 1})])
+    assert args[-8:] == [
+        "-map",
+        "0:a:1",
+        "-c:a:2",
+        "aac",
+        "-ac:a:2",
+        "2",
+        "-b:a:2",
+        "192k",
+    ]
+
+
+def test_stereo_downmix_falls_back_to_the_first_track():
+    from app.core.planning import _audio_args
+
+    assert _audio_args([_surround(), _surround("eac3")])[-8:-6] == ["-map", "0:a:0"]
+
+
+def test_no_downmix_when_a_stereo_aac_is_already_kept_or_made():
+    from app.core.planning import _audio_args
+
+    kept = _audio_args([_surround(), {"codec_name": "aac", "channels": 2}])
+    made = _audio_args([{"codec_name": "dts", "channels": 6}])
+    assert kept.count("aac") == 0 and made.count("aac") == 1
+
+
+def test_hostile_episode_title_stays_confined(tmp_path):
+    item = _item(
+        media_type=MediaType.series,
+        video_codec="h264",
+        audio_codec="aac",
+        episode_title="../../../etc/passwd: a/b\\c",
+        enrichment_data=json.dumps(
+            {"series_title": "Show", "season_number": 1, "episode_number": 2}
+        ),
+    )
+    target = Path(build_plan(item, {"series": str(tmp_path)}).target_path)
+    assert target.is_relative_to(tmp_path.resolve())
+    assert target.parent == tmp_path.resolve() / "Show" / "Season 01"
