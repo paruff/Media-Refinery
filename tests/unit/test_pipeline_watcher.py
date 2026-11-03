@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core import watcher as w
-from app.core.pipeline import PipelineCoordinator
 from app.core.watcher import MAX_IMPORT_ATTEMPTS, DebounceHandler, InputWatcher
 from app.models.media import FileState, MediaItem
 
@@ -25,53 +24,6 @@ async def _add_item(session, path, state=FileState.pending):
     session.add(item)
     await session.commit()
     return item
-
-
-@pytest.mark.asyncio
-async def test_process_unknown_and_not_pending_are_skipped(async_session):
-    coord = PipelineCoordinator(_factory(async_session))
-    coord.scanner.run = AsyncMock()
-    await coord.process("missing")
-    done = await _add_item(async_session, "/a.mkv", FileState.scanned)
-    await coord.process(done.id)
-    coord.scanner.run.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_process_pending_moves_to_scanning_and_runs_scanner(async_session):
-    item = await _add_item(async_session, "/b.mkv")
-    coord = PipelineCoordinator(_factory(async_session))
-    coord.scanner.run = AsyncMock()
-    await coord.process(item.id)
-    assert item.state == FileState.scanning
-    coord.scanner.run.assert_awaited_once_with(item.id)
-
-
-@pytest.mark.asyncio
-async def test_process_scanner_failure_marks_error(async_session):
-    item = await _add_item(async_session, "/c.mkv")
-    coord = PipelineCoordinator(_factory(async_session))
-    coord.scanner.run = AsyncMock(side_effect=RuntimeError("ffprobe died"))
-    await coord.process(item.id)
-    assert item.state == FileState.error
-    assert item.error_log == "ffprobe died"
-
-
-@pytest.mark.asyncio
-async def test_coordinator_worker_loop_drains_queue():
-    coord = PipelineCoordinator(MagicMock())
-    seen = []
-
-    async def fake_process(media_id):
-        seen.append(media_id)
-        coord.running = False
-
-    coord.process = fake_process
-    await coord.start()
-    await coord.enqueue("m1")
-    await asyncio.sleep(0.05)
-    await coord.stop()
-    assert seen == ["m1"]
 
 
 def test_debounce_handler_ignores_dirs_and_temp_files():
@@ -95,14 +47,17 @@ async def test_startup_scan_skips_excluded(tmp_path, async_session):
 
 
 @pytest.mark.asyncio
-async def test_insert_if_new_inserts_once_and_enqueues(async_session, tmp_path):
+async def test_insert_if_new_inserts_once(async_session, tmp_path):
     f = tmp_path / "a.mkv"
     f.write_bytes(b"x")
-    coordinator = SimpleNamespace(enqueue=AsyncMock())
-    watcher = InputWatcher("/in", _factory(async_session), coordinator=coordinator)
-    await watcher.insert_if_new(str(f))
-    await watcher.insert_if_new(str(f))
-    coordinator.enqueue.assert_awaited_once()
+    watcher = InputWatcher("/in", _factory(async_session))
+    first = await watcher.insert_if_new(str(f))
+    assert first and await watcher.insert_if_new(str(f)) == first
+    async with async_session.bind.connect() as conn:  # one row, not two
+        count = (
+            await conn.exec_driver_sql("select count(*) from media_items")
+        ).scalar()
+    assert count == 1
 
 
 @pytest.mark.asyncio

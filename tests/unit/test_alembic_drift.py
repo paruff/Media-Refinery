@@ -8,7 +8,6 @@ import pytest
 from alembic.config import Config
 from sqlalchemy import create_engine
 
-import app.models.device_profile
 import app.models.saga  # noqa: F401
 from alembic import command
 from app.models.media import Base

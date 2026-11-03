@@ -128,7 +128,12 @@ class PipelineOrchestrator:
         if self.cfg.enabled_types & {"movie", "series"}:
             FingerprintService.require_video_support()  # fail at startup, not per file
         self.running = True
-        await self.recover()
+        try:
+            await self.recover()
+        except (
+            Exception
+        ):  # e.g. database locked or old schema: keep looping, run_once logs again
+            self.logger.exception("Crash recovery failed")
         while self.running:
             try:
                 await self.run_once()
@@ -166,9 +171,19 @@ class PipelineOrchestrator:
             and (only is None or i in only)
             and (not types or t == MediaType.unknown or t.value in types)
             and (t == MediaType.unknown or t.value in self.cfg.enabled_types)
+            and self._gate_runs(s, t)
         ]
         moved = await asyncio.gather(*(self._guarded(i, s) for i, s in todo))
         return sum(moved)
+
+    def _gate_runs(self, state: FileState, media_type: MediaType) -> bool:
+        """A `planned` item waits for a human: polling it every pass costs a session per item
+        and moves nothing, unless dry-run reports on it or its type auto-approves."""
+        return (
+            state != FileState.planned
+            or self.cfg.dry_run
+            or media_type.value in self.cfg.auto_approve_types
+        )
 
     async def run_until_idle(self, max_passes: int = 100, **filters) -> None:
         try:
@@ -266,12 +281,29 @@ class PipelineOrchestrator:
             await asyncio.to_thread(
                 shutil.rmtree, self.cfg.work_dir / item_id, ignore_errors=True
             )
+            await asyncio.to_thread(self._restore_original, item)
             await session.commit()
         return True
 
-    @staticmethod
-    async def _source_exists(item) -> bool:
-        return await asyncio.to_thread(Path(str(item.source_path)).is_file)
+    def _held_original(self, item) -> Path:
+        """Where a failed health check parks the original (see pipeline.execute)."""
+        name = Path(str(item.source_path)).name
+        return self.cfg.quarantine_dir / "healthcheck_failed" / f"{item.id}-{name}"
+
+    async def _source_exists(self, item) -> bool:
+        """The source is there, or the quarantined original can be put back."""
+        return await asyncio.to_thread(
+            lambda: (
+                Path(str(item.source_path)).is_file()
+                or self._held_original(item).is_file()
+            )
+        )
+
+    def _restore_original(self, item) -> None:
+        source, held = Path(str(item.source_path)), self._held_original(item)
+        if not source.is_file() and held.is_file():  # repaired or replaced in place
+            source.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(held, source)
 
     async def refusal(self, item_id: str, action: str, item=None) -> str:
         """Why `action` was refused, for the 409/notice text. Pass a freshly loaded `item` to skip the read."""

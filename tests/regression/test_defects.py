@@ -11,9 +11,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import select
 
-from app.core.pipeline import PipelineCoordinator
 from app.core.scanner import ScannerService
 from app.core.watcher import DebounceHandler, InputWatcher
 from app.models.media import FileState, MediaItem
@@ -219,55 +218,6 @@ def _plan(tmp_path, **extra):
     }, src
 
 
-def test_d6_transcode_runs_ffmpeg_on_the_source_not_the_target(tmp_path, mocker):
-    from app.services.execution_service import _execute_normalization_plan
-
-    plan, src = _plan(tmp_path, needs_transcode=True)
-    calls = []
-
-    async def fake_exec(*args, **kwargs):
-        calls.append(args)
-        out = Path(args[-1])
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(b"encoded")
-        proc = MagicMock()
-        proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"", b""))
-        return proc
-
-    mocker.patch("asyncio.create_subprocess_exec", side_effect=fake_exec)
-    _execute_normalization_plan(plan)
-
-    assert calls, "ffmpeg was never invoked"
-    argv = calls[0]
-    assert "-version" not in argv
-    assert argv[argv.index("-i") + 1] == str(src)
-    assert argv[-1] != plan["target_path"]  # written to a temp name, then renamed
-    assert Path(plan["target_path"]).read_bytes() == b"encoded"
-
-
-def test_d6_execution_failures_propagate(tmp_path, mocker):
-    from app.services.execution_service import (
-        _execute_normalization_plan,
-        execute_normalization_plan,
-    )
-
-    plan, _ = _plan(tmp_path, needs_transcode=True)
-
-    async def failing_exec(*args, **kwargs):
-        proc = MagicMock()
-        proc.returncode = 1
-        proc.communicate = AsyncMock(return_value=(b"", b"boom"))
-        return proc
-
-    mocker.patch("asyncio.create_subprocess_exec", side_effect=failing_exec)
-    with pytest.raises(RuntimeError, match="ffmpeg failed"):
-        _execute_normalization_plan(plan)
-    with pytest.raises(RuntimeError):
-        execute_normalization_plan(plan)
-    assert not Path(plan["target_path"]).exists()
-
-
 # --- D7 ---------------------------------------------------------------------
 def _exec_plan(src, dst):
     return SimpleNamespace(
@@ -280,58 +230,10 @@ def _exec_plan(src, dst):
     )
 
 
-@pytest.mark.asyncio
-async def test_d7_execute_plan_keeps_the_original(tmp_path):
-    from app.services.execution_service import ExecutionService
-
-    src = tmp_path / "in" / "a.flac"
-    src.parent.mkdir()
-    src.write_bytes(b"audio")
-    dst = tmp_path / "out" / "a.flac"
-    plan = _exec_plan(src, dst)
-
-    await ExecutionService(AsyncMock()).execute_plan(plan)
-
-    assert src.read_bytes() == b"audio"  # R-SAFE-1: original untouched
-    assert dst.read_bytes() == b"audio"
-
-
-@pytest.mark.asyncio
-async def test_d7_execute_plan_reports_failure_instead_of_success(tmp_path):
-    from app.services.execution_service import ExecutionService
-
-    plan = _exec_plan(tmp_path / "missing.flac", tmp_path / "out" / "a.flac")
-
-    with pytest.raises(FileNotFoundError):
-        await ExecutionService(AsyncMock()).execute_plan(plan)
-
-    assert "Moved to output" not in plan.execution_log
-    assert plan.plan_status == "failed"
-
-
 # --- D8 ---------------------------------------------------------------------
-@pytest.mark.asyncio
-async def test_d8_pipeline_timestamps_are_tz_aware_and_stop_cancels_worker(
-    async_session,
-):
-    item = MediaItem(source_path="/x.mkv", state=FileState.pending)
-    async_session.add(item)
-    await async_session.commit()
-    coord = PipelineCoordinator(_factory(async_session))
-    coord.scanner.run = AsyncMock()
-    await coord.process(item.id)
-    assert item.updated_at.tzinfo is not None
-
-    await coord.start()
-    worker = coord._worker
-    await coord.stop()
-    assert worker.done()
 
 
-def test_d8_no_naive_utcnow_stub_scanner_or_print_in_app():
-    import app.core.pipeline as pipeline
-
-    assert not hasattr(pipeline, "MediaScanner")
+def test_d8_no_naive_utcnow_or_print_in_app():
     for path in APP_DIR.rglob("*.py"):
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
@@ -371,195 +273,6 @@ async def test_d9_lifespan_replaces_on_event_and_logs_outside_cwd(
 
 
 # --- R-SAFE-1 (issue G1: _prune_old_errors must not delete rows) -------------
-@pytest.mark.asyncio
-async def test_prune_old_errors_keeps_media_item_rows(async_session):
-    from datetime import UTC, datetime, timedelta
-
-    from app.services.validator_service import ValidatorService
-
-    old = datetime.now(UTC) - timedelta(days=90)
-    item = MediaItem(
-        source_path="/old.mkv", state=FileState.error, error_log="boom", updated_at=old
-    )
-    async_session.add(item)
-    await async_session.commit()
-
-    service = ValidatorService.__new__(ValidatorService)
-    service.db = async_session
-    await service._prune_old_errors()
-
-    count = (await async_session.execute(select(func.count(MediaItem.id)))).scalar_one()
-    assert count == 1
 
 
 # --- B2: idempotent execution under the lock ---------------------------------
-def _db_plan(plan):
-    """Insert the DB row the executor updates; return a reader for (status, log)."""
-    from app.core.database import AsyncSessionLocal, init_db
-    from app.models.media import NormalizationPlan
-
-    async def insert():
-        await init_db()
-        async with AsyncSessionLocal() as s:
-            s.add(
-                NormalizationPlan(
-                    id=plan["id"],
-                    media_item_id=plan["media_item_id"],
-                    target_path=plan["target_path"],
-                    ffmpeg_args=[],
-                    original_hash="h",
-                )
-            )
-            await s.commit()
-
-    async def read():
-        async with AsyncSessionLocal() as s:
-            row = await s.get(NormalizationPlan, plan["id"])
-            await s.refresh(row)
-            return row.plan_status.value, row.execution_log
-
-    asyncio.run(insert())
-    return lambda: asyncio.run(read())
-
-
-@pytest.fixture
-def b2_plan(tmp_path):
-    from sqlalchemy import text
-
-    from app.core.database import AsyncSessionLocal, init_db
-
-    async def clear():
-        await init_db()
-        async with AsyncSessionLocal() as s:
-            await s.execute(text("DELETE FROM normalization_plans"))
-            await s.commit()
-
-    asyncio.run(clear())
-    return tmp_path
-
-
-def test_b2_existing_identical_output_is_completed_without_rewrite(b2_plan):
-    from app.services.execution_service import _execute_normalization_plan
-
-    plan, src = _plan(b2_plan)
-    status = _db_plan(plan)
-    out = Path(plan["target_path"])
-    out.parent.mkdir()
-    out.write_bytes(src.read_bytes())
-    before = out.stat().st_mtime_ns
-
-    _execute_normalization_plan(plan)
-
-    assert out.read_bytes() == b"source bytes"
-    assert out.stat().st_mtime_ns == before
-    assert status()[0] == "completed"
-
-
-def test_b2_different_preexisting_output_fails_the_plan(b2_plan):
-    from app.services.execution_service import _execute_normalization_plan
-
-    plan, _ = _plan(b2_plan)
-    status = _db_plan(plan)
-    out = Path(plan["target_path"])
-    out.parent.mkdir()
-    out.write_bytes(b"someone else's file")
-
-    with pytest.raises(FileExistsError):
-        _execute_normalization_plan(plan)
-    assert out.read_bytes() == b"someone else's file"
-    state, log = status()
-    assert state == "failed"
-    assert "not the output of plan" in log
-
-
-def _fake_ffmpeg(mocker):
-    async def fake_exec(*args, **kwargs):
-        Path(args[-1]).write_bytes(b"encoded")
-        proc = MagicMock()
-        proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"", b""))
-        return proc
-
-    return mocker.patch("asyncio.create_subprocess_exec", side_effect=fake_exec)
-
-
-def test_b2_rerun_after_committed_transcode_skips_ffmpeg(b2_plan, mocker):
-    from app.services.execution_service import _execute_normalization_plan
-
-    plan, _ = _plan(b2_plan, needs_transcode=True)
-    status = _db_plan(plan)
-    run = _fake_ffmpeg(mocker)
-    _execute_normalization_plan(plan)
-    _execute_normalization_plan(plan)
-
-    assert run.call_count == 1
-    assert status()[0] == "completed"
-
-
-def test_b2_committed_saga_matches_through_a_different_path_spelling(b2_plan, mocker):
-    from app.services.execution_service import _execute_normalization_plan
-
-    plan, _ = _plan(b2_plan, needs_transcode=True)
-    status = _db_plan(plan)
-    run = _fake_ffmpeg(mocker)
-    _execute_normalization_plan(plan)
-    # Same file, spelled with a `..` detour.
-    out = Path(plan["target_path"])
-    _execute_normalization_plan(
-        {**plan, "target_path": str(out.parent / ".." / out.parent.name / out.name)}
-    )
-
-    assert run.call_count == 1
-    assert status()[0] == "completed"
-
-
-def test_b2_stale_tmp_from_a_crash_is_overwritten(b2_plan):
-    from app.services.execution_service import _execute_normalization_plan
-
-    plan, _ = _plan(b2_plan)
-    status = _db_plan(plan)
-    out = Path(plan["target_path"])
-    out.parent.mkdir()
-    stale = out.with_name(f"{out.stem}.tmp{out.suffix}")
-    stale.write_bytes(b"half written")
-
-    _execute_normalization_plan(plan)
-
-    assert out.read_bytes() == b"source bytes"
-    assert not stale.exists()
-    assert status()[0] == "completed"
-
-
-@pytest.mark.asyncio
-async def test_prune_old_errors_keeps_diagnostics_of_error_and_quarantined(
-    async_session,
-):
-    from datetime import UTC, datetime, timedelta
-
-    from app.services.validator_service import ValidatorService
-
-    old = datetime.now(UTC) - timedelta(days=90)
-    for path, state in [
-        ("/e.mkv", FileState.error),
-        ("/q.mkv", FileState.quarantined),
-        ("/d.mkv", FileState.validated),
-    ]:
-        async_session.add(
-            MediaItem(source_path=path, state=state, error_log="boom", updated_at=old)
-        )
-    await async_session.commit()
-
-    service = ValidatorService.__new__(ValidatorService)
-    service.db = async_session
-    await service._prune_old_errors()
-
-    logs = dict(
-        (
-            await async_session.execute(
-                select(MediaItem.source_path, MediaItem.error_log)
-            )
-        )
-        .tuples()
-        .all()
-    )
-    assert logs == {"/e.mkv": "boom", "/q.mkv": "boom", "/d.mkv": None}

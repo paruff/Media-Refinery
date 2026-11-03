@@ -41,12 +41,13 @@ class Notifier:
         self.quiet = quiet
         self._pending: dict[str, set[Path]] = {}  # media type -> published files
         self._timer: asyncio.Task | None = None
+        self._sending = False  # a flush is mid-request: its timer must not be cancelled
 
     # ---- coalescing ---------------------------------------------------------
     def schedule(self, media_type: str, dest: Path) -> None:
         """Remember a published file; the rescans go out once publishing has been quiet."""
         self._pending.setdefault(str(media_type), set()).add(dest)
-        if self._timer is not None:
+        if self._timer is not None and not self._sending:
             self._timer.cancel()
         self._timer = asyncio.get_running_loop().create_task(self._after_quiet())
 
@@ -62,8 +63,12 @@ class Notifier:
                 await self._timer
         pending, self._pending = self._pending, {}
         failed: list[str] = []
-        for media_type, dests in pending.items():
-            failed += await self.published_batch(media_type, dests)
+        self._sending = True
+        try:
+            for media_type, dests in pending.items():
+                failed += await self.published_batch(media_type, dests)
+        finally:
+            self._sending = False
         return failed
 
     # ---- sending ------------------------------------------------------------

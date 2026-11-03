@@ -1,5 +1,6 @@
 """G11 review: container->server path mapping, one rescan per album/run, guarded orchestrator call."""
 
+import asyncio
 import logging
 from pathlib import Path
 from types import SimpleNamespace
@@ -95,6 +96,25 @@ async def test_schedule_coalesces_publishes_until_flush():
     assert seen == []
     await n.flush()
     assert names(seen) == ["abs/api/libraries/lib9/scan"]
+
+
+async def test_a_publish_during_a_flush_does_not_cancel_the_inflight_rescan():
+    gate, seen = asyncio.Event(), []
+
+    async def handler(req):
+        await gate.wait()  # the server is slow: the flush is mid-request
+        seen.append(req)
+        return httpx.Response(200)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    n = Notifier(cfg(), client, quiet=0.01)
+    n.schedule("audiobook", Path("/o/Books/X/1.m4b"))
+    await asyncio.sleep(0.05)  # timer fired, flush is waiting on the server
+    n.schedule("audiobook", Path("/o/Books/Y/1.m4b"))  # used to cancel that flush
+    gate.set()
+    await asyncio.sleep(0.1)
+    await n.flush()
+    assert names(seen).count("abs/api/libraries/lib9/scan") == 2
 
 
 # ---- orchestrator guard ---------------------------------------------------
