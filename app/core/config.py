@@ -1,9 +1,30 @@
+import json
+import logging
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import AliasChoices, Field
-from pydantic_settings import BaseSettings
+from pydantic import AliasChoices, BeforeValidator, Field
+from pydantic_settings import BaseSettings, NoDecode
 
 _ROOT = Path(__file__).parent.parent.parent
+_log = logging.getLogger(__name__)
+
+
+def _lenient_map(v: object) -> object:
+    """Env JSON map; a malformed value disables the optional feature instead of aborting startup."""
+    if not isinstance(v, str):
+        return v
+    try:
+        parsed = json.loads(v) if v.strip() else {}
+    except ValueError:
+        parsed = None
+    if not isinstance(parsed, dict):
+        _log.warning("ignoring malformed JSON map setting: %.40r", v)
+        return {}
+    return parsed
+
+
+LenientMap = Annotated[dict[str, str], NoDecode, BeforeValidator(_lenient_map)]
 
 
 class Settings(BaseSettings):
@@ -49,7 +70,7 @@ class Settings(BaseSettings):
     # R-NOTIFY: each server is optional; empty URL = off. Secrets via env only.
     PLEX_URL: str = ""
     PLEX_TOKEN: str = ""
-    PLEX_SECTIONS: dict[str, str] = {}  # media type -> Plex section id
+    PLEX_SECTIONS: LenientMap = {}  # media type -> Plex section id
     JELLYFIN_URL: str = ""
     JELLYFIN_API_KEY: str = ""
     ABS_URL: str = ""
@@ -58,7 +79,7 @@ class Settings(BaseSettings):
     MUSIC_ASSISTANT_URL: str = ""
     MUSIC_ASSISTANT_TOKEN: str = ""
     # container path prefix -> the path the media server sees, e.g. {"/output/Music": "/data/music"}
-    NOTIFY_PATH_MAP: dict[str, str] = {}
+    NOTIFY_PATH_MAP: LenientMap = {}
 
     class Config:
         env_file = ".env"

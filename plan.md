@@ -32,6 +32,7 @@ G3/G4 can run in parallel; G6/G7/G8 can run in parallel once G2 lands.
 
 ## G0 — Foundation: one Python, lean deps, green CI
 
+**Superseded:** the target is now Python 3.14 (`pyproject.toml`, Dockerfile, CI); the 3.12 references below are historical.
 **Why:** CI has been red on `main` since 2026-02; nothing else is trustworthy until it's green.
 **Scope:** Python 3.12 everywhere (pyproject, CI, Dockerfile). `requirements.txt` = runtime imports of `app/` only; dev tools → `requirements-dev.txt` (drop Scrapy, kubernetes, Twisted, ipython, mkdocs, goodwe, python-jenkins…). Fix `docker-compose.yml` (single valid `media-refinery` service; legacy *arr/transcoder/tagger services removed). Dockerfile runs the daemon. Delete committed artifacts (`coverage.xml`, `test.mp3`, `scripts/diag_out.txt`). Close/rebase dependabot PRs after. Close Go issue #2.
 **Already done (tooling PR):** SHA-pinned pre-commit config + CI/security workflows, ruff/bandit/mypy/hadolint clean, 173 baseline `# noqa` comments, coverage floor 49 %. **Remaining:** tests are red on main (197 errors, 18 failures, e.g. `patch_create_subprocess_exec did not yield a value`), `docker-compose.yml` is excluded from yamllint/compose-spec until fixed, raise `--cov-fail-under` to 80.
