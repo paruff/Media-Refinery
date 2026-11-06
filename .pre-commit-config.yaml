@@ -46,7 +46,7 @@ repos:
 
   # ---- python: lint + format (ruff replaces black/isort/flake8/pyupgrade) --
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: f368fb366ff7f2f808dd324b83a6d32267799e19  # frozen: v0.17.2
+    rev: 25bcf95026b96e2dd3c0aec3090c3d6ef6ca2e6c  # frozen: v0.17.3
     hooks:
       - id: ruff-check
         args: ["--fix", "--exit-non-zero-on-fix"]
@@ -54,16 +54,16 @@ repos:
 
   # ---- python: types ------------------------------------------------------
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 2834ec6639549dd6796205c8f011dedcd587288b  # frozen: v2.4.0
+    rev: ad26ebfa797fcb9b8f83275937c1c1d6e126719c  # frozen: v2.4.1
     hooks:
       - id: mypy
         args: ["--config-file=mypy.ini"]
         files: ^app/
         additional_dependencies:
-          - "pydantic==2.14.1"
-          - "pydantic-settings==2.16.1"
+          - "pydantic==2.14.2"
+          - "pydantic-settings==2.16.2"
           - "sqlalchemy[mypy]==2.1.6"
-          - "fastapi==0.161.1"
+          - "fastapi==0.162.0"
           - "watchdog==6.0.0"
           - "types-PyYAML==6.0.12.20260906"
 
@@ -88,7 +88,7 @@ repos:
       - id: yamllint
         args: ["--strict", "-c", ".yamllint.yaml"]
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 4f85d46a92dc17713078e5de73f8a13190edf6fc  # frozen: 0.38.2
+    rev: a76b92851fc9eede9f9bc4073eb55202f34eb0df  # frozen: 0.39.0
     hooks:
       - id: check-github-workflows
       - id: check-dependabot
@@ -125,7 +125,7 @@ repos:
 
   # ---- commit message: "<type>: <description>" (see global git workflow) --
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: 3db014c16a9d31997ab8c07a4d61fcce936c8f0d  # frozen: v4.4.0
+    rev: 33b50eb042bee26eac0ee96ad84aa9c1b4dccdd8  # frozen: v4.5.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
